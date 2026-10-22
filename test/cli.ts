@@ -38,16 +38,6 @@ describe("cli - exec", function () {
     const serveOpts = commands.commands.serve.options.map(
       (o: { arg: string }) => o.arg.split(" ")[0],
     );
-    for (const removed of [
-      "--out",
-      "--generate-sdk",
-      "--oag-version",
-      "--oag-backend",
-      "--oag-jar",
-      "--no-install",
-    ]) {
-      assert.isFalse(serveOpts.includes(removed), removed);
-    }
     assert.isUndefined(commands.commands.serve.args);
     for (const flag of [
       "--spec",
@@ -66,31 +56,32 @@ describe("cli - exec", function () {
 });
 
 describe("cli - documentation", function () {
-  it("should not describe the removed build or artifact workflow outside the migration notes", function () {
+  it("should document only serve invocations that pass --spec and --sdk", function () {
     const files = [
       "README.md",
       ...fs.readdirSync(path.join(ROOT, "docs")).map((f) => `docs/${f}`),
       ...fs
         .readdirSync(path.join(ROOT, "examples"))
         .map((f) => `examples/${f}`),
-      "conf/commands.json",
     ];
-    const removed =
-      /oag-mcp build|--generate-sdk|--oag-backend|--no-install|oag-mcp-manifest|serve \.\/[\w-]+ --transport|\bartifact director/;
+    let invocations = 0;
     for (const rel of files) {
-      let text = fs.readFileSync(path.join(ROOT, rel), "utf8");
-      if (rel === "README.md") {
-        // The migration notes name the old commands on purpose.
-        text = text.replace(/### Migrating from[\s\S]*?(?=\n## )/, "");
+      const text = fs
+        .readFileSync(path.join(ROOT, rel), "utf8")
+        .replace(/\\\n\s*/g, " ");
+      // Every documented invocation with options must name both inputs.
+      for (const m of text.matchAll(/oag-mcp serve (?!--help)--[^\n`|]*/g)) {
+        assert.match(m[0], /--spec\b/, `${rel}: ${m[0]}`);
+        assert.match(m[0], /--sdk\b/, `${rel}: ${m[0]}`);
+        invocations++;
       }
-      assert.isFalse(removed.test(text), `${rel}: ${removed.exec(text)?.[0]}`);
     }
+    assert(invocations >= 10, `only ${invocations} invocations found`);
     const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
     assert.contains(
       readme,
       "oag-mcp serve --spec ./openapi.yaml --sdk ./generated-sdk --transport stdio",
     );
-    assert.contains(readme, "### Migrating from `oag-mcp build`");
   });
 });
 

@@ -6,18 +6,18 @@
   exitcode: 0
   output: "Usage: oag-mcp"
 
-- description: Serve help should describe direct serving from a spec and an SDK
+- description: Serve help should list the spec and SDK options
   command: "oag-mcp serve --help"
   exitcode: 0
   output: "--sdk <sdk>"
 
-- description: The removed build command should not exist
-  command: "oag-mcp build --spec {base}/test/fixtures/petclinic/openapi.yaml --out unused 2>&1"
+- description: Unknown commands should be rejected
+  command: "oag-mcp frobnicate 2>&1"
   exitcode: 1
-  output: "unknown command 'build'"
+  output: "unknown command 'frobnicate'"
 
-- description: Serve should reject an artifact directory argument with migration guidance
-  command: "oag-mcp serve petclinic-server --log-level silent 2>&1"
+- description: Serve should reject positional arguments and show the expected options
+  command: "oag-mcp serve ./openapi.yaml --log-level silent 2>&1"
   exitcode: 1
   output: "--spec ./openapi.yaml --sdk ./generated-sdk"
 

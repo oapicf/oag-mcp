@@ -150,8 +150,8 @@ export interface OperationBinding {
 }
 
 /**
- * Description of an SDK prepared at server start-up (in memory; never
- * written as a user-managed artifact).
+ * Description of an SDK prepared at server start-up (held in memory for
+ * the lifetime of the process).
  */
 export interface PreparedSdkInfo {
   /** Random id of this preparation (one per server process). */

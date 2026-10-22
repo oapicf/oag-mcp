@@ -15,8 +15,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Per-operation authorization policy enforced in search and on every SDK call
 - Pino structured logging with separate operational and security_audit categories, redaction and fail-closed auditing
 
-### Removed
-- The `oag-mcp build` command, prepared artifact directories and `serve <artifact-dir>`; SDK generation (`--generate-sdk`, Java/Docker backends) and automatic `npm install` of SDK dependencies. See "Migrating from `oag-mcp build`" in the README.
-
 ### Changed
 - Convert the generator-node template to TypeScript (tsc, tsx, typescript-eslint) while keeping bagofcli, Mocha/Sinon/referee and the Suntory/Bob pipeline

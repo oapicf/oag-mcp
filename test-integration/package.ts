@@ -1,7 +1,7 @@
 "use strict";
 /**
- * The npm package installs and the installed CLI serves directly from
- * --spec and --sdk, with no build step or artifact directory.
+ * The npm package installs and the installed CLI serves from --spec and
+ * --sdk.
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -85,8 +85,8 @@ describe("package - npm pack and global install", function () {
       JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"))
         .version,
     );
-    const help = spawnSync(bin, ["--help"], { encoding: "utf8" });
-    assert.equals(help.stdout.includes("build"), false, help.stdout);
+    const help = spawnSync(bin, ["serve", "--help"], { encoding: "utf8" });
+    assert.match(help.stdout, /--spec <spec>/);
     assert.equals(
       files.some((f) => f.startsWith("scripts/")),
       false,

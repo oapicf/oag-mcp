@@ -1,4 +1,4 @@
-# Testing and verification
+# Testing
 
 ```bash
 npm install                 # also builds dist/ (prepare)
@@ -42,24 +42,24 @@ Fixtures are regenerated with the development tool
 `npx tsx scripts/dev/generate-sdk.ts --spec … --out … [--props k=v,…]`,
 which is not part of the package.
 
-## Verification matrix
+## What is verified where
 
-| # | Requirement | Tests |
-| --- | --- | --- |
-| 1 | `serve` works directly with `--spec` and `--sdk` | `serve.ts` "CLI processes", `transports.ts`, `http-auth.ts`, `logging.ts`, `package.ts` (installed CLI) |
-| 2 | stdio and Streamable HTTP expose `search` and `execute` | `transports.ts`, `serve.ts` |
-| 3 | preparation once per process, reused by every session/call | `serve.ts` "should prepare once and reuse…" (one `prepare.*`/`executor.verified`/`tools.registered`, unchanged bundle, three sessions) |
-| 4 | search describes the callable SDK methods | `serve.ts` "index every method accurately", `execute.ts` "search and binding agreement", `test/search/*`, `test/prepare/*` |
-| 5 | execute calls the real SDK against a local mock API | `execute.ts` "real SDK against the mock API", `serve.ts`, `dev-generate.ts` |
-| 6 | MCP and upstream auth, per-operation authorization, isolation, audit | `http-auth.ts`, `upstream-auth.ts`, `execute.ts` "limits, isolation and denied capabilities", `logging.ts`, `test/auth/*`, `test/upstream/*` |
-| 7 | actionable errors: missing dependencies, incompatible SDKs, invalid inputs | `serve.ts` "actionable errors" and CLI failure test, cmdt `commands.yml`, `test/prepare/*` |
-| 8 | the supplied SDK is unchanged | `serve.ts` "should never modify or add files…" (source directory and compiled CommonJS package), missing-dependency test (no `node_modules` created), `dev-generate.ts`, `test/prepare/sdk-input.ts` |
-| 9 | workspaces removed on shutdown and start-up failure | `serve.ts` (in-process close, failure in a late stage, SIGTERM while serving and while starting, stdio disconnect, CLI failure, stale sweep), `test/prepare/workspace.ts` |
-| 10 | no build artifacts or build command needed | every test serves straight from fixtures; `serve.ts` checks no manifest/artifact files; `test/cli.ts` |
-| 11 | preparation does not corrupt stdio | `serve.ts` stdio test (requests queued during preparation, debug + pretty logs, every stdout line is JSON-RPC), `logging.ts` |
-| 12 | removed workflow absent from help and documentation | `test/cli.ts` (only `serve`, no build options), cmdt `commands.yml` (`unknown command 'build'`), `package.ts` (installed `--help`) |
-| A | stdio credentials without stdout contamination | `logging.ts` |
-| A | HTTP rejects missing/invalid/expired/mis-targeted credentials | `http-auth.ts` |
-| A | each upstream mechanism; OAuth caching/renewal | `upstream-auth.ts`, `test/upstream/*` |
-| A | agent cannot obtain credentials; none in the workspace | `upstream-auth.ts`, `execute.ts`, `serve.ts` "keep secrets out of the workspace" |
-| L | categories separable; audit unaffected by level; redaction; correlation; audit failure policy | `logging.ts`, `test/logging/*` |
+| Area | Tests |
+| --- | --- |
+| `serve` from `--spec`/`--sdk`, from the source tree and from the installed package | `serve.ts` "CLI processes", `transports.ts`, `http-auth.ts`, `logging.ts`, `package.ts` |
+| both transports expose `search` and `execute` | `transports.ts`, `serve.ts` |
+| preparation runs once per process and is reused by every session and call | `serve.ts` "should prepare once and reuse…" |
+| search describes the callable SDK methods accurately | `serve.ts` "index every method accurately", `execute.ts` "search and binding agreement", `test/search/*`, `test/prepare/*` |
+| execute calls the real SDK against a local mock API | `execute.ts`, `serve.ts`, `dev-generate.ts` |
+| supported inputs: source and compiled layouts, archives, 7.25.0/7.26.0, option variants | `serve.ts` "supported SDK inputs", `test/prepare/*` |
+| actionable errors: invalid inputs, missing dependencies, incompatible SDKs, spec/SDK mismatch | `serve.ts` "actionable errors" and CLI failure test, cmdt `commands.yml`, `test/prepare/*` |
+| the supplied SDK is never modified | `serve.ts` "should never modify or add files…", the missing-dependency test, `dev-generate.ts`, `test/prepare/sdk-input.ts` |
+| the workspace is removed on shutdown, start-up failure, signals during start-up, stdio disconnect, and after a killed process | `serve.ts`, `test/prepare/workspace.ts` |
+| stdio stdout carries only MCP traffic, including during preparation | `serve.ts` stdio test, `logging.ts` |
+| CLI surface and help | `test/cli.ts`, cmdt `commands.yml` |
+| MCP authentication on HTTP (missing/invalid/expired/mis-targeted credentials), stdio principals | `http-auth.ts`, `logging.ts` |
+| upstream authentication for each mechanism; OAuth caching and renewal | `upstream-auth.ts`, `test/upstream/*` |
+| per-operation authorization, concurrent caller isolation, no MCP token forwarding | `http-auth.ts`, `test/auth/*` |
+| sandbox limits, isolation and denied capabilities | `execute.ts` "limits, isolation and denied capabilities" |
+| agent code cannot obtain credentials; none in the workspace | `upstream-auth.ts`, `execute.ts`, `serve.ts` "keep secrets out of the workspace" |
+| logging: separable categories, audit independent of level, redaction, correlation, audit failure policy | `logging.ts`, `test/logging/*` |

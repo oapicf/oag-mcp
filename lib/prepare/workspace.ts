@@ -2,9 +2,9 @@
 /**
  * The private preparation workspace: a temporary directory owned by one
  * oag-mcp process that holds the prepared SDK bundle, declarations and the
- * sandbox runner for the lifetime of the server. It is never a user-managed
- * artifact; it is removed on shutdown and on start-up failure, and stale
- * workspaces of processes that no longer exist are swept on start-up.
+ * sandbox runner for the lifetime of the server. Users never manage it: it
+ * is removed on shutdown and on start-up failure, and stale workspaces of
+ * processes that have died are swept on start-up.
  *
  * @module prepare/workspace
  */

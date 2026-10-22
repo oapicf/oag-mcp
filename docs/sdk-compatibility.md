@@ -17,11 +17,12 @@ SDKs are rejected with `SDK_GENERATOR_UNSUPPORTED` or
 The version is read from `.openapi-generator/VERSION`. If that file was
 removed, declare it with `--sdk-oag-version <version>`.
 
-oag-mcp does not generate SDKs. Generate yours with the version you want,
-e.g. `openapi-generator-cli generate -g typescript-fetch -i openapi.yaml -o
-./generated-sdk` (CLI, JAR or the `openapitools/openapi-generator-cli`
-Docker image). Java and Docker are needed only for that step, never by
-oag-mcp.
+Generate the SDK with one of these versions using whichever OpenAPI
+Generator distribution you prefer (npm CLI wrapper, JAR or the
+`openapitools/openapi-generator-cli` Docker image), e.g.
+`openapi-generator-cli generate -g typescript-fetch -i openapi.yaml -o
+./generated-sdk`. Generation is your step; the server itself needs neither
+Java nor Docker.
 
 ## Generator options
 

@@ -87,7 +87,7 @@ async function _serve(args: CommandArgs): Promise<void> {
         "CLI_ARGS_INVALID",
         `Unexpected argument "${args.args[0]}"`,
         {
-          hint: "Pass the inputs as options: oag-mcp serve --spec ./openapi.yaml --sdk ./generated-sdk. Prepared artifact directories are no longer used.",
+          hint: "serve takes no positional arguments; pass the inputs as options: oag-mcp serve --spec ./openapi.yaml --sdk ./generated-sdk",
         },
       );
     }

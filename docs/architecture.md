@@ -74,14 +74,13 @@ stderr. Nothing is served partially.
 A `mkdtemp` directory `oag-mcp-ws-*` (mode `0700`) under the OS temporary
 directory holds `sdk/` (bundle, declarations, binding declaration, TS libs),
 `executor/runner.js`, and `input/` for an extracted archive. It contains no
-secrets (credentials are resolved later, host-side) and is not a user-facing
-artifact: it is removed on `SIGINT`/`SIGTERM`, when a stdio client closes
+secrets (credentials are resolved later, host-side) and nothing in it needs
+to be managed by the user: it is removed on `SIGINT`/`SIGTERM`, when a stdio client closes
 stdin, on start-up failure and, as a last resort, on process exit. Signal
 handlers are installed before preparation begins: a signal during start-up
 cancels preparation at the next stage boundary (`STARTUP_ABORTED`, exit
 code 1) and the workspace is removed by the normal failure path; a second
-signal exits immediately. Each
-workspace records its owner PID; a later start removes workspaces whose
+signal exits immediately. Each workspace records its owner PID; a later start removes workspaces whose
 process no longer exists (e.g. after `SIGKILL`).
 
 ### Caching
@@ -148,8 +147,8 @@ Mocha, bagofcli, Suntory/Bob). Changes:
   through `tsx` (Mocha configuration in `package.json`, so Suntory dotfile
   updates cannot remove it). Unit tests use local fixture files;
   integration tests (`test-integration/*.ts`) add a mock API and a local
-  authorisation server. The cmdt `commands.yml` smoke tests were rewritten for
-  the new commands. `.bob.json` runs unit tests via `npm test`.
+  authorisation server. The cmdt `commands.yml` smoke tests cover the `serve`
+  command instead of the sample command. `.bob.json` runs unit tests via `npm test`.
 - **Lint/format**: `eslint.config.js` now uses `typescript-eslint`; Prettier
   config ignores fixtures and build output.
 - **Packaging**: `package.json` gained `exports`, `files`, `types`,

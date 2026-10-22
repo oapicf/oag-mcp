@@ -1,6 +1,6 @@
 "use strict";
 /**
- * Direct serving from --spec and --sdk: start-up preparation of every
+ * Serving from --spec and --sdk: start-up preparation of every
  * supported input, accurate indexing, one preparation per process reused by
  * every call, actionable preparation errors, an unchanged SDK, and removal
  * of the private workspace on shutdown and start-up failure.
@@ -125,8 +125,6 @@ describe("prepare - supported SDK inputs", function () {
     ]) {
       assert(fs.existsSync(path.join(p.workspaceDir, f)), f);
     }
-    // No user-facing artifact files.
-    refute(fs.existsSync(path.join(p.workspaceDir, "oag-mcp-manifest.json")));
     assert(p.workspaceDir.startsWith(os.tmpdir()));
   });
 

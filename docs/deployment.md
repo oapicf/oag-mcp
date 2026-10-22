@@ -9,8 +9,9 @@ A deployment needs four things, all supplied at runtime:
 | **The typescript-fetch SDK** | `--sdk`, a directory or an `npm pack` archive, read once at start-up and never modified. Its runtime dependencies (if any) must already be installed. |
 | **Runtime configuration and secrets** | `--config` plus environment variables or a `0600` secrets file. |
 
-There is no build step and no generated server directory to ship or keep in
-sync. Java, Docker and OpenAPI Generator are not needed on the server.
+The spec and SDK are prepared when the server starts, so deploying is a
+matter of putting these inputs next to oag-mcp. Java, Docker and OpenAPI
+Generator are not needed on the server.
 
 ## Running
 
