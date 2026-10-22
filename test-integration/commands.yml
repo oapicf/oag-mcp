@@ -1,0 +1,18 @@
+- params:
+    oag-mcp: ../../../../../bin/oag-mcp.js
+    base: ../../../../..
+
+- description: Command help should display help information
+  command: 'oag-mcp --help'
+  exitcode: 0
+  output: 'Usage: oag-mcp'
+
+- description: Display command with lower transformation and no reverse
+  command: 'oag-mcp --config-file {base}/examples/oag-mcp.yaml display --reverse false --transform lower'
+  exitcode: 0
+  output: 'Message:'
+
+- description: Display command with upper transformation and reverse
+  command: 'oag-mcp --config-file {base}/examples/oag-mcp.yaml display --reverse true --transform upper'
+  exitcode: 0
+  output: 'Message:'

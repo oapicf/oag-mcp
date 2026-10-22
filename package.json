@@ -1,0 +1,44 @@
+{
+  "name": "oag-mcp",
+  "type": "module",
+  "description": "Turn OpenAPI spec and generated-SDK into code-mode MCP servers",
+  "keywords": [
+  ],
+  "version": "0.9.0-pre.0",
+  "homepage": "https://github.com/oapicf/oag-mcp",
+  "author": "OpenAPI Clients Factory <blah+oapicf@cliffano.com> (https://github.com/oapicf)",
+  "contributors": [
+    "All contributors (https://github.com/oapicf/oag-mcp/graphs/contributors)"
+  ],
+  "main": "./lib/oag-mcp",
+  "bin": {
+    "oag-mcp": "./bin/oag-mcp.js"
+  },
+  "preferGlobal": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oapicf/oag-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/oapicf/oag-mcp/issues"
+  },
+  "directories": {
+    "bin": "./bin",
+    "lib": "./lib",
+    "test": "./test"
+  },
+  "dependencies": {
+    "bagofcli": "^2.5.0",
+    "yaml-js": "^0.3.1"
+  },
+  "devDependencies": {
+    "esmock": "^2.7.3",
+    "@sinonjs/referee": "^11.0.1",
+    "sinon": "^21.0.0"
+  },
+  "scripts": {},
+  "engines": {
+    "node": ">= 20.0.0"
+  },
+  "license": "MIT"
+}

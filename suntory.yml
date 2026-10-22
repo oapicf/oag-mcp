@@ -1,0 +1,14 @@
+---
+package_name: oag-mcp
+author: OpenAPI Clients Factory
+generator:
+  component: node-cli
+  inputs:
+    project_id: oag-mcp
+    project_name: OAG MCP
+    project_desc: Turn OpenAPI spec and generated-SDK into code-mode MCP servers
+    author_name: OpenAPI Clients Factory
+    author_email: blah+oapicf@cliffano.com
+    author_url: https://github.com/oapicf
+    github_id: oapicf
+    github_repo: oag-mcp
