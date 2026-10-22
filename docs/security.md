@@ -42,6 +42,24 @@ Violations produce structured errors (`permission_denied` with `capability`
 or `reason`, `timeout`, `output_limit`, `resource_limit`) and
 `security_audit` log records.
 
+## Start-up preparation
+
+Preparing the SDK at start-up does not weaken any of the above:
+
+- The SDK is **read, never run, on the host**: the TypeScript compiler API
+  and esbuild parse and bundle it; its code executes only inside the Deno
+  sandbox (first in the start-up verification run, which has no bridge
+  access). No package manager, lifecycle script or SDK build script is
+  invoked, and the supplied directory is never written to.
+- Archives are validated before extraction (no absolute paths, `..`, links,
+  devices; bounded entry count and size) and extracted only into the
+  private workspace.
+- The workspace (`0700`) holds generated code and declarations only. Upstream
+  credentials are resolved later, host-side, by the credential provider and
+  never reach the workspace, the index, the `sdk` binding or logs.
+- The sandbox loads its runner and bundle from the workspace; the bundle is
+  written once before the server is ready and not rewritten while serving.
+
 ## Result serialisation
 
 Results must be JSON-compatible. `Date` becomes an ISO string; `undefined`
@@ -88,3 +106,5 @@ not a complete sandbox:
 - Multipart and binary request bodies are serialised across the bridge but
   are not covered by the test suite yet.
 - No per-execution CPU quota (see above).
+- No persistent preparation cache: every start prepares the SDK again
+  (typically one to a few seconds) and changes need a restart.

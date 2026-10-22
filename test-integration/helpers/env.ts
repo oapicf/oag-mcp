@@ -1,7 +1,8 @@
 "use strict";
 /**
- * Shared integration-test environment: fixture paths, cached artifact
- * builds, prerequisite detection and service/CLI helpers.
+ * Shared integration-test environment: fixture paths, SDK preparations
+ * shared across tests (one per input combination, as a server process would
+ * hold), prerequisite detection and service/CLI helpers.
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
@@ -9,13 +10,17 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { build } from "../../lib/build/build.js";
-import { cachedJarPath } from "../../lib/build/generate.js";
+import { cachedJarPath } from "../../scripts/dev/generate-sdk.js";
 import {
   parseRuntimeConfig,
   type RuntimeConfig,
 } from "../../lib/config/runtime-config.js";
 import { Logs } from "../../lib/logging/logger.js";
+import {
+  type PrepareOptions,
+  type PreparedSdk,
+  prepareSdk,
+} from "../../lib/prepare/prepare.js";
 import { OagMcpService } from "../../lib/runtime/service.js";
 import {
   ADMIN_PASSWORD,
@@ -43,6 +48,9 @@ export const SDK_VARIANT = path.join(FIXTURES, "sdk-variant-7.26.0");
 export const SDK_TGZ = path.join(FIXTURES, "petclinic-sdk-1.2.0.tgz");
 export const BIN = path.join(ROOT, "bin", "oag-mcp.js");
 
+/** `serve` input options for the default fixture. */
+export const SERVE_ARGS = ["--spec", SPEC, "--sdk", SDK_726];
+
 /** Environment variables carrying upstream secrets for tests. */
 export const SECRET_ENV = {
   PC_API_KEY: API_KEY,
@@ -55,7 +63,7 @@ export const SECRET_ENV = {
 Object.assign(process.env, SECRET_ENV);
 
 const WORK = fs.mkdtempSync(path.join(os.tmpdir(), "oag-mcp-it-"));
-const artifacts = new Map<string, Promise<string>>();
+const preparations = new Map<string, Promise<PreparedSdk>>();
 
 /** Quiet logger for builds. */
 export function fileLogs(name = "it"): {
@@ -83,33 +91,27 @@ export function fileLogs(name = "it"): {
 }
 
 /**
- * Build (once per run) and return an artifact directory.
+ * Prepare (once per test run and key) an SDK, as one server process would.
  *
  * @param {String} key - cache key
- * @param {Object} opts - build options without logs/out
- * @return {Promise} artifact dir
+ * @param {Object} opts - preparation options without logs
+ * @return {Promise} prepared SDK
  */
-export function artifact(
+export function prepared(
   key: string,
-  opts: Omit<Parameters<typeof build>[0], "logs" | "out">,
-): Promise<string> {
-  let p = artifacts.get(key);
+  opts: Omit<PrepareOptions, "logs">,
+): Promise<PreparedSdk> {
+  let p = preparations.get(key);
   if (!p) {
-    const out = path.join(WORK, `artifact-${key}`);
-    p = build({
-      ...opts,
-      out,
-      force: true,
-      logs: fileLogs(`build-${key}`).logs,
-    }).then((r) => r.outDir);
-    artifacts.set(key, p);
+    p = prepareSdk({ ...opts, logs: fileLogs(`prepare-${key}`).logs });
+    preparations.set(key, p);
   }
   return p;
 }
 
-/** The default artifact built from the 7.26.0 source fixture. */
-export const defaultArtifact = () =>
-  artifact("source-7.26.0", { spec: SPEC, sdk: SDK_726 });
+/** The default preparation of the 7.26.0 source fixture. */
+export const defaultPrepared = () =>
+  prepared("source-7.26.0", { spec: SPEC, sdk: SDK_726 });
 
 /** Work directory for tests. */
 export function workDir(name: string): string {
@@ -195,14 +197,14 @@ export function runtimeConfig(
   });
 }
 
-/** Create a service for an artifact. */
+/** Create a service for a prepared SDK. */
 export async function service(
-  dir: string,
+  sdk: PreparedSdk,
   config: RuntimeConfig,
   logs?: Logs,
 ): Promise<OagMcpService> {
   return OagMcpService.create({
-    artifactDir: dir,
+    prepared: sdk,
     config,
     configBaseDir: process.cwd(),
     logs: logs ?? fileLogs("svc").logs,

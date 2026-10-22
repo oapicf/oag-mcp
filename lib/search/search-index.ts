@@ -172,7 +172,7 @@ export class MethodSearchIndex {
 
   /**
    * @param {Array} records - method records
-   * @param {String} [serialised] - MiniSearch JSON from the artifact
+   * @param {String} [serialised] - previously serialised MiniSearch JSON
    */
   constructor(
     readonly records: MethodRecord[],
@@ -194,7 +194,7 @@ export class MethodSearchIndex {
   }
 
   /**
-   * Serialise the full-text index for the artifact.
+   * Serialise the full-text index.
    *
    * @return {String} JSON
    */

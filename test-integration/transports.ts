@@ -13,7 +13,7 @@ import referee from "@sinonjs/referee";
 import {
   BIN,
   SECRET_ENV,
-  defaultArtifact,
+  SERVE_ARGS,
   startHttpServer,
   upstreamAuthConfig,
   workDir,
@@ -24,12 +24,10 @@ import { type MockApi, startMockApi } from "./helpers/mock-api.js";
 const { assert } = referee;
 
 let api: MockApi;
-let art: string;
 let config: string;
 
 before(async function () {
   this.timeout(120000);
-  art = await defaultArtifact();
   api = await startMockApi();
   config = writeConfig(workDir("transports"), {
     upstream: { baseUrl: api.baseUrl },
@@ -75,7 +73,7 @@ describe("transports - stdio and Streamable HTTP", function () {
         args: [
           BIN,
           "serve",
-          art,
+          ...SERVE_ARGS,
           "--transport",
           "stdio",
           "--config",
@@ -91,7 +89,7 @@ describe("transports - stdio and Streamable HTTP", function () {
     await stdioClient.close();
 
     const server = await startHttpServer(
-      [art, "--config", config, "--log-level", "warn"],
+      [...SERVE_ARGS, "--config", config, "--log-level", "warn"],
       SECRET_ENV,
     );
     try {
@@ -139,7 +137,7 @@ describe("transports - stdio and Streamable HTTP", function () {
   it("should serve Streamable HTTP (not legacy HTTP+SSE) on loopback with DNS rebinding protection", async function () {
     this.timeout(60000);
     const server = await startHttpServer(
-      [art, "--config", config, "--log-level", "warn"],
+      [...SERVE_ARGS, "--config", config, "--log-level", "warn"],
       SECRET_ENV,
     );
     try {

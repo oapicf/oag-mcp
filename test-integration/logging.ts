@@ -12,11 +12,13 @@ import path from "node:path";
 import referee from "@sinonjs/referee";
 
 import { Logs } from "../lib/logging/logger.js";
+import type { PreparedSdk } from "../lib/prepare/prepare.js";
 import {
   BIN,
   LOCAL,
   SECRET_ENV,
-  defaultArtifact,
+  SERVE_ARGS,
+  defaultPrepared,
   runtimeConfig,
   service,
   upstreamAuthConfig,
@@ -30,11 +32,11 @@ const { assert, refute } = referee;
 
 let api: MockApi;
 let auth: AuthServer;
-let art: string;
+let art: PreparedSdk;
 
 before(async function () {
   this.timeout(120000);
-  art = await defaultArtifact();
+  art = await defaultPrepared();
   auth = await startAuthServer();
   api = await startMockApi({ oauthTokens: auth.upstreamTokens });
 });
@@ -66,7 +68,7 @@ async function stdioSession(
 }> {
   const child = spawn(
     process.execPath,
-    [BIN, "serve", art, "--transport", "stdio", ...args],
+    [BIN, "serve", ...SERVE_ARGS, "--transport", "stdio", ...args],
     {
       env: { ...process.env, ...env },
       stdio: ["pipe", "pipe", "pipe"],
@@ -158,9 +160,9 @@ describe("logging - stdio sessions", function () {
       ["search", "execute"],
     );
     assert.equals(responses[3].result.structuredContent.result, 3);
-    assert.match(stderr, /server\.started/);
+    assert.match(stderr, /server\.ready/);
     assert.match(stderr, /authorization\.allowed/);
-    refute.contains(stdout, "server.started");
+    refute.contains(stdout, "server.ready");
   });
 
   it("should route categories to separate files and keep auditing when operational logs are silenced", async function () {
@@ -219,7 +221,7 @@ describe("logging - stdio sessions", function () {
     );
     assert.contains(
       lines(op2).map((r) => r.event),
-      "server.started",
+      "server.ready",
     );
   });
 

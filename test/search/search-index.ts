@@ -4,14 +4,14 @@ import path from "node:path";
 
 import referee from "@sinonjs/referee";
 
-import { SdkAnalyzer, scanImplementation } from "../../lib/build/analyze.js";
-import { emitDeclarations } from "../../lib/build/bundle.js";
-import { inspectSdk } from "../../lib/build/compat.js";
+import { SdkAnalyzer, scanImplementation } from "../../lib/prepare/analyze.js";
+import { emitDeclarations } from "../../lib/prepare/bundle.js";
+import { inspectSdk } from "../../lib/prepare/compat.js";
 import {
   buildRecords,
   hintsForOperation,
-} from "../../lib/build/index-builder.js";
-import { loadSpec } from "../../lib/build/spec.js";
+} from "../../lib/prepare/index-builder.js";
+import { loadSpec } from "../../lib/prepare/spec.js";
 import {
   MethodSearchIndex,
   authLine,

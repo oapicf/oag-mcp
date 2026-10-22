@@ -6,27 +6,37 @@
   exitcode: 0
   output: "Usage: oag-mcp"
 
-- description: Build help should list both build workflows
-  command: "oag-mcp build --help"
+- description: Serve help should describe direct serving from a spec and an SDK
+  command: "oag-mcp serve --help"
   exitcode: 0
-  output: "--generate-sdk"
+  output: "--sdk <sdk>"
 
-- description: Build from an existing SDK directory
-  command: "oag-mcp build --spec {base}/test/fixtures/petclinic/openapi.yaml --sdk {base}/test/fixtures/petclinic/sdk-7.26.0 --out petclinic-server --log-level warn"
-  exitcode: 0
-  output: "Methods: 11 across 4 API classes"
+- description: The removed build command should not exist
+  command: "oag-mcp build --spec {base}/test/fixtures/petclinic/openapi.yaml --out unused 2>&1"
+  exitcode: 1
+  output: "unknown command 'build'"
 
-- description: Build from a packaged SDK archive
-  command: "oag-mcp build --spec {base}/test/fixtures/petclinic/openapi.yaml --sdk {base}/test/fixtures/petclinic/petclinic-sdk-1.2.0.tgz --sdk-layout compiled --out petclinic-server-tgz --log-level warn"
-  exitcode: 0
-  output: "compiled, archive"
+- description: Serve should reject an artifact directory argument with migration guidance
+  command: "oag-mcp serve petclinic-server --log-level silent 2>&1"
+  exitcode: 1
+  output: "--spec ./openapi.yaml --sdk ./generated-sdk"
 
-- description: Build should reject a missing SDK with an actionable error
-  command: "oag-mcp build --spec {base}/test/fixtures/petclinic/openapi.yaml --sdk does-not-exist --out unused --log-level silent 2>&1"
+- description: Serve should require an SDK
+  command: "oag-mcp serve --spec {base}/test/fixtures/petclinic/openapi.yaml --log-level silent 2>&1"
+  exitcode: 1
+  output: "--sdk is required"
+
+- description: Serve should reject a missing SDK with an actionable error
+  command: "oag-mcp serve --spec {base}/test/fixtures/petclinic/openapi.yaml --sdk does-not-exist --log-level silent 2>&1"
   exitcode: 1
   output: "SDK_NOT_FOUND"
 
+- description: Serve should reject an SDK from another generator layout
+  command: "oag-mcp serve --spec {base}/test/fixtures/petclinic/openapi.yaml --sdk {base}/test/fixtures/petclinic/sdk-7.26.0 --sdk-layout compiled --log-level silent 2>&1"
+  exitcode: 1
+  output: "SDK_LAYOUT_UNSUPPORTED"
+
 - description: Serve should reject legacy HTTP+SSE as a transport
-  command: "oag-mcp serve petclinic-server --transport sse --log-level silent 2>&1"
+  command: "oag-mcp serve --spec {base}/test/fixtures/petclinic/openapi.yaml --sdk {base}/test/fixtures/petclinic/sdk-7.26.0 --transport sse --log-level silent 2>&1"
   exitcode: 1
   output: "streamable-http"

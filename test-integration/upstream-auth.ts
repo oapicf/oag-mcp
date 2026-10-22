@@ -11,7 +11,7 @@ import type { OagMcpService } from "../lib/runtime/service.js";
 import {
   LOCAL,
   SECRET_ENV,
-  defaultArtifact,
+  defaultPrepared,
   fileLogs,
   runtimeConfig,
   service,
@@ -40,7 +40,7 @@ before(async function () {
   const l = fileLogs("upstream");
   logRecords = l.records;
   svc = await service(
-    await defaultArtifact(),
+    await defaultPrepared(),
     runtimeConfig(api, {}, auth),
     l.logs,
   );
@@ -114,7 +114,7 @@ describe("upstream-auth - OAuth2 token caching and renewal", function () {
     const l = fileLogs("oauth-cache");
     auth.upstreamTokenLifetime = 32; // 30s refresh skew → valid for ~2s
     const fresh = await service(
-      await defaultArtifact(),
+      await defaultPrepared(),
       runtimeConfig(api, {}, auth),
       l.logs,
     );
@@ -142,7 +142,7 @@ describe("upstream-auth - OAuth2 token caching and renewal", function () {
 
   it("should renew a token that the API rejects", async function () {
     const fresh = await service(
-      await defaultArtifact(),
+      await defaultPrepared(),
       runtimeConfig(api, {}, auth),
     );
     const create = `return (await sdk.PetsApi.createPet({ newPet: { name: "D", species: "dog" } })).id;`;
@@ -162,7 +162,7 @@ describe("upstream-auth - configuration and confidentiality", function () {
   it("should fail fast when a configured secret is missing", async function () {
     try {
       await service(
-        await defaultArtifact(),
+        await defaultPrepared(),
         runtimeConfig(api, {
           upstreamAuth: {
             schemes: {
@@ -180,7 +180,7 @@ describe("upstream-auth - configuration and confidentiality", function () {
 
   it("should not silently downgrade when no credentials are configured", async function () {
     const noAuth = await service(
-      await defaultArtifact(),
+      await defaultPrepared(),
       runtimeConfig(api, { upstreamAuth: { schemes: {} } }),
     );
     const before = api.requests.length;

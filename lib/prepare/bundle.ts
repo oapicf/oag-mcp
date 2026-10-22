@@ -1,10 +1,11 @@
 "use strict";
 /**
- * Prepare the SDK once at build time: bundle it into a single ES module for
- * the Deno executor, and produce TypeScript declarations used to type-check
- * agent code.
+ * Prepare the SDK once at server start-up: bundle it into a single ES module
+ * for the Deno executor, and produce TypeScript declarations used to
+ * type-check agent code. All output goes to the oag-mcp workspace; the SDK
+ * is only read.
  *
- * @module build/bundle
+ * @module prepare/bundle
  */
 import fs from "node:fs";
 import { createRequire } from "node:module";
@@ -63,8 +64,9 @@ function _isCommonJs(entry: string): boolean {
  *
  * @param {Object} opts - options
  * @param {String} opts.entry - SDK entry module
- * @param {String} opts.root - SDK working copy root (for resolution)
- * @param {String} opts.outFile - bundle output path
+ * @param {String} opts.root - SDK package root (for resolution; read-only)
+ * @param {String} opts.outFile - bundle output path (in the workspace)
+ * @param {String} opts.shimDir - workspace directory for a CommonJS entry shim
  * @param {Array} opts.classNames - API classes that must be exported
  * @return {Promise} { exports, bytes }
  */
@@ -72,6 +74,7 @@ export async function bundleSdk(opts: {
   entry: string;
   root: string;
   outFile: string;
+  shimDir: string;
   classNames: string[];
 }): Promise<{ exports: string[]; bytes: number }> {
   fs.mkdirSync(path.dirname(opts.outFile), { recursive: true });
@@ -79,7 +82,8 @@ export async function bundleSdk(opts: {
   if (_isCommonJs(entry)) {
     // CommonJS entries lose named exports when bundled to ESM; re-export the
     // names the runner needs from a generated ESM shim.
-    const shim = path.join(opts.root, "__oag_mcp_entry.mjs");
+    fs.mkdirSync(opts.shimDir, { recursive: true });
+    const shim = path.join(opts.shimDir, "__oag_mcp_entry.mjs");
     const names = [
       ...new Set([
         ...REQUIRED_RUNTIME_EXPORTS,
@@ -91,7 +95,7 @@ export async function bundleSdk(opts: {
     ];
     fs.writeFileSync(
       shim,
-      `import __sdk from ${JSON.stringify("./" + path.relative(opts.root, entry).split(path.sep).join("/"))};\n` +
+      `import __sdk from ${JSON.stringify(entry.split(path.sep).join("/"))};\n` +
         names.map((n) => `export const ${n} = __sdk.${n};`).join("\n") +
         "\n",
     );
@@ -126,7 +130,7 @@ export async function bundleSdk(opts: {
         .map((e) => e.text)
         .join("; ")}`,
       {
-        hint: "If the SDK has runtime dependencies, make sure they are installed in the SDK (node_modules) or let oag-mcp install them. Node.js built-in modules cannot be used by the sandboxed SDK.",
+        hint: "If the SDK has runtime dependencies, install them in the SDK directory yourself (e.g. `npm install --omit=dev --ignore-scripts`); oag-mcp never installs packages. Node.js built-in modules cannot be used by the sandboxed SDK.",
         cause: err,
       },
     );
@@ -179,10 +183,10 @@ export function emitDeclarations(entry: string, outDir: string): string[] {
 }
 
 /**
- * Copy compiled declarations into the artifact.
+ * Copy compiled declarations into the workspace.
  *
  * @param {String} typesDir - SDK declarations directory (e.g. dist)
- * @param {String} outDir - artifact types directory
+ * @param {String} outDir - workspace types directory
  */
 export function copyDeclarations(typesDir: string, outDir: string): void {
   for (const rel of listFiles(typesDir, (r) => !r.startsWith("esm/"))) {

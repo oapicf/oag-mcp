@@ -22,40 +22,16 @@
     }
   ],
   "commands": {
-    "build": {
-      "desc": "Build a code-mode MCP server artifact from an OpenAPI document and a typescript-fetch SDK",
+    "serve": {
+      "desc": "Prepare an OpenAPI document and an existing OpenAPI Generator typescript-fetch SDK, then serve them as an MCP server exposing the search and execute tools",
       "options": [
         {
           "arg": "--spec <spec>",
-          "desc": "OpenAPI 3.0/3.1 document (YAML or JSON)"
+          "desc": "OpenAPI 3.0/3.1 document (YAML or JSON), required"
         },
         {
           "arg": "--sdk <sdk>",
-          "desc": "Existing typescript-fetch SDK: a package directory or an npm package archive (.tgz)"
-        },
-        {
-          "arg": "--generate-sdk",
-          "desc": "Generate the typescript-fetch SDK locally with OpenAPI Generator"
-        },
-        {
-          "arg": "--out <out>",
-          "desc": "Output artifact directory"
-        },
-        {
-          "arg": "--oag-version <oagVersion>",
-          "desc": "Exact OpenAPI Generator version for --generate-sdk, default: 7.26.0"
-        },
-        {
-          "arg": "--oag-backend <oagBackend>",
-          "desc": "Generation backend for --generate-sdk: java (JAR, default) or docker"
-        },
-        {
-          "arg": "--oag-jar <oagJar>",
-          "desc": "Local openapi-generator-cli JAR to use instead of the cache or Maven Central"
-        },
-        {
-          "arg": "--oag-options <oagOptions>",
-          "desc": "Comma-separated generator additional properties, e.g. withInterfaces=true,useSingleRequestParameter=false"
+          "desc": "Existing typescript-fetch SDK: a package directory or an npm package archive (.tgz), required; never modified"
         },
         {
           "arg": "--sdk-layout <sdkLayout>",
@@ -69,35 +45,6 @@
           "arg": "--allow-untested-oag-version",
           "desc": "Proceed with an OpenAPI Generator version outside the tested set"
         },
-        {
-          "arg": "--no-install",
-          "desc": "Never run npm install for SDK runtime dependencies"
-        },
-        {
-          "arg": "--skip-verify",
-          "desc": "Skip loading the prepared SDK bundle in the Deno sandbox at build time"
-        },
-        {
-          "arg": "--force",
-          "desc": "Replace an existing artifact in --out"
-        }
-      ],
-      "examples": [
-        "oag-mcp build --spec ./openapi.yaml --sdk ./generated-sdk --out ./my-mcp-server",
-        "oag-mcp build --spec ./openapi.yaml --sdk ./petstore-sdk-1.0.0.tgz --out ./my-mcp-server",
-        "oag-mcp build --spec ./openapi.yaml --generate-sdk --out ./my-mcp-server",
-        "oag-mcp build --spec ./openapi.yaml --generate-sdk --oag-version 7.26.0 --oag-backend docker --out ./my-mcp-server"
-      ]
-    },
-    "serve": {
-      "desc": "Serve an artifact as an MCP server exposing the search and execute tools",
-      "args": [
-        {
-          "name": "artifact",
-          "rules": ["required"]
-        }
-      ],
-      "options": [
         {
           "arg": "--transport <transport>",
           "desc": "stdio (default) or streamable-http"
@@ -120,9 +67,9 @@
         }
       ],
       "examples": [
-        "oag-mcp serve ./my-mcp-server --transport stdio",
-        "oag-mcp serve ./my-mcp-server --transport streamable-http --port 3000",
-        "oag-mcp serve ./my-mcp-server --transport streamable-http --config ./oag-mcp.config.yaml"
+        "oag-mcp serve --spec ./openapi.yaml --sdk ./generated-sdk --transport stdio",
+        "oag-mcp serve --spec ./openapi.yaml --sdk ./generated-sdk --transport streamable-http --port 3000",
+        "oag-mcp serve --spec ./openapi.yaml --sdk ./petstore-sdk-1.0.0.tgz --config ./oag-mcp.config.yaml"
       ]
     }
   }

@@ -1,6 +1,6 @@
 "use strict";
 /**
- * Shared data types for the build artifact, search index and runtime.
+ * Shared data types for SDK preparation, the search index and the runtime.
  *
  * @module types
  */
@@ -149,32 +149,28 @@ export interface OperationBinding {
   security: SecurityRequirement[];
 }
 
-/** Manifest written to `oag-mcp-manifest.json` in every artifact. */
-export interface ArtifactManifest {
-  format: "oag-mcp-artifact";
-  formatVersion: number;
-  buildId: string;
-  createdAt: string;
+/**
+ * Description of an SDK prepared at server start-up (in memory; never
+ * written as a user-managed artifact).
+ */
+export interface PreparedSdkInfo {
+  /** Random id of this preparation (one per server process). */
+  prepareId: string;
+  preparedAt: string;
   oagMcpVersion: string;
   target: {
     generator: "typescript-fetch";
     oagVersion: string;
     oagVersionTested: boolean;
-    /** Options passed to the generator (generate path) or detected. */
+    /** Generator options detected from the SDK sources. */
     options: Record<string, string | boolean>;
-    optionsSource: "generator-arguments" | "detected";
     sdkLayout: "source" | "compiled";
     sdkPackage?: { name?: string; version?: string };
   };
-  tools: {
-    typescript: string;
-    esbuild: string;
-    deno: { minVersion: string; maxVersionExclusive: string };
-    openapiGenerator?: { version: string; backend: "java" | "docker" };
-  };
+  tools: { typescript: string; esbuild: string };
   inputs: {
     spec: { fileName: string; sha256: string };
-    sdk: { kind: "directory" | "archive" | "generated"; sha256: string };
+    sdk: { kind: "directory" | "archive"; sha256: string };
   };
   api: {
     title: string;
@@ -186,6 +182,4 @@ export interface ArtifactManifest {
   securitySchemes: Record<string, SecuritySchemeInfo>;
   operations: OperationBinding[];
   unmappedOperations: Array<{ key: string; operationId?: string }>;
-  /** SHA-256 of every artifact file, keyed by relative path. */
-  files: Record<string, string>;
 }

@@ -9,7 +9,6 @@ import { fileURLToPath } from "node:url";
 
 import bag from "bagofcli";
 
-import { build } from "./build/build.js";
 import { loadRuntimeConfig } from "./config/runtime-config.js";
 import { OagMcpError, formatCliError } from "./errors.js";
 import {
@@ -18,7 +17,7 @@ import {
   Logs,
   type LoggingOptions,
 } from "./logging/logger.js";
-import { serve } from "./runtime/serve.js";
+import { type RunningServer, serve } from "./runtime/serve.js";
 
 const DIRNAME = path.dirname(fileURLToPath(import.meta.url));
 
@@ -60,29 +59,6 @@ function _loggingOptions(
 }
 
 /**
- * Parse `k=v,k2=v2`.
- *
- * @private
- */
-function _parseOptions(s: string | undefined): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const part of (s ?? "")
-    .split(",")
-    .map((x) => x.trim())
-    .filter(Boolean)) {
-    const idx = part.indexOf("=");
-    if (idx <= 0) {
-      throw new OagMcpError(
-        "CLI_ARGS_INVALID",
-        `Invalid --oag-options entry "${part}" (expected key=value)`,
-      );
-    }
-    out[part.slice(0, idx)] = part.slice(idx + 1);
-  }
-  return out;
-}
-
-/**
  * Report a command failure and exit.
  *
  * @private
@@ -99,83 +75,6 @@ function _fail(logs: Logs | undefined, command: string, err: unknown): never {
 }
 
 /**
- * `build` action.
- *
- * @private
- */
-async function _build(args: CommandArgs): Promise<void> {
-  let logs: Logs | undefined;
-  try {
-    logs = new Logs(_loggingOptions(args));
-    logs.op("info", "cli.command.started", { command: "build" });
-    for (const required of ["spec", "out"]) {
-      if (!args[required]) {
-        throw new OagMcpError("CLI_ARGS_INVALID", `--${required} is required`, {
-          hint: "Run `oag-mcp build --help` for usage.",
-        });
-      }
-    }
-    const backend = (args.oagBackend as string | undefined) ?? "java";
-    if (backend !== "java" && backend !== "docker") {
-      throw new OagMcpError(
-        "CLI_ARGS_INVALID",
-        "--oag-backend must be java or docker",
-      );
-    }
-    const layout = (args.sdkLayout as string | undefined) ?? "auto";
-    if (!["auto", "source", "compiled"].includes(layout)) {
-      throw new OagMcpError(
-        "CLI_ARGS_INVALID",
-        "--sdk-layout must be auto, source or compiled",
-      );
-    }
-    if (
-      !args.generateSdk &&
-      (args.oagVersion || args.oagBackend || args.oagJar || args.oagOptions)
-    ) {
-      throw new OagMcpError(
-        "CLI_ARGS_INVALID",
-        "--oag-version, --oag-backend, --oag-jar and --oag-options apply only with --generate-sdk",
-      );
-    }
-    const result = await build({
-      spec: String(args.spec),
-      sdk: args.sdk as string | undefined,
-      generateSdk: Boolean(args.generateSdk),
-      out: String(args.out),
-      oagVersion: args.oagVersion as string | undefined,
-      oagBackend: backend,
-      oagJar: args.oagJar as string | undefined,
-      oagOptions: _parseOptions(args.oagOptions as string | undefined),
-      sdkLayout: layout as "auto" | "source" | "compiled",
-      sdkOagVersion: args.sdkOagVersion as string | undefined,
-      allowUntestedOagVersion: Boolean(args.allowUntestedOagVersion),
-      installDependencies: args.install !== false,
-      verifyWithDeno: !args.skipVerify,
-      force: Boolean(args.force),
-      logs,
-    });
-    logs.op("info", "cli.command.completed", {
-      command: "build",
-      outcome: "success",
-    });
-    logs.flush();
-    const m = result.manifest;
-    const lines = [
-      `Built ${m.api.title} ${m.api.version} → ${result.outDir}`,
-      `  SDK: typescript-fetch, OpenAPI Generator ${m.target.oagVersion} (${m.target.sdkLayout}, ${m.inputs.sdk.kind})`,
-      `  Methods: ${result.records.length} across ${new Set(result.records.map((r) => r.className)).size} API classes`,
-      `  Build ID: ${m.buildId}`,
-      ...result.warnings.map((w) => `  Warning: ${w}`),
-      `Run: oag-mcp serve ${path.relative(process.cwd(), result.outDir) || "."} --transport stdio`,
-    ];
-    process.stdout.write(`${lines.join("\n")}\n`);
-  } catch (err) {
-    _fail(logs, "build", err);
-  }
-}
-
-/**
  * `serve` action.
  *
  * @private
@@ -183,11 +82,27 @@ async function _build(args: CommandArgs): Promise<void> {
 async function _serve(args: CommandArgs): Promise<void> {
   let logs: Logs | undefined;
   try {
-    const artifact = args.args?.[0];
-    if (!artifact) {
+    if (args.args && args.args.length > 0) {
       throw new OagMcpError(
         "CLI_ARGS_INVALID",
-        "Usage: oag-mcp serve <artifact-dir> [--transport stdio|streamable-http]",
+        `Unexpected argument "${args.args[0]}"`,
+        {
+          hint: "Pass the inputs as options: oag-mcp serve --spec ./openapi.yaml --sdk ./generated-sdk. Prepared artifact directories are no longer used.",
+        },
+      );
+    }
+    for (const required of ["spec", "sdk"]) {
+      if (!args[required]) {
+        throw new OagMcpError("CLI_ARGS_INVALID", `--${required} is required`, {
+          hint: "Usage: oag-mcp serve --spec ./openapi.yaml --sdk ./generated-sdk [--transport stdio|streamable-http]",
+        });
+      }
+    }
+    const layout = (args.sdkLayout as string | undefined) ?? "auto";
+    if (!["auto", "source", "compiled"].includes(layout)) {
+      throw new OagMcpError(
+        "CLI_ARGS_INVALID",
+        "--sdk-layout must be auto, source or compiled",
       );
     }
     const transport = (args.transport as string | undefined) ?? "stdio";
@@ -221,25 +136,31 @@ async function _serve(args: CommandArgs): Promise<void> {
     }
     logs = new Logs(_loggingOptions(args, config.logging));
     logs.op("info", "cli.command.started", { command: "serve", transport });
-    const running = await serve({
-      artifactDir: artifact,
-      transport,
-      config,
-      configBaseDir: baseDir,
-      logs,
-    });
-    if (running.url) {
-      process.stderr.write(`oag-mcp listening on ${running.url}\n`);
-    }
+    // Signal handlers are installed before preparation starts. A signal
+    // during start-up cancels preparation at the next stage boundary; the
+    // normal failure path then removes the workspace. A second signal exits
+    // immediately (the exit hook still removes the workspace, best effort).
+    const state: { running?: RunningServer } = {};
+    const startup = new AbortController();
     let closing = false;
     const shutdown = async (signal: string) => {
       if (closing) {
+        if (!state.running) {
+          process.exit(1);
+        }
         return;
       }
       closing = true;
-      logs?.op("info", "server.shutdown_requested", { signal });
+      logs?.op("info", "server.shutdown_requested", {
+        signal,
+        phase: state.running ? "serving" : "starting",
+      });
+      if (!state.running) {
+        startup.abort();
+        return;
+      }
       try {
-        await running.close();
+        await state.running.close();
       } finally {
         logs?.op("info", "cli.command.completed", {
           command: "serve",
@@ -251,6 +172,32 @@ async function _serve(args: CommandArgs): Promise<void> {
     };
     process.on("SIGINT", () => void shutdown("SIGINT"));
     process.on("SIGTERM", () => void shutdown("SIGTERM"));
+    const running = await serve({
+      spec: String(args.spec),
+      sdk: String(args.sdk),
+      sdkLayout: layout as "auto" | "source" | "compiled",
+      sdkOagVersion: args.sdkOagVersion as string | undefined,
+      allowUntestedOagVersion: Boolean(args.allowUntestedOagVersion),
+      transport,
+      config,
+      configBaseDir: baseDir,
+      signal: startup.signal,
+      logs,
+    });
+    state.running = running;
+    if (closing) {
+      // The signal arrived while the transport was starting.
+      await running.close();
+      logs.flush();
+      process.exit(1);
+    }
+    if (running.url) {
+      process.stderr.write(`oag-mcp listening on ${running.url}\n`);
+    }
+    if (transport === "stdio") {
+      // The MCP client closed our stdin: shut down and remove the workspace.
+      process.stdin.once("end", () => void shutdown("stdin_closed"));
+    }
   } catch (err) {
     _fail(logs, "serve", err);
   }
@@ -262,7 +209,6 @@ async function _serve(args: CommandArgs): Promise<void> {
 function exec(): void {
   const actions = {
     commands: {
-      build: { action: (args: CommandArgs) => void _build(args) },
       serve: { action: (args: CommandArgs) => void _serve(args) },
     },
   };

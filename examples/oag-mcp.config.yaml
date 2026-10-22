@@ -1,7 +1,9 @@
 # Example runtime configuration for the Pet Clinic fixture
 # (test/fixtures/petclinic/openapi.yaml). Secrets are referenced, never inlined:
 #   export PETCLINIC_API_KEY=... PETCLINIC_TOKEN=... PETCLINIC_CLIENT_ID=... PETCLINIC_CLIENT_SECRET=...
-#   oag-mcp serve ./petclinic-server --transport stdio --config examples/oag-mcp.config.yaml
+#   oag-mcp serve --spec test/fixtures/petclinic/openapi.yaml \
+#     --sdk test/fixtures/petclinic/sdk-7.26.0 --transport stdio \
+#     --config examples/oag-mcp.config.yaml
 upstream:
   baseUrl: http://127.0.0.1:4010/v1
 

@@ -1,6 +1,13 @@
 "use strict";
 /**
- * `oag-mcp serve`: run an artifact over stdio or Streamable HTTP.
+ * `oag-mcp serve`: prepare an OpenAPI document and an existing
+ * typescript-fetch SDK once, then serve them over stdio or Streamable HTTP.
+ *
+ * Start-up order: inputs → compatibility → SDK bundle/declarations → index
+ * (prepare/prepare) → bridge and executor (runtime/service) → tool
+ * registration → transport. No request is accepted until every stage has
+ * succeeded; on any failure the private workspace is removed and the error
+ * is returned (no partially functional server).
  *
  * stdio uses the local process/OS boundary for access control: the parent
  * process that spawned the server is the caller. stdout carries only MCP
@@ -35,7 +42,13 @@ import {
 import { OagMcpError } from "../errors.js";
 import type { Logs } from "../logging/logger.js";
 import { secrets } from "../logging/redact.js";
-import { createMcpServer } from "./mcp-server.js";
+import {
+  type PrepareOptions,
+  type PreparedSdk,
+  prepareSdk,
+  runStage,
+} from "../prepare/prepare.js";
+import { TOOL_NAMES, createMcpServer } from "./mcp-server.js";
 import { OagMcpService } from "./service.js";
 
 /** A running server. */
@@ -47,8 +60,7 @@ export interface RunningServer {
 }
 
 /** Options for {@link serve}. */
-export interface ServeOptions {
-  artifactDir: string;
+export interface ServeOptions extends Omit<PrepareOptions, "logs"> {
   transport: "stdio" | "streamable-http";
   config: RuntimeConfig;
   configBaseDir: string;
@@ -57,25 +69,74 @@ export interface ServeOptions {
 }
 
 /**
- * Start serving an artifact.
+ * Prepare the SDK and start serving it.
  *
  * @param {Object} opts - serve options
  * @return {Promise} running server
  */
 export async function serve(opts: ServeOptions): Promise<RunningServer> {
   const { config, logs } = opts;
-  const service = await OagMcpService.create({
-    artifactDir: opts.artifactDir,
-    config,
-    configBaseDir: opts.configBaseDir,
-    logs,
-    fetchImpl: opts.fetchImpl,
-  });
-  service.warmUp();
-  if (opts.transport === "stdio") {
-    return _serveStdio(service, opts);
+  const started = Date.now();
+  const prepared: PreparedSdk = await prepareSdk({ ...opts, logs });
+  let running: RunningServer;
+  let service: OagMcpService;
+  try {
+    service = await runStage(
+      logs,
+      "executor",
+      () =>
+        OagMcpService.create({
+          prepared,
+          config,
+          configBaseDir: opts.configBaseDir,
+          logs,
+          fetchImpl: opts.fetchImpl,
+        }),
+      opts.signal,
+    );
+    logs.op("info", "tools.registered", {
+      tools: TOOL_NAMES,
+      methods: prepared.records.length,
+    });
+    if (opts.signal?.aborted) {
+      throw new OagMcpError(
+        "STARTUP_ABORTED",
+        "Start-up was cancelled before the transport started",
+        { hint: "The server received a shutdown signal while preparing." },
+      );
+    }
+    service.warmUp();
+    running =
+      opts.transport === "stdio"
+        ? await _serveStdio(service, opts)
+        : await _serveHttp(service, opts);
+  } catch (err) {
+    prepared.cleanup();
+    throw err;
   }
-  return _serveHttp(service, opts);
+  logs.op("info", "server.ready", {
+    transport: running.transport,
+    prepareId: prepared.info.prepareId,
+    methods: prepared.records.length,
+    startupDurationMs: Date.now() - started,
+  });
+  const close = running.close;
+  let closed: Promise<void> | undefined;
+  running.close = () => {
+    closed ??= (async () => {
+      try {
+        await close();
+      } finally {
+        if (prepared.cleanup()) {
+          logs.op("info", "prepare.workspace.cleaned", { outcome: "success" });
+        }
+        logs.op("info", "server.stopped", { transport: running.transport });
+        logs.flush();
+      }
+    })();
+    return closed;
+  };
+  return running;
 }
 
 /**
@@ -113,17 +174,10 @@ async function _serveStdio(
     transport: "stdio",
     outcome: "success",
   });
-  logs.op("info", "server.started", {
-    transport: "stdio",
-    buildId: service.manifest.buildId,
-    methods: service.manifest.operations.length,
-  });
   return {
     transport: "stdio",
     close: async () => {
       await handle.close();
-      logs.op("info", "server.stopped", { transport: "stdio" });
-      logs.flush();
     },
   };
 }
@@ -186,7 +240,7 @@ async function _serveHttp(
       registry: secrets,
       logs,
       resourceUrl,
-      resourceName: `${service.manifest.api.title} (oag-mcp)`,
+      resourceName: `${service.info.api.title} (oag-mcp)`,
     });
   } catch (err) {
     server!.close();
@@ -361,11 +415,6 @@ async function _serveHttp(
     mcpAuthMode: authenticator.mode,
     outcome: "success",
   });
-  logs.op("info", "server.started", {
-    transport: "streamable-http",
-    buildId: service.manifest.buildId,
-    methods: service.manifest.operations.length,
-  });
   return {
     transport: "streamable-http",
     url: localUrl,
@@ -376,8 +425,6 @@ async function _serveHttp(
       );
       server!.closeAllConnections?.();
       await closed;
-      logs.op("info", "server.stopped", { transport: "streamable-http" });
-      logs.flush();
     },
   };
 }

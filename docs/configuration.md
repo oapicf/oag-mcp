@@ -1,8 +1,25 @@
 # Configuration reference
 
-`oag-mcp serve <artifact> --config <file>` reads a YAML or JSON file. Every
-section is optional; unknown keys are rejected to catch typos. CLI flags
-(`--host`, `--port`, `--path`, logging flags) override the file.
+`oag-mcp serve --spec <openapi> --sdk <sdk> --config <file>` reads a YAML or
+JSON file. Every section is optional; unknown keys are rejected to catch
+typos. CLI flags (`--host`, `--port`, `--path`, logging flags) override the
+file. The file is read once at start-up, like the spec and SDK; restart
+oag-mcp to apply changes.
+
+The inputs themselves are CLI options only:
+
+| Option | Meaning |
+| --- | --- |
+| `--spec <file>` | OpenAPI 3.0/3.1 document (YAML or JSON); required |
+| `--sdk <dir\|file.tgz>` | existing typescript-fetch SDK directory or `npm pack` archive; required, never modified |
+| `--sdk-layout auto\|source\|compiled` | which layout of the SDK to use (default `auto`: sources when present) |
+| `--sdk-oag-version <x.y.z>` | generator version for SDKs without `.openapi-generator/VERSION` |
+| `--allow-untested-oag-version` | accept a generator version outside the tested set |
+| `--transport stdio\|streamable-http` | default `stdio` |
+
+Temporary preparation files go to the OS temporary directory; set `TMPDIR`
+to move them (e.g. to a writable volume when the root filesystem is
+read-only).
 
 **Secrets are never written in this file.** Every secret is a reference:
 
@@ -11,7 +28,9 @@ section is optional; unknown keys are rejected to catch typos. CLI flags
 { secret: key }    # key in upstreamAuth.secretsFile (YAML/JSON map, chmod 600)
 ```
 
-Secrets are not accepted as CLI arguments and are never stored in artifacts.
+Secrets are not accepted as CLI arguments and are never written to the
+index, the preparation workspace or logs; they are resolved host-side when a
+credential is first needed.
 
 ## Full example
 

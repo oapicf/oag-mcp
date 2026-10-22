@@ -13,7 +13,7 @@
  * 2. Declarations (`.d.ts`) are type-checked to extract exact signatures,
  *    documentation and the declarations of referenced types.
  *
- * @module build/analyze
+ * @module prepare/analyze
  */
 import fs from "node:fs";
 import path from "node:path";

@@ -12,3 +12,4 @@ generator:
     author_url: https://github.com/oapicf
     github_id: oapicf
     github_repo: oag-mcp
+    github_token_prefix: OAPICF

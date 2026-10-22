@@ -15,7 +15,7 @@ import {
 import referee from "@sinonjs/referee";
 
 import {
-  defaultArtifact,
+  SERVE_ARGS,
   runCli,
   startHttpServer,
   upstreamAuthConfig,
@@ -37,11 +37,9 @@ const ADMIN_TOKEN = "admin-token-0123456789abcdef";
 
 let api: MockApi;
 let auth: AuthServer;
-let art: string;
 
 before(async function () {
   this.timeout(120000);
-  art = await defaultArtifact();
   auth = await startAuthServer();
   api = await startMockApi({ oauthTokens: auth.upstreamTokens });
 });
@@ -84,7 +82,7 @@ describe("http-auth - unauthenticated mode", function () {
     });
     const res = runCli([
       "serve",
-      art,
+      ...SERVE_ARGS,
       "--transport",
       "streamable-http",
       "--host",
@@ -143,7 +141,7 @@ describe("http-auth - static bearer", function () {
     });
     server = await startHttpServer(
       [
-        art,
+        ...SERVE_ARGS,
         "--config",
         config,
         "--audit-log-file",
@@ -337,7 +335,7 @@ describe("http-auth - OAuth resource server", function () {
       http: { port },
     });
     server = await startHttpServer([
-      art,
+      ...SERVE_ARGS,
       "--config",
       config,
       "--port",
@@ -472,7 +470,7 @@ describe("http-auth - OAuth introspection", function () {
       http: { port },
     });
     server = await startHttpServer(
-      [art, "--config", config, "--port", String(port)],
+      [...SERVE_ARGS, "--config", config, "--port", String(port)],
       {
         RS_ID: INTROSPECTION_CLIENT_ID,
         RS_SECRET: INTROSPECTION_CLIENT_SECRET,

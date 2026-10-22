@@ -8,7 +8,7 @@
  * generator version and the options that shape the generated code, and
  * rejects anything it cannot support with an actionable error.
  *
- * @module build/compat
+ * @module prepare/compat
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -144,7 +144,7 @@ function _checkRuntime(runtimeFile: string, root: string): void {
         "SDK_GENERATOR_UNSUPPORTED",
         `The SDK in ${root} looks like OpenAPI Generator "${gen}" output`,
         {
-          hint: `Only the ${SUPPORTED_GENERATOR} generator is supported. Regenerate with -g ${SUPPORTED_GENERATOR}, or use --generate-sdk.`,
+          hint: `Only the ${SUPPORTED_GENERATOR} generator is supported. Regenerate the SDK with OpenAPI Generator -g ${SUPPORTED_GENERATOR}.`,
         },
       );
     }
@@ -233,7 +233,7 @@ function _oagVersion(
       "SDK_OAG_VERSION_UNSUPPORTED",
       `OpenAPI Generator ${version} is not in the tested set (${SUPPORTED_OAG_VERSIONS.join(", ")})`,
       {
-        hint: "Regenerate the SDK with a supported version (e.g. --generate-sdk --oag-version 7.26.0), or pass --allow-untested-oag-version to proceed at your own risk.",
+        hint: `Regenerate the SDK with a tested OpenAPI Generator version (${SUPPORTED_OAG_VERSIONS.join(", ")}), or pass --allow-untested-oag-version to proceed at your own risk.`,
       },
     );
   }
@@ -414,7 +414,8 @@ export function inspectSdk(
 }
 
 /**
- * Validate generator options for the generate path.
+ * Validate generator options before generating an SDK (used by the
+ * development fixture generator).
  *
  * @param {Object} options - option name to value
  */

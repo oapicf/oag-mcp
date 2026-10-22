@@ -6,7 +6,7 @@
  * match no operation, or more than one, are reported as errors rather than
  * guessed.
  *
- * @module build/index-builder
+ * @module prepare/index-builder
  */
 import { OagMcpError } from "../errors.js";
 import type {
@@ -175,7 +175,7 @@ export function buildRecords(
       "SDK_SPEC_MISMATCH",
       `The SDK does not match the OpenAPI document: ${problems.slice(0, 5).join("; ")}`,
       {
-        hint: "Make sure --spec is the document the SDK was generated from (or regenerate the SDK with --generate-sdk).",
+        hint: "Make sure --spec is the document the SDK was generated from (or regenerate the SDK from this document), then restart oag-mcp.",
         details: { problems },
       },
     );

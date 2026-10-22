@@ -1,16 +1,16 @@
 "use strict";
 /**
- * The oag-mcp service: loads an artifact and implements the behaviour of the
- * two MCP tools, independent of transport.
+ * The oag-mcp service: assembles the trusted bridge (credentials, policy,
+ * request broker) and the isolated executor around an SDK prepared at
+ * start-up, and implements the behaviour of the two MCP tools independent
+ * of transport.
  *
  * @module runtime/service
  */
 import crypto from "node:crypto";
-import fs from "node:fs";
 import path from "node:path";
 
 import { AuthorizationPolicy, type Principal } from "../auth/policy.js";
-import { ARTIFACT_PATHS, readAndVerifyManifest } from "../build/artifact.js";
 import {
   type RuntimeConfig,
   SecretResolver,
@@ -22,11 +22,13 @@ import { AgentTypeChecker } from "../executor/typecheck.js";
 import type { ExecutionError, Executor, LogEntry } from "../executor/types.js";
 import type { Logs } from "../logging/logger.js";
 import { boundValue, secrets } from "../logging/redact.js";
-import { MethodSearchIndex, authLine } from "../search/search-index.js";
+import type { PreparedSdk } from "../prepare/prepare.js";
+import { WORKSPACE_PATHS } from "../prepare/workspace.js";
+import { type MethodSearchIndex, authLine } from "../search/search-index.js";
 import type {
-  ArtifactManifest,
   MethodRecord,
   OperationBinding,
+  PreparedSdkInfo,
 } from "../types.js";
 import { RequestBroker } from "../upstream/broker.js";
 import { ServiceIdentityCredentialProvider } from "../upstream/credentials.js";
@@ -81,10 +83,11 @@ function _clip(s: string | undefined, n: number): string | undefined {
 }
 
 /**
- * Loaded artifact plus runtime components.
+ * Prepared SDK plus runtime components, shared by every session of one
+ * server process.
  */
 export class OagMcpService {
-  readonly manifest: ArtifactManifest;
+  readonly info: PreparedSdkInfo;
   readonly index: MethodSearchIndex;
   readonly policy: AuthorizationPolicy;
   readonly broker: RequestBroker;
@@ -97,11 +100,11 @@ export class OagMcpService {
    * @param {Object} parts - assembled components (use {@link OagMcpService.create})
    */
   private constructor(
-    readonly artifactDir: string,
+    readonly workspaceDir: string,
     readonly config: RuntimeConfig,
     readonly logs: Logs,
     parts: {
-      manifest: ArtifactManifest;
+      info: PreparedSdkInfo;
       index: MethodSearchIndex;
       policy: AuthorizationPolicy;
       broker: RequestBroker;
@@ -109,13 +112,13 @@ export class OagMcpService {
       checker?: AgentTypeChecker;
     },
   ) {
-    this.manifest = parts.manifest;
+    this.info = parts.info;
     this.index = parts.index;
     this.policy = parts.policy;
     this.broker = parts.broker;
     this.executor = parts.executor;
     this.checker = parts.checker;
-    this.bindings = new Map(parts.manifest.operations.map((o) => [o.id, o]));
+    this.bindings = new Map(parts.info.operations.map((o) => [o.id, o]));
     this.semaphore = new Semaphore(
       config.execution.maxConcurrent,
       config.execution.maxQueue,
@@ -123,45 +126,27 @@ export class OagMcpService {
   }
 
   /**
-   * Load and validate an artifact and assemble the runtime.
+   * Assemble the runtime around a prepared SDK: credential provider,
+   * authorization policy, request broker, Deno executor (verified by
+   * loading the bundle with every binding) and the type checker.
    *
    * @param {Object} opts - options
    * @return {Promise} service
    */
   static async create(opts: {
-    artifactDir: string;
+    prepared: PreparedSdk;
     config: RuntimeConfig;
     configBaseDir: string;
     logs: Logs;
     executor?: Executor;
     fetchImpl?: typeof fetch;
   }): Promise<OagMcpService> {
-    const { config, logs } = opts;
-    const dir = path.resolve(opts.artifactDir);
-    let manifest: ArtifactManifest;
-    try {
-      manifest = readAndVerifyManifest(dir);
-    } catch (err) {
-      logs.op("error", "artifact.validation_failed", {
-        errorCode: err instanceof OagMcpError ? err.code : "UNEXPECTED",
-      });
-      throw err;
-    }
-    logs.op("info", "artifact.validated", {
-      buildId: manifest.buildId,
-      methods: manifest.operations.length,
-      oagVersion: manifest.target.oagVersion,
-      outcome: "success",
-    });
-    const records = JSON.parse(
-      fs.readFileSync(path.join(dir, ARTIFACT_PATHS.methods), "utf8"),
-    ) as MethodRecord[];
-    const index = new MethodSearchIndex(
-      records,
-      fs.readFileSync(path.join(dir, ARTIFACT_PATHS.searchIndex), "utf8"),
-    );
+    const { config, logs, prepared } = opts;
+    const dir = prepared.workspaceDir;
+    const info = prepared.info;
+    const index = prepared.index;
 
-    const baseUrl = config.upstream.baseUrl ?? manifest.api.servers[0];
+    const baseUrl = config.upstream.baseUrl ?? info.api.servers[0];
     let base: URL;
     try {
       base = new URL(baseUrl ?? "");
@@ -171,7 +156,7 @@ export class OagMcpService {
     } catch {
       throw new OagMcpError(
         "CONFIG_BASE_URL_REQUIRED",
-        `No absolute upstream base URL is available (spec servers: ${manifest.api.servers.join(", ") || "none"})`,
+        `No absolute upstream base URL is available (spec servers: ${info.api.servers.join(", ") || "none"})`,
         { hint: "Set upstream.baseUrl in the runtime configuration." },
       );
     }
@@ -181,7 +166,7 @@ export class OagMcpService {
     });
     const provider = new ServiceIdentityCredentialProvider({
       schemes: config.upstreamAuth.schemes,
-      schemeInfo: manifest.securitySchemes,
+      schemeInfo: info.securitySchemes,
       resolver,
       registry: secrets,
       logs,
@@ -196,8 +181,8 @@ export class OagMcpService {
       default: config.authorization?.default ?? "allow",
     });
     const broker = new RequestBroker({
-      operations: manifest.operations,
-      schemes: manifest.securitySchemes,
+      operations: info.operations,
+      schemes: info.securitySchemes,
       provider,
       policy,
       network: { baseUrl: base.toString(), ...config.upstream },
@@ -220,16 +205,23 @@ export class OagMcpService {
         denoVersion: deno.version,
         source: deno.source,
       });
-      executor = new DenoExecutor({ artifactDir: dir, deno, logs });
+      const denoExecutor = new DenoExecutor({ workspaceDir: dir, deno, logs });
+      await denoExecutor.verify(info.operations, broker.sdkBasePath);
+      logs.op("info", "executor.verified", {
+        executor: "deno-subprocess",
+        bindings: info.operations.length,
+        outcome: "success",
+      });
+      executor = denoExecutor;
     }
     const checker = config.execution.typecheck
       ? new AgentTypeChecker(
           path.join(dir, "sdk"),
-          path.join(dir, ARTIFACT_PATHS.tsLib),
+          path.join(dir, WORKSPACE_PATHS.tsLib),
         )
       : undefined;
     return new OagMcpService(dir, config, logs, {
-      manifest,
+      info,
       index,
       policy,
       broker,
@@ -273,9 +265,7 @@ export class OagMcpService {
    * @return {Array} class names
    */
   apiClasses(): string[] {
-    return [
-      ...new Set(this.manifest.operations.map((o) => o.className)),
-    ].sort();
+    return [...new Set(this.info.operations.map((o) => o.className))].sort();
   }
 
   /**
@@ -366,8 +356,8 @@ export class OagMcpService {
       mode = "browse";
       out = {
         api: {
-          title: this.manifest.api.title,
-          version: this.manifest.api.version,
+          title: this.info.api.title,
+          version: this.info.api.version,
         },
         apis: this.index.browse({ visible, perClass: 8, tag: input.tag }),
         hint: "Use search with a query or { tag: <ApiClass or tag> } to list methods; { id } for details.",
@@ -509,7 +499,7 @@ export class OagMcpService {
       outcome = await this.executor.execute({
         executionId,
         moduleBase64: prepared.moduleBase64,
-        bindings: this.manifest.operations,
+        bindings: this.info.operations,
         basePath: this.broker.sdkBasePath,
         limits: {
           timeoutMs,

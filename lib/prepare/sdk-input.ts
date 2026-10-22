@@ -1,9 +1,13 @@
 "use strict";
 /**
- * Stage an existing SDK input (package directory or npm package archive)
- * into a private working copy. The supplied SDK is never modified.
+ * Resolve an existing SDK input (package directory or npm package archive).
  *
- * @module build/sdk-input
+ * Directories are read in place and never written to: declarations and the
+ * execution bundle are produced in the oag-mcp workspace, and dependencies
+ * resolve from the SDK's own `node_modules` (or a parent's). Archives are
+ * extracted safely into the workspace. The supplied SDK is never modified.
+ *
+ * @module prepare/sdk-input
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -27,9 +31,12 @@ const ALLOWED_ENTRY_TYPES = new Set([
   "Directory",
 ]);
 
-/** Result of staging an SDK input. */
+/** Result of resolving an SDK input. */
 export interface StagedSdk {
-  /** Root of the working copy (directory containing package.json/src). */
+  /**
+   * Package root (directory containing package.json/src): the supplied
+   * directory itself (read-only use) or the extracted archive.
+   */
   root: string;
   kind: "directory" | "archive";
   /** Hash of the original input (archive bytes or directory tree). */
@@ -171,10 +178,11 @@ export async function extractArchive(
 }
 
 /**
- * Stage an SDK input into `workDir`.
+ * Resolve an SDK input. Archives are extracted into `workDir`; directories
+ * are used in place, read-only.
  *
  * @param {String} input - SDK directory or .tgz archive path
- * @param {String} workDir - private working directory
+ * @param {String} workDir - private workspace directory for extraction
  * @return {Promise} staged SDK
  */
 export async function stageSdkInput(
@@ -184,28 +192,13 @@ export async function stageSdkInput(
   const abs = path.resolve(input);
   if (!fs.existsSync(abs)) {
     throw new OagMcpError("SDK_NOT_FOUND", `SDK path ${input} does not exist`, {
-      hint: "Pass --sdk <directory|package.tgz> pointing at a typescript-fetch SDK, or use --generate-sdk.",
+      hint: "Pass --sdk <directory|package.tgz> pointing at an existing OpenAPI Generator typescript-fetch SDK.",
     });
   }
   const stat = fs.statSync(abs);
   if (stat.isDirectory()) {
-    const dest = path.join(workDir, "sdk");
-    fs.cpSync(abs, dest, {
-      recursive: true,
-      verbatimSymlinks: true,
-      filter: (src) => !IGNORED_TREE_ENTRIES.has(path.basename(src)),
-    });
-    // node_modules is copied separately only when present, so dependency
-    // resolution works without reinstalling.
-    const nm = path.join(abs, "node_modules");
-    if (fs.existsSync(nm)) {
-      fs.cpSync(nm, path.join(dest, "node_modules"), {
-        recursive: true,
-        verbatimSymlinks: true,
-      });
-    }
     return {
-      root: dest,
+      root: fs.realpathSync(abs),
       kind: "directory",
       sha256: sha256Tree(
         abs,
@@ -214,14 +207,39 @@ export async function stageSdkInput(
     };
   }
   if (/\.(tgz|tar\.gz)$/i.test(abs)) {
-    const root = await extractArchive(abs, path.join(workDir, "archive"));
+    const root = await extractArchive(abs, workDir);
     return { root, kind: "archive", sha256: sha256File(abs) };
   }
   throw new OagMcpError(
     "SDK_INPUT_UNSUPPORTED",
     `SDK input ${input} is neither a directory nor a .tgz package archive`,
     {
-      hint: "Use a generated SDK directory or an archive produced by `npm pack`.",
+      hint: "Use a generated typescript-fetch SDK directory or an archive produced by `npm pack`.",
     },
   );
+}
+
+/**
+ * Find the runtime dependencies of an SDK that cannot be resolved from its
+ * root, using Node.js lookup rules (`node_modules` in the root or any
+ * parent directory). Nothing is installed.
+ *
+ * @param {String} root - SDK package root
+ * @param {Object} [deps] - package.json dependencies
+ * @return {Array} names of missing dependencies
+ */
+export function missingDependencies(
+  root: string,
+  deps: Record<string, string> | undefined,
+): string[] {
+  return Object.keys(deps ?? {}).filter((name) => {
+    for (let dir = root; ; dir = path.dirname(dir)) {
+      if (fs.existsSync(path.join(dir, "node_modules", name, "package.json"))) {
+        return false;
+      }
+      if (path.dirname(dir) === dir) {
+        return true;
+      }
+    }
+  });
 }

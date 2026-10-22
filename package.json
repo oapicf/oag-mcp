@@ -63,7 +63,7 @@
     "style": "prettier --check lib test test-integration assets scripts bin eslint.config.js",
     "style:fix": "prettier --write lib test test-integration assets scripts bin eslint.config.js",
     "test": "mocha",
-    "test:integration": "mocha --config .mocharc.integration.json",
+    "test:integration": "mocha --no-package --node-option import=tsx --extension ts --recursive --timeout 180000 --ignore 'test-integration/helpers/**' 'test-integration/**/*.ts'",
     "coverage": "c8 --reporter=text-summary --reporter=lcov --reports-dir=.bob/coverage/c8 --include=lib mocha",
     "prepare": "npm run build",
     "test:all": "npm run typecheck && npm run lint && npm run style && npm test && npm run test:integration"
@@ -103,5 +103,23 @@
   "engines": {
     "node": ">= 22.0.0"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "mocha": {
+    "node-option": [
+      "import=tsx"
+    ],
+    "extension": [
+      "ts"
+    ],
+    "spec": [
+      "test/**/*.ts"
+    ],
+    "ignore": [
+      "test/fixtures/**",
+      "test/helpers/**",
+      "test/**/*.d.ts"
+    ],
+    "recursive": true,
+    "timeout": 15000
+  }
 }

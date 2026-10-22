@@ -1,0 +1,3 @@
+# The packed SDK fixture is test data (the root .gitignore ignores *.tgz).
+!*.tgz
+!petclinic/*.tgz

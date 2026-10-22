@@ -10,7 +10,7 @@ import {
   describeSecurityScheme,
   exampleForSchema,
   loadSpec,
-} from "../../lib/build/spec.js";
+} from "../../lib/prepare/spec.js";
 import { SPEC, tmpDir } from "../helpers/paths.js";
 
 const { assert } = referee;

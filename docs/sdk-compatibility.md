@@ -10,22 +10,26 @@ SDKs are rejected with `SDK_GENERATOR_UNSUPPORTED` or
 
 | Version | Status |
 | --- | --- |
-| 7.26.0 | Tested, default for `--generate-sdk` |
+| 7.26.0 | Tested |
 | 7.25.0 | Tested |
-| anything else | Rejected; `--allow-untested-oag-version` proceeds at your own risk and records `oagVersionTested: false` in the manifest |
+| anything else | Rejected (`SDK_OAG_VERSION_UNSUPPORTED`); `--allow-untested-oag-version` proceeds at your own risk and logs `oagVersionTested: false` |
 
 The version is read from `.openapi-generator/VERSION`. If that file was
 removed, declare it with `--sdk-oag-version <version>`.
-`--oag-version` must be an exact version such as `7.26.0`; `latest` is
-refused.
+
+oag-mcp does not generate SDKs. Generate yours with the version you want,
+e.g. `openapi-generator-cli generate -g typescript-fetch -i openapi.yaml -o
+./generated-sdk` (CLI, JAR or the `openapitools/openapi-generator-cli`
+Docker image). Java and Docker are needed only for that step, never by
+oag-mcp.
 
 ## Generator options
 
-Tested (accepted by `--oag-options`, detected for existing SDKs):
+Tested (detected from the SDK sources at start-up):
 
 | Option | Notes |
 | --- | --- |
-| `npmName`, `npmVersion` | `--generate-sdk` sets these by default so the SDK is a full npm package |
+| `npmName`, `npmVersion` | recommended: the SDK is then a complete npm package (`src/`, `package.json`) |
 | `supportsES6` | |
 | `withInterfaces` | `*ApiInterface` declarations are ignored; classes are bound |
 | `useSingleRequestParameter` | `true` (default) → `method({ ... })`; `false` → positional `method(a, b)`; search shows the exact signature |
@@ -71,45 +75,44 @@ An `npm pack` archive. Before extraction every entry is checked: absolute
 paths, `..` segments, symbolic/hard links, devices and FIFOs are rejected,
 the archive must have one top-level directory, and entry count (20 000) and
 uncompressed size (256 MiB) are bounded. After extraction every path is
-verified to resolve inside the private work directory.
+verified to resolve inside the private workspace, which is removed when the
+server stops.
 
-### Generated (`--generate-sdk`)
+Archives produced by `npm pack` normally contain the compiled `dist/` (and,
+for typescript-fetch packages, `src/`); use `--sdk-layout compiled` to serve
+the compiled JavaScript, or the default to prefer sources.
+
+### Source versus compiled packages
+
+| | Source layout | Compiled layout |
+| --- | --- | --- |
+| What is read | `src/**/*.ts` | `dist/**/*.js` (or `dist/esm/`) and `dist/**/*.d.ts` |
+| Declarations | emitted by oag-mcp's pinned TypeScript into the workspace | copied into the workspace |
+| Execution bundle | esbuild compiles and bundles the sources | esbuild bundles the compiled JavaScript (CommonJS gets an ESM shim) |
+| Your build tooling | not needed | not run — the package must already contain `dist/` |
+
+oag-mcp never runs the SDK's own `build`/`prepare` scripts, `tsc` from the
+SDK, or any package lifecycle script. A package that ships neither sources
+nor compiled output is rejected with `SDK_LAYOUT_UNSUPPORTED`.
+
+## Runtime dependencies
+
+typescript-fetch SDKs have no runtime dependencies, so nothing else is
+needed. If an SDK's `package.json` declares `dependencies`, each must
+already be installed where Node.js would find it — the SDK's
+`node_modules` or a parent directory's (workspaces and monorepos work).
+Otherwise start-up stops with `SDK_DEPENDENCIES_MISSING`, naming the
+packages; install them yourself, e.g.
 
 ```bash
-oag-mcp build --spec openapi.yaml --generate-sdk \
-  [--oag-version 7.26.0] [--oag-backend java|docker] [--oag-jar ./openapi-generator-cli-7.26.0.jar] \
-  [--oag-options withInterfaces=true,useSingleRequestParameter=false] --out ./server
+cd ./generated-sdk && npm install --omit=dev --ignore-scripts
 ```
 
-- **java** (default): needs Java 11+. The JAR is taken from `--oag-jar`,
-  `OAG_MCP_OAG_JAR`, the cache (`~/.cache/oag-mcp/openapi-generator/<v>/`,
-  overridable with `OAG_MCP_CACHE_DIR`), or downloaded once from Maven
-  Central and verified against its published SHA-1. The JAR's reported
-  version must match `--oag-version`.
-- **docker**: needs a running Docker daemon; uses
-  `openapitools/openapi-generator-cli:v<version>` with `--network none`,
-  mounting the spec directory read-only. Spec `$ref`s must stay within that
-  directory.
-
-The generated package is kept in the artifact (`sdk-package/`) so the same SDK
-can be used by ordinary applications:
-
-```ts
-import { Configuration, PetsApi } from "./server/sdk-package/src/index";
-const api = new PetsApi(new Configuration({ basePath: "https://api.example.com/v1", apiKey: process.env.API_KEY }));
-```
-
-## Build requirements and dependencies
-
-typescript-fetch SDKs have no runtime dependencies; the build needs no network
-access for them. If an SDK's `package.json` declares `dependencies` that are
-not present in its `node_modules`, oag-mcp runs
-`npm install --omit=dev --ignore-scripts` **in its private copy** — this
-needs network access unless the packages are in your npm cache or a local
-registry. Use `--no-install` to forbid it (the build then fails with
-`SDK_DEPENDENCIES_MISSING`). Dependencies are bundled into
-`sdk/sdk.bundle.js`; they must not require Node.js built-ins, filesystem or
-network access at import time.
+For an archive, extract it, install dependencies in the extracted
+`package/` directory, and pass that directory to `--sdk`. oag-mcp never
+installs packages and never writes to the SDK; dependencies are bundled into
+the workspace's `sdk/sdk.bundle.js` and must not need Node.js built-ins,
+filesystem or network access at import time.
 
 ## How methods are mapped
 
@@ -118,7 +121,7 @@ oag-mcp never assumes `operationId` equals the generated method name
 operationId become e.g. `healthGet`). For every public method of every class
 extending `BaseAPI`, the HTTP method and path template are read from the
 generated `<method>RequestOpts` (7.x) or `<method>Raw` (older output) and
-matched to the spec by `METHOD + path`. Build errors:
+matched to the spec by `METHOD + path`. Start-up errors:
 
 | Code | Meaning |
 | --- | --- |
@@ -127,8 +130,11 @@ matched to the spec by `METHOD + path`. Build errors:
 | `SDK_NO_METHODS` | nothing could be bound |
 
 Spec operations without an SDK method (e.g. excluded via
-`.openapi-generator-ignore`) are reported as warnings and listed in the
-manifest's `unmappedOperations`.
+`.openapi-generator-ignore`) are logged as `prepare.warning` records and are
+not offered by `search`.
+
+Bindings are fixed for the lifetime of the process. After regenerating the
+SDK or editing the spec, restart oag-mcp.
 
 ## Dates
 

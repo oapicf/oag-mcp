@@ -6,7 +6,7 @@
  * External `$ref`s are resolved from the local filesystem only: HTTP
  * resolution is disabled so builds never contact remote hosts.
  *
- * @module build/spec
+ * @module prepare/spec
  */
 import SwaggerParser from "@apidevtools/swagger-parser";
 

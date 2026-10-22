@@ -11,8 +11,8 @@ import {
   LOCAL,
   SDK_VARIANT,
   SPEC,
-  artifact,
-  defaultArtifact,
+  prepared,
+  defaultPrepared,
   runtimeConfig,
   service,
 } from "./helpers/env.js";
@@ -30,7 +30,7 @@ before(async function () {
   auth = await startAuthServer();
   api = await startMockApi({ oauthTokens: auth.upstreamTokens });
   svc = await service(
-    await defaultArtifact(),
+    await defaultPrepared(),
     runtimeConfig(
       api,
       {
@@ -172,7 +172,7 @@ return { count: report.length, totalCents: report.reduce((s, r) => s + r.spentCe
 
   it("should work with positional SDK signatures", async function () {
     const variant = await service(
-      await artifact("variant", { spec: SPEC, sdk: SDK_VARIANT }),
+      await prepared("variant", { spec: SPEC, sdk: SDK_VARIANT }),
       runtimeConfig(api, {}, auth),
     );
     const res = await variant.execute(

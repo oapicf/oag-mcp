@@ -5,6 +5,11 @@
     "noEmit": true,
     "types": ["node", "mocha"]
   },
-  "include": ["lib/**/*.ts", "test/**/*.ts", "test-integration/**/*.ts"],
+  "include": [
+    "lib/**/*.ts",
+    "test/**/*.ts",
+    "test-integration/**/*.ts",
+    "scripts/**/*.ts"
+  ],
   "exclude": ["test/fixtures/**", "dist", "node_modules"]
 }

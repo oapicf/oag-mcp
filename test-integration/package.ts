@@ -1,7 +1,7 @@
 "use strict";
 /**
- * Verification 10: the npm package installs and the installed CLI builds and
- * serves an artifact.
+ * The npm package installs and the installed CLI serves directly from
+ * --spec and --sdk, with no build step or artifact directory.
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -25,7 +25,7 @@ import { startMockApi } from "./helpers/mock-api.js";
 const { assert } = referee;
 
 describe("package - npm pack and global install", function () {
-  it("should install from the packed tarball and run build and serve from the installed CLI", async function () {
+  it("should install from the packed tarball and serve directly from the installed CLI", async function () {
     this.timeout(600000);
     const ping = spawnSync("npm", ["ping"], {
       encoding: "utf8",
@@ -85,24 +85,12 @@ describe("package - npm pack and global install", function () {
       JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"))
         .version,
     );
-    const out = path.join(dir, "server");
-    const built = spawnSync(
-      bin,
-      [
-        "build",
-        "--spec",
-        SPEC,
-        "--sdk",
-        SDK_TGZ,
-        "--out",
-        out,
-        "--log-level",
-        "warn",
-      ],
-      { encoding: "utf8", timeout: 120000 },
+    const help = spawnSync(bin, ["--help"], { encoding: "utf8" });
+    assert.equals(help.stdout.includes("build"), false, help.stdout);
+    assert.equals(
+      files.some((f) => f.startsWith("scripts/")),
+      false,
     );
-    assert.equals(built.status, 0, built.stderr);
-    assert.match(built.stdout, /Methods: 11 across 4 API classes/);
 
     const api = await startMockApi();
     try {
@@ -116,7 +104,12 @@ describe("package - npm pack and global install", function () {
           command: bin,
           args: [
             "serve",
-            out,
+            "--spec",
+            SPEC,
+            "--sdk",
+            SDK_TGZ,
+            "--sdk-layout",
+            "compiled",
             "--transport",
             "stdio",
             "--config",

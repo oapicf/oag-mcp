@@ -7,8 +7,8 @@ import referee from "@sinonjs/referee";
 import {
   inspectSdk,
   validateGeneratorOptions,
-} from "../../lib/build/compat.js";
-import { extractArchive } from "../../lib/build/sdk-input.js";
+} from "../../lib/prepare/compat.js";
+import { extractArchive } from "../../lib/prepare/sdk-input.js";
 import { OagMcpError } from "../../lib/errors.js";
 import {
   SDK_725,

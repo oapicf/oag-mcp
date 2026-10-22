@@ -4,7 +4,6 @@
  *
  * @module oag-mcp
  */
-export { build, type BuildOptions, type BuildResult } from "./build/build.js";
 export {
   loadRuntimeConfig,
   parseRuntimeConfig,
@@ -19,6 +18,11 @@ export type {
 export { DenoExecutor, resolveDeno } from "./executor/deno-executor.js";
 export { Logs, type LoggingOptions } from "./logging/logger.js";
 export {
+  prepareSdk,
+  type PrepareOptions,
+  type PreparedSdk,
+} from "./prepare/prepare.js";
+export {
   serve,
   type RunningServer,
   type ServeOptions,
@@ -30,7 +34,7 @@ export type {
   AppliedCredential,
 } from "./upstream/credentials.js";
 export type {
-  ArtifactManifest,
+  PreparedSdkInfo,
   MethodRecord,
   OperationBinding,
 } from "./types.js";

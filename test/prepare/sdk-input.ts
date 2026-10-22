@@ -7,9 +7,10 @@ import * as tar from "tar";
 
 import {
   extractArchive,
+  missingDependencies,
   stageSdkInput,
   unsafeArchivePath,
-} from "../../lib/build/sdk-input.js";
+} from "../../lib/prepare/sdk-input.js";
 import { OagMcpError } from "../../lib/errors.js";
 import { SDK_726, SDK_TGZ, tmpDir } from "../helpers/paths.js";
 import { sha256Tree } from "../../lib/util/hash.js";
@@ -99,14 +100,23 @@ describe("sdk-input - extractArchive", function () {
 });
 
 describe("sdk-input - stageSdkInput", function () {
-  it("should copy a directory without modifying the original", async function () {
+  it("should use a directory in place without copying or modifying it", async function () {
     const before = sha256Tree(SDK_726);
     const work = tmpDir();
     const staged = await stageSdkInput(SDK_726, work);
     assert.equals(staged.kind, "directory");
-    fs.writeFileSync(path.join(staged.root, "src", "index.ts"), "// changed");
+    assert.equals(staged.root, fs.realpathSync(SDK_726));
+    assert.equals(fs.readdirSync(work), []);
     assert.equals(sha256Tree(SDK_726), before);
     assert.equals(staged.sha256, before);
+  });
+
+  it("should extract an archive into the workspace", async function () {
+    const work = tmpDir();
+    const staged = await stageSdkInput(SDK_TGZ, path.join(work, "input"));
+    assert.equals(staged.kind, "archive");
+    assert(staged.root.startsWith(fs.realpathSync(work)));
+    assert.match(staged.sha256, /^[0-9a-f]{64}$/);
   });
 
   it("should reject inputs that are neither directories nor archives", async function () {
@@ -118,5 +128,35 @@ describe("sdk-input - stageSdkInput", function () {
       stageSdkInput(path.join(work, "missing"), work),
       "SDK_NOT_FOUND",
     );
+  });
+});
+
+describe("sdk-input - missingDependencies", function () {
+  it("should resolve dependencies from the SDK or any parent node_modules", function () {
+    const work = tmpDir();
+    const sdk = path.join(work, "apps", "sdk");
+    fs.mkdirSync(path.join(sdk, "node_modules", "local-dep"), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      path.join(sdk, "node_modules", "local-dep", "package.json"),
+      "{}",
+    );
+    fs.mkdirSync(path.join(work, "node_modules", "@scope", "hoisted"), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      path.join(work, "node_modules", "@scope", "hoisted", "package.json"),
+      "{}",
+    );
+    assert.equals(
+      missingDependencies(sdk, {
+        "local-dep": "1",
+        "@scope/hoisted": "1",
+        "not-installed-anywhere-xyz": "1",
+      }),
+      ["not-installed-anywhere-xyz"],
+    );
+    assert.equals(missingDependencies(sdk, undefined), []);
   });
 });

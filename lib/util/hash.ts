@@ -1,6 +1,6 @@
 "use strict";
 /**
- * Hashing helpers used for input hashes and artifact integrity.
+ * Hashing helpers used to identify preparation inputs.
  *
  * @module util/hash
  */

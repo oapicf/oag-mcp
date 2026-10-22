@@ -114,8 +114,8 @@ export function resolveDeno(configured?: string): DenoRuntime {
 
 /** Options for {@link DenoExecutor}. */
 export interface DenoExecutorOptions {
-  /** Artifact directory containing executor/runner.js and sdk/. */
-  artifactDir: string;
+  /** Preparation workspace containing executor/runner.js and sdk/. */
+  workspaceDir: string;
   deno: DenoRuntime;
   logs: Logs;
 }
@@ -131,7 +131,7 @@ export class DenoExecutor implements Executor {
    * @param {Object} opts - executor options
    */
   constructor(private readonly opts: DenoExecutorOptions) {
-    this.runner = path.join(opts.artifactDir, "executor", "runner.js");
+    this.runner = path.join(opts.workspaceDir, "executor", "runner.js");
   }
 
   /**

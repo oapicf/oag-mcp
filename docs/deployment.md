@@ -1,60 +1,68 @@
-# Packaging and deployment
+# Deployment
 
-## The artifact
+A deployment needs four things, all supplied at runtime:
 
-```text
-my-mcp-server/
-├── oag-mcp-manifest.json   target, versions, options, input hashes, file hashes
-├── package.json            private package pinning the oag-mcp runtime version
-├── README.md
-├── index/
-│   ├── methods.json        method records (search results)
-│   └── search-index.json   serialised MiniSearch index
-├── sdk/
-│   ├── sdk.bundle.js       prepared SDK (one ES module, dependencies inlined)
-│   ├── sdk-binding.d.ts    declaration of the `sdk` binding
-│   ├── types/              SDK declarations
-│   └── ts-lib/             TypeScript lib files for type checking
-├── executor/runner.js      Deno sandbox runner
-└── sdk-package/            generated SDK package (--generate-sdk only)
-```
+| What | Notes |
+| --- | --- |
+| **oag-mcp** | `npm install -g oag-mcp` (Node.js 22+). Its `deno` dependency provides the sandbox runtime; alternatively set `OAG_MCP_DENO_PATH` or put Deno 2.x on `PATH`. |
+| **The OpenAPI document** | `--spec`, read once at start-up. |
+| **The typescript-fetch SDK** | `--sdk`, a directory or an `npm pack` archive, read once at start-up and never modified. Its runtime dependencies (if any) must already be installed. |
+| **Runtime configuration and secrets** | `--config` plus environment variables or a `0600` secrets file. |
 
-The artifact contains no secrets and does not need the original spec or SDK,
-Java, Docker, or per-request package installation. On start-up every file is
-verified against the manifest's SHA-256 hashes (`ARTIFACT_INTEGRITY` on
-mismatch); rebuild rather than editing files.
-
-Runtime prerequisites that are not bundled: **Node.js 22+**, the
-**oag-mcp** runtime (global install or `npm install` in the artifact), and
-**Deno 2.x** (installed with oag-mcp's `deno` dependency, or provided via
-`OAG_MCP_DENO_PATH`/`PATH`).
+There is no build step and no generated server directory to ship or keep in
+sync. Java, Docker and OpenAPI Generator are not needed on the server.
 
 ## Running
 
 ```bash
-# global CLI
-npm install -g oag-mcp
-oag-mcp serve ./my-mcp-server --transport streamable-http --config ./oag-mcp.config.yaml
+oag-mcp serve --spec ./openapi.yaml --sdk ./generated-sdk --transport stdio \
+  --config ./oag-mcp.config.yaml
 
-# or pin the runtime next to the artifact (one-time install)
-cd my-mcp-server && npm install --omit=dev && npx oag-mcp serve . --transport stdio
+oag-mcp serve --spec ./openapi.yaml --sdk ./petstore-sdk-1.0.0.tgz \
+  --transport streamable-http --port 3000 --config ./oag-mcp.config.yaml
 ```
+
+Start-up prepares the SDK before the transport opens; readiness is the
+`server.ready` log record (and, for HTTP, `oag-mcp listening on <url>` on
+stderr and `GET /healthz`). A non-zero exit during start-up means nothing
+was served; the stderr message carries an error code and a hint.
+
+**After changing the spec or the SDK, restart the process.** The index and
+bindings are fixed for its lifetime.
+
+## Temporary files
+
+Each process prepares into a private `oag-mcp-ws-*` directory under the OS
+temporary directory (`TMPDIR`), typically a few megabytes: the sandbox
+bundle, declarations and, for archives, the extracted package. It contains
+no secrets. It is removed on graceful shutdown (`SIGINT`, `SIGTERM`, stdio
+client disconnect) and on start-up failure; after an unclean exit the next
+start on the same host removes it. Each execution also uses a short-lived
+private temporary directory for the Deno sandbox.
+
+On a read-only root filesystem, mount a writable `tmpfs` and point `TMPDIR`
+at it.
 
 ## Container example
 
 ```dockerfile
 FROM node:22-slim
-RUN useradd --create-home --uid 10001 mcp
+RUN npm install -g oag-mcp@<version> && useradd --create-home --uid 10001 mcp
 WORKDIR /srv
-COPY my-mcp-server/ ./server/
-RUN cd server && npm install --omit=dev --no-audit --no-fund
+COPY openapi.yaml ./
+COPY generated-sdk/ ./sdk/
 COPY oag-mcp.config.yaml ./
 USER mcp
+ENV TMPDIR=/tmp
 EXPOSE 3000
-CMD ["npx", "--prefix", "server", "oag-mcp", "serve", "server", \
+CMD ["oag-mcp", "serve", "--spec", "openapi.yaml", "--sdk", "sdk", \
      "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "3000", \
      "--config", "oag-mcp.config.yaml"]
 ```
+
+If the SDK has runtime dependencies, install them in the image at build time
+(`RUN cd sdk && npm install --omit=dev --ignore-scripts`); oag-mcp will not
+install them when it starts.
 
 Binding `0.0.0.0` requires `mcpAuth.mode: static-bearer` or `oauth`. Supply
 secrets as environment variables or a mounted secrets file
@@ -68,8 +76,8 @@ mcp.example.com {
 ```
 
 Recommended hardening: run as a non-root user, read-only root filesystem
-(the executor only writes to the OS temp directory), drop capabilities,
-container memory/CPU limits in addition to `execution.memoryMb`.
+with a writable `TMPDIR`, drop capabilities, container memory/CPU limits in
+addition to `execution.memoryMb`.
 
 ## Publishing oag-mcp
 

@@ -14,7 +14,7 @@ const require = createRequire(import.meta.url);
 /** Exact OpenAPI Generator versions that oag-mcp is tested against. */
 export const SUPPORTED_OAG_VERSIONS = ["7.25.0", "7.26.0"] as const;
 
-/** Default OpenAPI Generator version used by `build --generate-sdk`. */
+/** OpenAPI Generator version used by the development fixture generator. */
 export const DEFAULT_OAG_VERSION = "7.26.0";
 
 /** The only OpenAPI Generator target supported by this release. */
@@ -22,9 +22,6 @@ export const SUPPORTED_GENERATOR = "typescript-fetch";
 
 /** Deno version range accepted by the executor. */
 export const DENO_VERSION_RANGE = { min: "2.5.0", maxExclusive: "3.0.0" };
-
-/** Artifact format version written to the manifest. */
-export const ARTIFACT_FORMAT_VERSION = 1;
 
 /** Service name used in structured logs. */
 export const SERVICE_NAME = "oag-mcp";

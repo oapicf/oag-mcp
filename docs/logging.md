@@ -5,7 +5,7 @@ a stable `event` name and a `logCategory`:
 
 | `logCategory` | Contents | Level control |
 | --- | --- | --- |
-| `operational` | CLI commands, builds, artifact validation, transports, search/execution lifecycle and durations, upstream call outcomes and latency | `--log-level` / `logging.level` |
+| `operational` | CLI commands, start-up preparation stages and durations, compatibility failures, readiness, workspace cleanup, transports, search/execution lifecycle and durations, upstream call outcomes and latency | `--log-level` / `logging.level` |
 | `security_audit` | authentication, token validation and refresh, authorization decisions (one per attempted SDK operation), credential provider selection and lookup failures, execution policy, denied capabilities/imports/destinations/redirects, resource limits, timeouts, forced termination, invalid security configuration | **always written** at `info`+; never sampled; unaffected by `--log-level` |
 
 Do not rely on severity or message text to tell them apart: filter on
@@ -14,12 +14,12 @@ Do not rely on severity or message text to tell them apart: filter on
 Example records:
 
 ```json
-{"level":"warn","severity":"WARN","time":"2026-10-22T09:00:00.000Z","service":"oag-mcp","version":"0.9.0","buildId":"…","requestId":"req_…","executionId":"exec_…","transport":"streamable-http","principalId":"static:reader","operation":"AdminApi.deletePet","operationId":"deletePet","policyId":"default","reason":"default_deny","logCategory":"security_audit","event":"authorization.denied","outcome":"denied","message":"authorization.denied"}
+{"level":"warn","severity":"WARN","time":"2026-10-22T09:00:00.000Z","service":"oag-mcp","version":"0.9.0","instanceId":"inst_…","requestId":"req_…","executionId":"exec_…","transport":"streamable-http","principalId":"static:reader","operation":"AdminApi.deletePet","operationId":"deletePet","policyId":"default","reason":"default_deny","logCategory":"security_audit","event":"authorization.denied","outcome":"denied","message":"authorization.denied"}
 {"level":"info","severity":"INFO","time":"…","service":"oag-mcp","version":"0.9.0","requestId":"req_…","executionId":"exec_…","operation":"PetsApi.listPets","httpMethod":"GET","pathTemplate":"/pets","status":200,"durationMs":14,"responseBytes":1180,"outcome":"success","logCategory":"operational","event":"upstream.call.completed","message":"upstream.call.completed"}
 ```
 
-Common fields: `time`, `level`, `severity`, `service`, `version`, `buildId`
-(when known), `requestId`, `executionId`, `transport`, `principalId`,
+Common fields: `time`, `level`, `severity`, `service`, `version`,
+`instanceId` (one per server process), `requestId`, `executionId`, `transport`, `principalId`,
 `durationMs`, `outcome`. Correlation ids flow from the MCP request through
 the execution to each SDK call and its audit records.
 
@@ -27,27 +27,29 @@ the execution to each SDK call and its audit records.
 
 ```bash
 # both categories to stderr as one JSON stream (default)
-oag-mcp serve ./server --transport stdio 2>oag-mcp.log
+oag-mcp serve --spec openapi.yaml --sdk ./sdk --transport stdio 2>oag-mcp.log
 jq 'select(.logCategory == "security_audit")' oag-mcp.log
 
 # separate files
-oag-mcp serve ./server --transport streamable-http \
+oag-mcp serve --spec openapi.yaml --sdk ./sdk --transport streamable-http \
   --log-file /var/log/oag-mcp/operational.log \
   --audit-log-file /var/log/oag-mcp/audit.log
 
 # quiet operational logs, auditing continues
-oag-mcp serve ./server --log-level silent --audit-log-file audit.log
+oag-mcp serve --spec openapi.yaml --sdk ./sdk --log-level silent --audit-log-file audit.log
 
 # forward audit records to a collector through a file descriptor
-oag-mcp serve ./server --audit-log-file fd:3 3> >(vector --config vector.toml)
+oag-mcp serve --spec openapi.yaml --sdk ./sdk --audit-log-file fd:3 3> >(vector --config vector.toml)
 
 # human-readable for local development (stderr only)
-oag-mcp serve ./server --transport stdio --log-format pretty
+oag-mcp serve --spec openapi.yaml --sdk ./sdk --transport stdio --log-format pretty
 ```
 
-For stdio MCP, stdout carries **only** protocol messages; logs (including
-pretty output) go to stderr or files. `stdout`/`fd:1` are refused as
-destinations.
+For stdio MCP, stdout carries **only** protocol messages, including while
+the SDK is being prepared at start-up: logs (including pretty output) and
+start-up errors go to stderr or files, the TypeScript compiler and esbuild
+run silently, and the Deno verification run's output is captured.
+`stdout`/`fd:1` are refused as log destinations.
 
 Files are opened in append mode with `0600` permissions. Writes are
 synchronous so failures are detected immediately and logs are flushed on
@@ -82,17 +84,21 @@ Fluent Bit, a SIEM).
 
 ## Event catalogue
 
-Operational: `cli.command.started|completed|failed`, `build.started`,
-`build.spec.loaded`, `build.sdk.generation.started|completed|failed`,
-`build.oag.jar_download.started|completed`, `build.compat.checked`,
-`build.sdk.dependencies.install_started|install_completed`,
-`build.index.created`, `build.sdk.bundled`, `build.executor.verified`,
-`build.artifact.written`, `build.failed`, `artifact.validated`,
-`artifact.validation_failed`, `executor.runtime.resolved`,
-`transport.initialized`, `transport.remote_exposure`,
-`transport.connection_failed`, `transport.request_failed`, `transport.error`,
-`server.started`, `server.shutdown_requested`, `server.stopped`,
-`search.completed`, `execution.started|completed|failed`,
+Operational: `cli.command.started|completed|failed`, `prepare.started`,
+`prepare.stage.started|completed|failed` (`stage`: `inputs`,
+`compatibility`, `sdk`, `index`, `executor`; with `durationMs`),
+`prepare.spec.loaded`, `prepare.sdk.resolved`, `prepare.compat.checked`,
+`prepare.compat.failed`, `prepare.sdk.bundled`, `prepare.index.created`,
+`prepare.warning`, `prepare.sdk.prepared` (total preparation `durationMs`,
+input hashes), `prepare.aborted`, `prepare.failed`, `prepare.workspace.stale_removed`,
+`prepare.workspace.removed`, `prepare.workspace.cleaned`,
+`prepare.workspace.cleanup_failed`, `executor.runtime.resolved`,
+`executor.verified`, `tools.registered`, `transport.initialized`,
+`transport.remote_exposure`, `transport.connection_failed`,
+`transport.request_failed`, `transport.error`, `server.ready` (with
+`startupDurationMs`), `server.shutdown_requested` (`signal` includes
+`stdin_closed`; `phase`: `starting` or `serving`), `server.stopped`, `typecheck.warmed`, `search.completed`,
+`execution.started|completed|failed`,
 `upstream.call.completed|failed|redirected`, `upstream.token.cache_hit`,
 `logging.destination_failed`.
 

@@ -14,6 +14,35 @@ import type { Principal } from "../auth/policy.js";
 import { oagMcpVersion } from "../version.js";
 import type { OagMcpService } from "./service.js";
 
+/** The only tools oag-mcp exposes. */
+export const TOOL_NAMES = ["search", "execute"] as const;
+
+/** Tool descriptions computed once per service (process). */
+const DESCRIPTIONS = new WeakMap<
+  OagMcpService,
+  { search: string; execute: string }
+>();
+
+/**
+ * Tool descriptions for a service, computed once.
+ *
+ * @private
+ */
+function _descriptions(service: OagMcpService): {
+  search: string;
+  execute: string;
+} {
+  let d = DESCRIPTIONS.get(service);
+  if (!d) {
+    d = {
+      search: searchDescription(service),
+      execute: executeDescription(service),
+    };
+    DESCRIPTIONS.set(service, d);
+  }
+  return d;
+}
+
 /**
  * Build the description of the execute tool.
  *
@@ -23,7 +52,7 @@ import type { OagMcpService } from "./service.js";
 export function executeDescription(service: OagMcpService): string {
   const apis = service.apiClasses().join(", ");
   return [
-    `Run JavaScript or TypeScript that calls the ${service.manifest.api.title} API through its generated SDK.`,
+    `Run JavaScript or TypeScript that calls the ${service.info.api.title} API through its generated SDK.`,
     "Write the BODY of an async function: use `await`, combine several calls, loop, filter and aggregate, then `return` a JSON-serialisable result (keep it small).",
     `A global \`sdk\` binding exposes the SDK API classes: ${apis}. Call methods as \`sdk.<ApiClass>.<method>(...)\` exactly as shown by the search tool; the base URL and credentials are configured by the server.`,
     "No imports, network, filesystem, environment or subprocess access. `console.log` output is captured (bounded). TypeScript is type-checked against the SDK before running.",
@@ -40,7 +69,7 @@ export function executeDescription(service: OagMcpService): string {
  */
 export function searchDescription(service: OagMcpService): string {
   return [
-    `Discover methods of the ${service.manifest.api.title} SDK available to the execute tool.`,
+    `Discover methods of the ${service.info.api.title} SDK available to the execute tool.`,
     '- `{ query }`: ranked full-text search (e.g. "list pets by species"); returns ids, signatures and summaries.',
     "- `{ id }`: full details for one method: signature, input/return types, referenced type declarations, auth and an example.",
     "- `{}` or `{ tag }`: browse API classes and their methods when you do not know the vocabulary yet.",
@@ -81,7 +110,7 @@ export function createMcpServer(
     {
       name: "oag-mcp",
       version: oagMcpVersion(),
-      title: `${service.manifest.api.title} (oag-mcp)`,
+      title: `${service.info.api.title} (oag-mcp)`,
     },
     {
       capabilities: { tools: {} },
@@ -94,7 +123,7 @@ export function createMcpServer(
     "search",
     {
       title: "Search SDK methods",
-      description: searchDescription(service),
+      description: _descriptions(service).search,
       inputSchema: z.object({
         query: z
           .string()
@@ -140,7 +169,7 @@ export function createMcpServer(
     "execute",
     {
       title: "Execute SDK code",
-      description: executeDescription(service),
+      description: _descriptions(service).execute,
       inputSchema: z.object({
         code: z
           .string()

@@ -30,8 +30,8 @@ describe("logger - Logs", function () {
   it("should route operational and audit records to separate destinations when configured", function () {
     const op = path.join(this.dir, "op.log");
     const audit = path.join(this.dir, "audit.log");
-    const logs = new Logs({ file: op, auditFile: audit, buildId: "b-1" });
-    logs.op("info", "server.started", { transport: "stdio" });
+    const logs = new Logs({ file: op, auditFile: audit, instanceId: "inst-1" });
+    logs.op("info", "server.ready", { transport: "stdio" });
     logs.audit(
       "authorization.denied",
       "denied",
@@ -44,13 +44,13 @@ describe("logger - Logs", function () {
     assert.equals(opRecords.length, 1);
     assert.equals(auditRecords.length, 1);
     assert.equals(opRecords[0].logCategory, "operational");
-    assert.equals(opRecords[0].event, "server.started");
+    assert.equals(opRecords[0].event, "server.ready");
     assert.equals(auditRecords[0].logCategory, "security_audit");
     assert.equals(auditRecords[0].event, "authorization.denied");
     assert.equals(auditRecords[0].outcome, "denied");
     for (const r of [...opRecords, ...auditRecords]) {
       assert.equals(r.service, "oag-mcp");
-      assert.equals(r.buildId, "b-1");
+      assert.equals(r.instanceId, "inst-1");
       assert.isString(r.time);
       assert.isString(r.level);
       assert.isString(r.severity);

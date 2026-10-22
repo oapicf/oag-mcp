@@ -1,11 +1,20 @@
 "use strict";
 /**
- * Generate a typescript-fetch SDK locally with OpenAPI Generator, using
- * either a Java runtime with the generator JAR or the official Docker image.
+ * DEVELOPMENT TOOL (not part of the oag-mcp product or package): generate a
+ * typescript-fetch SDK with OpenAPI Generator, using either a Java runtime
+ * with the generator JAR or the official Docker image. Used to regenerate
+ * test fixtures and by the optional generation integration tests.
  *
- * Neither Java nor Docker is needed to run the resulting MCP server.
+ * oag-mcp itself never generates SDKs and needs neither Java, Docker nor
+ * OpenAPI Generator.
  *
- * @module build/generate
+ * Usage:
+ *
+ *     npx tsx scripts/dev/generate-sdk.ts --spec <file> --out <dir>
+ *       [--oag-version 7.26.0] [--backend java|docker] [--jar <file>]
+ *       [--props k=v,k2=v2]
+ *
+ * @module scripts/dev/generate-sdk
  */
 import { spawn, spawnSync } from "node:child_process";
 import crypto from "node:crypto";
@@ -13,10 +22,16 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { OagMcpError } from "../errors.js";
-import type { Logs } from "../logging/logger.js";
-import { sha256File } from "../util/hash.js";
-import { SUPPORTED_GENERATOR, SUPPORTED_OAG_VERSIONS } from "../version.js";
+import { fileURLToPath } from "node:url";
+
+import { OagMcpError } from "../../lib/errors.js";
+import { Logs } from "../../lib/logging/logger.js";
+import { sha256File } from "../../lib/util/hash.js";
+import {
+  DEFAULT_OAG_VERSION,
+  SUPPORTED_GENERATOR,
+  SUPPORTED_OAG_VERSIONS,
+} from "../../lib/version.js";
 
 /** Maven Central location of the OpenAPI Generator CLI JAR. */
 export const MAVEN_BASE =
@@ -174,7 +189,7 @@ export async function resolveJar(
     return cached;
   }
   const url = `${MAVEN_BASE}/${version}/openapi-generator-cli-${version}.jar`;
-  logs.op("info", "build.oag.jar_download.started", {
+  logs.op("info", "dev.oag.jar_download.started", {
     oagVersion: version,
     source: "maven-central",
   });
@@ -203,12 +218,12 @@ export async function resolveJar(
       "OAG_JAR_DOWNLOAD_FAILED",
       `Could not download OpenAPI Generator ${version} from Maven Central: ${(err as Error).message}`,
       {
-        hint: `Download openapi-generator-cli-${version}.jar manually and pass --oag-jar <path> (or set OAG_MCP_OAG_JAR), or place it at ${cached}.`,
+        hint: `Download openapi-generator-cli-${version}.jar manually and pass --jar <path> (or set OAG_MCP_OAG_JAR), or place it at ${cached}.`,
         cause: err,
       },
     );
   }
-  logs.op("info", "build.oag.jar_download.completed", {
+  logs.op("info", "dev.oag.jar_download.completed", {
     oagVersion: version,
     sha256: sha256File(cached),
   });
@@ -289,7 +304,7 @@ export async function generateSdk(
   const specAbs = path.resolve(req.specPath);
   const props = formatAdditionalProperties(req.additionalProperties);
   const started = Date.now();
-  req.logs.op("info", "build.sdk.generation.started", {
+  req.logs.op("info", "dev.sdk.generation.started", {
     backend: req.backend,
     oagVersion: req.version,
     generator: SUPPORTED_GENERATOR,
@@ -367,7 +382,7 @@ export async function generateSdk(
     }
   }
   if (result.code !== 0) {
-    req.logs.op("error", "build.sdk.generation.failed", {
+    req.logs.op("error", "dev.sdk.generation.failed", {
       backend: req.backend,
       oagVersion: req.version,
       exitCode: result.code,
@@ -382,7 +397,7 @@ export async function generateSdk(
       },
     );
   }
-  req.logs.op("info", "build.sdk.generation.completed", {
+  req.logs.op("info", "dev.sdk.generation.completed", {
     backend: req.backend,
     oagVersion: req.version,
     durationMs: Date.now() - started,
@@ -395,4 +410,47 @@ export async function generateSdk(
     jarSha256,
     dockerImage,
   };
+}
+
+/**
+ * Command-line entry point.
+ *
+ * @private
+ */
+async function _main(argv: string[]): Promise<void> {
+  const args = new Map<string, string>();
+  for (let i = 0; i < argv.length; i += 2) {
+    args.set(argv[i].replace(/^--/, ""), argv[i + 1]);
+  }
+  if (!args.get("spec") || !args.get("out")) {
+    process.stderr.write(
+      "Usage: tsx scripts/dev/generate-sdk.ts --spec <file> --out <dir> [--oag-version x.y.z] [--backend java|docker] [--jar <file>] [--props k=v,...]\n",
+    );
+    process.exit(2);
+  }
+  const props: Record<string, string> = {};
+  for (const kv of (args.get("props") ?? "").split(",").filter(Boolean)) {
+    const idx = kv.indexOf("=");
+    props[kv.slice(0, idx)] = kv.slice(idx + 1);
+  }
+  const res = await generateSdk({
+    specPath: args.get("spec")!,
+    outDir: args.get("out")!,
+    version: args.get("oag-version") ?? DEFAULT_OAG_VERSION,
+    backend: (args.get("backend") as "java" | "docker") ?? "java",
+    jarPath: args.get("jar"),
+    additionalProperties: props,
+    logs: new Logs({ format: "pretty" }),
+  });
+  process.stderr.write(`Generated ${res.dir}\n`);
+}
+
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  _main(process.argv.slice(2)).catch((err) => {
+    process.stderr.write(`${(err as Error).message}\n`);
+    process.exit(1);
+  });
 }

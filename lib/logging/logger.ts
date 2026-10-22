@@ -18,6 +18,7 @@
  *
  * @module logging/logger
  */
+import crypto from "node:crypto";
 import fs from "node:fs";
 
 import pino, { type Logger as PinoLogger } from "pino";
@@ -53,8 +54,8 @@ export interface LoggingOptions {
   auditFile?: string;
   /** Refuse execute calls while audit records cannot be written. */
   auditFailClosed?: boolean;
-  /** Build identifier included in every record. */
-  buildId?: string;
+  /** Server instance identifier included in every record (default: random). */
+  instanceId?: string;
 }
 
 /** Context fields that may be attached to any record. */
@@ -262,9 +263,7 @@ export class Logs {
       service: SERVICE_NAME,
       version: oagMcpVersion(),
     };
-    if (opts.buildId) {
-      base.buildId = opts.buildId;
-    }
+    base.instanceId = opts.instanceId ?? `inst_${crypto.randomUUID()}`;
     const opDest = _openDestination(opts.file);
     const auditDest = _openDestination(opts.auditFile);
     this.opWriter = new SyncFdWriter(opDest.fd, `operational:${opDest.label}`);

@@ -12,12 +12,12 @@ import path from "node:path";
 
 import ts from "typescript";
 
-import { sdkCompilerOptions } from "../build/bundle.js";
+import { sdkCompilerOptions } from "../prepare/bundle.js";
 import { mapDiagnostic, wrapForTypecheck } from "./code-policy.js";
 import type { Diagnostic } from "./types.js";
 
 /**
- * A persistent language service over the artifact's declarations.
+ * A persistent language service over the prepared SDK declarations.
  */
 export class AgentTypeChecker {
   private readonly service: ts.LanguageService;
@@ -28,7 +28,7 @@ export class AgentTypeChecker {
   private readonly options: ts.CompilerOptions;
 
   /**
-   * @param {String} sdkDir - artifact sdk/ directory (contains types/ and sdk-binding.d.ts)
+   * @param {String} sdkDir - workspace sdk/ directory (contains types/ and sdk-binding.d.ts)
    * @param {String} libDir - directory with TypeScript lib files
    */
   constructor(sdkDir: string, libDir: string) {
