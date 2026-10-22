@@ -1,0 +1,52 @@
+# Example runtime configuration for the Pet Clinic fixture
+# (test/fixtures/petclinic/openapi.yaml). Secrets are referenced, never inlined:
+#   export PETCLINIC_API_KEY=... PETCLINIC_TOKEN=... PETCLINIC_CLIENT_ID=... PETCLINIC_CLIENT_SECRET=...
+#   oag-mcp serve ./petclinic-server --transport stdio --config examples/oag-mcp.config.yaml
+upstream:
+  baseUrl: http://127.0.0.1:4010/v1
+
+upstreamAuth:
+  secretsFile: ./secrets.yaml # chmod 600; holds admin_password
+  allowInsecureTokenUrl: true # the fixture's token URL is plain http on loopback
+  schemes:
+    apiKeyHeader:
+      apiKey: { env: PETCLINIC_API_KEY }
+    apiKeyQuery:
+      apiKey: { env: PETCLINIC_API_KEY }
+    bearerAuth:
+      token: { env: PETCLINIC_TOKEN }
+    adminBasic:
+      username: { env: PETCLINIC_ADMIN_USER }
+      password: { secret: admin_password }
+    clinicOAuth:
+      clientId: { env: PETCLINIC_CLIENT_ID }
+      clientSecret: { env: PETCLINIC_CLIENT_SECRET }
+
+# Streamable HTTP access control (ignored for stdio).
+mcpAuth:
+  mode: static-bearer
+  staticBearer:
+    tokens:
+      - principal: reader
+        token: { env: OAG_MCP_READER_TOKEN }
+        scopes: [pets:read]
+      - principal: admin
+        token: { env: OAG_MCP_ADMIN_TOKEN }
+        scopes: [pets:read, admin]
+
+authorization:
+  default: deny
+  rules:
+    - id: readers
+      principals: [reader, local]
+      allow: ["method:GET"]
+    - id: admins
+      principals: [admin]
+      allow: ["*"]
+
+execution:
+  timeoutMs: 30000
+  memoryMb: 256
+
+logging:
+  level: info

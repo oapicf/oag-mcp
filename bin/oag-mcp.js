@@ -1,4 +1,4 @@
 #!/usr/bin/env node
-
-import cli from '../lib/cli.js';
+"use strict";
+import cli from "../dist/cli.js";
 cli.exec();

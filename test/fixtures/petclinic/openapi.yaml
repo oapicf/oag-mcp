@@ -1,0 +1,347 @@
+openapi: 3.0.3
+info:
+  title: Pet Clinic API
+  version: 1.2.0
+  description: |
+    A small fixture API used by oag-mcp tests. It exercises tags, path,
+    query and body parameters, several authentication schemes, operation
+    level security overrides, and redirects.
+servers:
+  - url: http://127.0.0.1:4010/v1
+security:
+  - apiKeyHeader: []
+  - bearerAuth: []
+tags:
+  - name: pets
+    description: Pets registered at the clinic
+  - name: owners
+    description: Pet owners
+  - name: store
+    description: Clinic store and inventory
+  - name: admin
+    description: Administrative operations
+paths:
+  /pets:
+    get:
+      tags: [pets]
+      operationId: listPets
+      summary: List pets
+      description: Returns pets registered at the clinic, optionally filtered by species.
+      parameters:
+        - name: species
+          in: query
+          description: Only return pets of this species
+          schema:
+            $ref: "#/components/schemas/Species"
+        - name: limit
+          in: query
+          description: Maximum number of pets to return
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            example: 20
+      responses:
+        "200":
+          description: A list of pets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Pet"
+    post:
+      tags: [pets]
+      operationId: createPet
+      summary: Register a new pet
+      description: Registers a new pet. Requires an OAuth2 client credentials token with the pets:write scope.
+      security:
+        - clinicOAuth: [pets:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewPet"
+      responses:
+        "201":
+          description: The created pet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+        "400":
+          description: Invalid pet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /pets/{petId}:
+    get:
+      tags: [pets]
+      operationId: getPetById
+      summary: Get a pet by its identifier
+      description: Public endpoint returning a single pet, including its owner and vaccination records.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      responses:
+        "200":
+          description: The pet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+        "404":
+          description: Pet not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      tags: [admin]
+      operationId: deletePet
+      summary: Delete a pet record
+      description: Permanently deletes a pet. Requires HTTP Basic credentials of a clinic administrator.
+      security:
+        - adminBasic: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      responses:
+        "204":
+          description: Deleted
+  /pets/{petId}/visits:
+    get:
+      tags: [pets]
+      operationId: list-pet-visits
+      summary: List the vet visits of a pet
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+        - name: since
+          in: query
+          description: Only visits on or after this date
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Visits
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Visit"
+  /owners:
+    get:
+      tags: [owners]
+      operationId: listOwners
+      summary: List owners
+      description: Lists pet owners with their contact city.
+      security:
+        - apiKeyQuery: []
+      parameters:
+        - name: city
+          in: query
+          schema:
+            type: string
+            example: Melbourne
+      responses:
+        "200":
+          description: Owners
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Owner"
+  /store/inventory:
+    get:
+      tags: [store]
+      operationId: get-store-inventory
+      summary: Store inventory counts
+      description: Returns a map of product code to quantity in stock.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Inventory
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: integer
+                  format: int32
+  /legacy/pets:
+    get:
+      tags: [pets]
+      operationId: listLegacyPets
+      summary: Legacy pet listing (redirects to /pets)
+      security: []
+      responses:
+        "200":
+          description: A list of pets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Pet"
+  /external/docs:
+    get:
+      tags: [store]
+      operationId: getExternalDocs
+      summary: Fetch documentation that redirects to another host
+      security: []
+      responses:
+        "200":
+          description: Docs
+          content:
+            application/json:
+              schema:
+                type: object
+  /health:
+    get:
+      tags: [admin]
+      summary: Health check without an operationId
+      security: []
+      responses:
+        "200":
+          description: Health
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+  /slow:
+    get:
+      tags: [admin]
+      operationId: slowEndpoint
+      summary: Responds after a delay
+      security: []
+      parameters:
+        - name: delayMs
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Done
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+components:
+  parameters:
+    PetId:
+      name: petId
+      in: path
+      required: true
+      description: Identifier of the pet
+      schema:
+        type: integer
+        format: int64
+        example: 1
+  securitySchemes:
+    apiKeyHeader:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+    apiKeyQuery:
+      type: apiKey
+      in: query
+      name: api_key
+    bearerAuth:
+      type: http
+      scheme: bearer
+    adminBasic:
+      type: http
+      scheme: basic
+    clinicOAuth:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: http://127.0.0.1:4011/token
+          scopes:
+            pets:write: Register pets
+            pets:read: Read pets
+  schemas:
+    Species:
+      type: string
+      enum: [dog, cat, bird, rabbit]
+    Pet:
+      type: object
+      required: [id, name, species]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        name:
+          type: string
+          example: Biscuit
+        species:
+          $ref: "#/components/schemas/Species"
+        birthDate:
+          type: string
+          format: date
+        ownerId:
+          type: integer
+          format: int64
+        vaccinated:
+          type: boolean
+        weightKg:
+          type: number
+          format: double
+    NewPet:
+      type: object
+      required: [name, species]
+      properties:
+        name:
+          type: string
+          example: Biscuit
+        species:
+          $ref: "#/components/schemas/Species"
+        ownerId:
+          type: integer
+          format: int64
+    Owner:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        city:
+          type: string
+    Visit:
+      type: object
+      required: [id, date, reason]
+      properties:
+        id:
+          type: integer
+          format: int64
+        date:
+          type: string
+          format: date
+        reason:
+          type: string
+        costCents:
+          type: integer
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string

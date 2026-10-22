@@ -1,20 +1,128 @@
 {
   "options": [
-    { "arg": "-c, --config-file <configFile>", "desc": "Configuration file" }
+    {
+      "arg": "--log-level <logLevel>",
+      "desc": "Operational log level: fatal|error|warn|info|debug|trace|silent (security audit records are always written), default: info"
+    },
+    {
+      "arg": "--log-format <logFormat>",
+      "desc": "Log format: json (default) or pretty (human-readable, for local development; stderr only)"
+    },
+    {
+      "arg": "--log-file <logFile>",
+      "desc": "Write operational logs to a file path or fd:N instead of stderr"
+    },
+    {
+      "arg": "--audit-log-file <auditLogFile>",
+      "desc": "Write security audit logs to a file path or fd:N instead of stderr"
+    },
+    {
+      "arg": "--audit-fail-closed",
+      "desc": "Refuse execute calls while security audit records cannot be written"
+    }
   ],
   "commands": {
-    "display": {
-      "desc": "Display message",
-      "args": [
-      ],
+    "build": {
+      "desc": "Build a code-mode MCP server artifact from an OpenAPI document and a typescript-fetch SDK",
       "options": [
-        { "arg": "-r, --reverse <reverse>", "desc": "When reverse is enabled, message text is written in reverse, default: false" },
-        { "arg": "-t, --transform <transform>", "desc": "Message text transformation type, can be lower or upper, default: lower" }
+        {
+          "arg": "--spec <spec>",
+          "desc": "OpenAPI 3.0/3.1 document (YAML or JSON)"
+        },
+        {
+          "arg": "--sdk <sdk>",
+          "desc": "Existing typescript-fetch SDK: a package directory or an npm package archive (.tgz)"
+        },
+        {
+          "arg": "--generate-sdk",
+          "desc": "Generate the typescript-fetch SDK locally with OpenAPI Generator"
+        },
+        {
+          "arg": "--out <out>",
+          "desc": "Output artifact directory"
+        },
+        {
+          "arg": "--oag-version <oagVersion>",
+          "desc": "Exact OpenAPI Generator version for --generate-sdk, default: 7.26.0"
+        },
+        {
+          "arg": "--oag-backend <oagBackend>",
+          "desc": "Generation backend for --generate-sdk: java (JAR, default) or docker"
+        },
+        {
+          "arg": "--oag-jar <oagJar>",
+          "desc": "Local openapi-generator-cli JAR to use instead of the cache or Maven Central"
+        },
+        {
+          "arg": "--oag-options <oagOptions>",
+          "desc": "Comma-separated generator additional properties, e.g. withInterfaces=true,useSingleRequestParameter=false"
+        },
+        {
+          "arg": "--sdk-layout <sdkLayout>",
+          "desc": "SDK layout to use: auto (default), source (src/*.ts) or compiled (dist/*.js + .d.ts)"
+        },
+        {
+          "arg": "--sdk-oag-version <sdkOagVersion>",
+          "desc": "Declare the generator version of an SDK lacking .openapi-generator/VERSION"
+        },
+        {
+          "arg": "--allow-untested-oag-version",
+          "desc": "Proceed with an OpenAPI Generator version outside the tested set"
+        },
+        {
+          "arg": "--no-install",
+          "desc": "Never run npm install for SDK runtime dependencies"
+        },
+        {
+          "arg": "--skip-verify",
+          "desc": "Skip loading the prepared SDK bundle in the Deno sandbox at build time"
+        },
+        {
+          "arg": "--force",
+          "desc": "Replace an existing artifact in --out"
+        }
       ],
       "examples": [
-        "oag-mcp display",
-        "oag-mcp display --reverse true",
-        "oag-mcp display --reverse true --transform upper"
+        "oag-mcp build --spec ./openapi.yaml --sdk ./generated-sdk --out ./my-mcp-server",
+        "oag-mcp build --spec ./openapi.yaml --sdk ./petstore-sdk-1.0.0.tgz --out ./my-mcp-server",
+        "oag-mcp build --spec ./openapi.yaml --generate-sdk --out ./my-mcp-server",
+        "oag-mcp build --spec ./openapi.yaml --generate-sdk --oag-version 7.26.0 --oag-backend docker --out ./my-mcp-server"
+      ]
+    },
+    "serve": {
+      "desc": "Serve an artifact as an MCP server exposing the search and execute tools",
+      "args": [
+        {
+          "name": "artifact",
+          "rules": ["required"]
+        }
+      ],
+      "options": [
+        {
+          "arg": "--transport <transport>",
+          "desc": "stdio (default) or streamable-http"
+        },
+        {
+          "arg": "--port <port>",
+          "desc": "Streamable HTTP port, default: 3000"
+        },
+        {
+          "arg": "--host <host>",
+          "desc": "Streamable HTTP bind address, default: 127.0.0.1 (loopback)"
+        },
+        {
+          "arg": "--path <path>",
+          "desc": "Streamable HTTP endpoint path, default: /mcp"
+        },
+        {
+          "arg": "--config <config>",
+          "desc": "Runtime configuration file (YAML/JSON): upstream, upstreamAuth, mcpAuth, authorization, execution, logging"
+        }
+      ],
+      "examples": [
+        "oag-mcp serve ./my-mcp-server --transport stdio",
+        "oag-mcp serve ./my-mcp-server --transport streamable-http --port 3000",
+        "oag-mcp serve ./my-mcp-server --transport streamable-http --config ./oag-mcp.config.yaml"
       ]
     }
   }

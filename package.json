@@ -1,8 +1,17 @@
 {
   "name": "oag-mcp",
   "type": "module",
-  "description": "Turn OpenAPI spec and generated-SDK into code-mode MCP servers",
+  "description": "An open-source CLI that turns OpenAPI specifications and OpenAPI Generator SDKs into code-mode MCP servers, exposing searchable SDK capabilities and sandboxed SDK execution through two tools: search and execute.",
   "keywords": [
+    "openapi",
+    "openapi-generator",
+    "typescript-fetch",
+    "mcp",
+    "model-context-protocol",
+    "code-mode",
+    "sdk",
+    "deno",
+    "sandbox"
   ],
   "version": "0.9.0-pre.0",
   "homepage": "https://github.com/oapicf/oag-mcp",
@@ -10,10 +19,29 @@
   "contributors": [
     "All contributors (https://github.com/oapicf/oag-mcp/graphs/contributors)"
   ],
-  "main": "./lib/oag-mcp",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "bin": {
     "oag-mcp": "./bin/oag-mcp.js"
   },
+  "files": [
+    "assets",
+    "bin",
+    "conf",
+    "dist",
+    "docs",
+    "examples",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md"
+  ],
   "preferGlobal": true,
   "repository": {
     "type": "git",
@@ -27,18 +55,53 @@
     "lib": "./lib",
     "test": "./test"
   },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "node scripts/clean.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "style": "prettier --check lib test test-integration assets scripts bin eslint.config.js",
+    "style:fix": "prettier --write lib test test-integration assets scripts bin eslint.config.js",
+    "test": "mocha",
+    "test:integration": "mocha --config .mocharc.integration.json",
+    "coverage": "c8 --reporter=text-summary --reporter=lcov --reports-dir=.bob/coverage/c8 --include=lib mocha",
+    "prepare": "npm run build",
+    "test:all": "npm run typecheck && npm run lint && npm run style && npm test && npm run test:integration"
+  },
   "dependencies": {
-    "bagofcli": "^2.5.0",
-    "yaml-js": "^0.3.1"
+    "@apidevtools/swagger-parser": "13.1.0",
+    "@modelcontextprotocol/node": "2.1.1",
+    "@modelcontextprotocol/server": "2.3.1",
+    "bagofcli": "3.2.0",
+    "deno": "2.9.6",
+    "esbuild": "0.28.2",
+    "jose": "6.2.13",
+    "minisearch": "7.2.0",
+    "pino": "10.4.0",
+    "pino-pretty": "13.2.0",
+    "tar": "7.5.22",
+    "typescript": "6.0.3",
+    "yaml": "2.9.1",
+    "zod": "4.6.7"
   },
   "devDependencies": {
-    "esmock": "^2.7.3",
-    "@sinonjs/referee": "^11.0.1",
-    "sinon": "^21.0.0"
+    "@eslint/js": "10.0.1",
+    "@modelcontextprotocol/client": "2.3.1",
+    "@sinonjs/referee": "11.0.2",
+    "@types/mocha": "10.0.10",
+    "@types/node": "22.20.5",
+    "@types/sinon": "22.0.1",
+    "c8": "12.0.0",
+    "eslint": "10.13.0",
+    "esmock": "2.8.0",
+    "mocha": "12.0.3",
+    "prettier": "3.9.10",
+    "sinon": "22.1.0",
+    "tsx": "4.23.15",
+    "typescript-eslint": "8.72.0"
   },
-  "scripts": {},
   "engines": {
-    "node": ">= 20.0.0"
+    "node": ">= 22.0.0"
   },
   "license": "MIT"
 }

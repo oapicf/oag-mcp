@@ -1,18 +1,32 @@
 - params:
-    oag-mcp: ../../../../../bin/oag-mcp.js
     base: ../../../../..
 
 - description: Command help should display help information
-  command: 'oag-mcp --help'
+  command: "oag-mcp --help"
   exitcode: 0
-  output: 'Usage: oag-mcp'
+  output: "Usage: oag-mcp"
 
-- description: Display command with lower transformation and no reverse
-  command: 'oag-mcp --config-file {base}/examples/oag-mcp.yaml display --reverse false --transform lower'
+- description: Build help should list both build workflows
+  command: "oag-mcp build --help"
   exitcode: 0
-  output: 'Message:'
+  output: "--generate-sdk"
 
-- description: Display command with upper transformation and reverse
-  command: 'oag-mcp --config-file {base}/examples/oag-mcp.yaml display --reverse true --transform upper'
+- description: Build from an existing SDK directory
+  command: "oag-mcp build --spec {base}/test/fixtures/petclinic/openapi.yaml --sdk {base}/test/fixtures/petclinic/sdk-7.26.0 --out petclinic-server --log-level warn"
   exitcode: 0
-  output: 'Message:'
+  output: "Methods: 11 across 4 API classes"
+
+- description: Build from a packaged SDK archive
+  command: "oag-mcp build --spec {base}/test/fixtures/petclinic/openapi.yaml --sdk {base}/test/fixtures/petclinic/petclinic-sdk-1.2.0.tgz --sdk-layout compiled --out petclinic-server-tgz --log-level warn"
+  exitcode: 0
+  output: "compiled, archive"
+
+- description: Build should reject a missing SDK with an actionable error
+  command: "oag-mcp build --spec {base}/test/fixtures/petclinic/openapi.yaml --sdk does-not-exist --out unused --log-level silent 2>&1"
+  exitcode: 1
+  output: "SDK_NOT_FOUND"
+
+- description: Serve should reject legacy HTTP+SSE as a transport
+  command: "oag-mcp serve petclinic-server --transport sse --log-level silent 2>&1"
+  exitcode: 1
+  output: "streamable-http"

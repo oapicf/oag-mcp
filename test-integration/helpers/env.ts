@@ -1,0 +1,297 @@
+"use strict";
+/**
+ * Shared integration-test environment: fixture paths, cached artifact
+ * builds, prerequisite detection and service/CLI helpers.
+ */
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { build } from "../../lib/build/build.js";
+import { cachedJarPath } from "../../lib/build/generate.js";
+import {
+  parseRuntimeConfig,
+  type RuntimeConfig,
+} from "../../lib/config/runtime-config.js";
+import { Logs } from "../../lib/logging/logger.js";
+import { OagMcpService } from "../../lib/runtime/service.js";
+import {
+  ADMIN_PASSWORD,
+  ADMIN_USER,
+  API_KEY,
+  BEARER_TOKEN,
+  type MockApi,
+} from "./mock-api.js";
+import {
+  UPSTREAM_CLIENT_ID,
+  UPSTREAM_CLIENT_SECRET,
+  type AuthServer,
+} from "./auth-server.js";
+
+export const ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+);
+export const FIXTURES = path.join(ROOT, "test", "fixtures", "petclinic");
+export const SPEC = path.join(FIXTURES, "openapi.yaml");
+export const SDK_726 = path.join(FIXTURES, "sdk-7.26.0");
+export const SDK_725 = path.join(FIXTURES, "sdk-7.25.0");
+export const SDK_VARIANT = path.join(FIXTURES, "sdk-variant-7.26.0");
+export const SDK_TGZ = path.join(FIXTURES, "petclinic-sdk-1.2.0.tgz");
+export const BIN = path.join(ROOT, "bin", "oag-mcp.js");
+
+/** Environment variables carrying upstream secrets for tests. */
+export const SECRET_ENV = {
+  PC_API_KEY: API_KEY,
+  PC_BEARER: BEARER_TOKEN,
+  PC_ADMIN_USER: ADMIN_USER,
+  PC_ADMIN_PASS: ADMIN_PASSWORD,
+  PC_CLIENT_ID: UPSTREAM_CLIENT_ID,
+  PC_CLIENT_SECRET: UPSTREAM_CLIENT_SECRET,
+};
+Object.assign(process.env, SECRET_ENV);
+
+const WORK = fs.mkdtempSync(path.join(os.tmpdir(), "oag-mcp-it-"));
+const artifacts = new Map<string, Promise<string>>();
+
+/** Quiet logger for builds. */
+export function fileLogs(name = "it"): {
+  logs: Logs;
+  file: string;
+  records: () => Array<Record<string, unknown>>;
+} {
+  const file = path.join(
+    WORK,
+    `${name}-${Math.random().toString(36).slice(2)}.log`,
+  );
+  const logs = new Logs({ file, auditFile: file, level: "debug" });
+  return {
+    logs,
+    file,
+    records: () =>
+      fs.existsSync(file)
+        ? fs
+            .readFileSync(file, "utf8")
+            .split("\n")
+            .filter(Boolean)
+            .map((l) => JSON.parse(l))
+        : [],
+  };
+}
+
+/**
+ * Build (once per run) and return an artifact directory.
+ *
+ * @param {String} key - cache key
+ * @param {Object} opts - build options without logs/out
+ * @return {Promise} artifact dir
+ */
+export function artifact(
+  key: string,
+  opts: Omit<Parameters<typeof build>[0], "logs" | "out">,
+): Promise<string> {
+  let p = artifacts.get(key);
+  if (!p) {
+    const out = path.join(WORK, `artifact-${key}`);
+    p = build({
+      ...opts,
+      out,
+      force: true,
+      logs: fileLogs(`build-${key}`).logs,
+    }).then((r) => r.outDir);
+    artifacts.set(key, p);
+  }
+  return p;
+}
+
+/** The default artifact built from the 7.26.0 source fixture. */
+export const defaultArtifact = () =>
+  artifact("source-7.26.0", { spec: SPEC, sdk: SDK_726 });
+
+/** Work directory for tests. */
+export function workDir(name: string): string {
+  const d = path.join(WORK, `${name}-${Math.random().toString(36).slice(2)}`);
+  fs.mkdirSync(d, { recursive: true });
+  return d;
+}
+
+/** Whether the Java backend prerequisites are available. */
+export function javaAvailable(): { ok: boolean; reason?: string } {
+  const res = spawnSync("java", ["-version"], { encoding: "utf8" });
+  if (res.status !== 0) {
+    return { ok: false, reason: "java is not installed" };
+  }
+  if (!process.env.OAG_MCP_OAG_JAR && !fs.existsSync(cachedJarPath("7.26.0"))) {
+    return {
+      ok: false,
+      reason: `OpenAPI Generator 7.26.0 JAR not cached at ${cachedJarPath("7.26.0")} and Maven Central may be unreachable`,
+    };
+  }
+  return { ok: true };
+}
+
+/** Whether the Docker backend prerequisites are available. */
+export function dockerAvailable(): { ok: boolean; reason?: string } {
+  const res = spawnSync(
+    "docker",
+    ["version", "--format", "{{.Server.Version}}"],
+    { encoding: "utf8" },
+  );
+  if (res.status !== 0) {
+    return { ok: false, reason: "docker daemon is not available" };
+  }
+  const img = spawnSync(
+    "docker",
+    ["image", "inspect", "openapitools/openapi-generator-cli:v7.26.0"],
+    { encoding: "utf8" },
+  );
+  if (img.status !== 0) {
+    return {
+      ok: false,
+      reason: "image openapitools/openapi-generator-cli:v7.26.0 is not pulled",
+    };
+  }
+  return { ok: true };
+}
+
+/** Upstream auth configuration covering every fixture scheme. */
+export function upstreamAuthConfig(auth?: AuthServer): Record<string, unknown> {
+  return {
+    allowInsecureTokenUrl: true,
+    schemes: {
+      apiKeyHeader: { apiKey: { env: "PC_API_KEY" } },
+      apiKeyQuery: { apiKey: { env: "PC_API_KEY" } },
+      bearerAuth: { token: { env: "PC_BEARER" } },
+      adminBasic: {
+        username: { env: "PC_ADMIN_USER" },
+        password: { env: "PC_ADMIN_PASS" },
+      },
+      ...(auth
+        ? {
+            clinicOAuth: {
+              clientId: { env: "PC_CLIENT_ID" },
+              clientSecret: { env: "PC_CLIENT_SECRET" },
+              tokenUrl: auth.tokenUrl,
+            },
+          }
+        : {}),
+    },
+  };
+}
+
+/** Runtime configuration against the mock API. */
+export function runtimeConfig(
+  api: MockApi,
+  extra: Record<string, unknown> = {},
+  auth?: AuthServer,
+): RuntimeConfig {
+  return parseRuntimeConfig({
+    upstream: { baseUrl: api.baseUrl },
+    upstreamAuth: upstreamAuthConfig(auth),
+    ...extra,
+  });
+}
+
+/** Create a service for an artifact. */
+export async function service(
+  dir: string,
+  config: RuntimeConfig,
+  logs?: Logs,
+): Promise<OagMcpService> {
+  return OagMcpService.create({
+    artifactDir: dir,
+    config,
+    configBaseDir: process.cwd(),
+    logs: logs ?? fileLogs("svc").logs,
+  });
+}
+
+/** A local principal context. */
+export const LOCAL = {
+  principal: {
+    id: "local:test",
+    kind: "local" as const,
+    name: "test",
+    scopes: [],
+  },
+  requestId: "req_test",
+  transport: "stdio" as const,
+};
+
+/** Write a YAML/JSON runtime config file. */
+export function writeConfig(
+  dir: string,
+  config: Record<string, unknown>,
+): string {
+  const file = path.join(dir, "oag-mcp.config.json");
+  fs.writeFileSync(file, JSON.stringify(config, null, 2));
+  return file;
+}
+
+/** Start `oag-mcp serve` over Streamable HTTP and wait until it listens. */
+export async function startHttpServer(
+  args: string[],
+  env: Record<string, string> = {},
+): Promise<{
+  child: ChildProcess;
+  url: string;
+  stderr: () => string;
+  stop: () => Promise<void>;
+}> {
+  const portArgs = args.includes("--port") ? [] : ["--port", "0"];
+  const child = spawn(
+    process.execPath,
+    [BIN, "serve", ...args, "--transport", "streamable-http", ...portArgs],
+    {
+      env: { ...process.env, ...env },
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  let stderr = "";
+  child.stderr!.on("data", (d) => (stderr += d));
+  const url = await new Promise<string>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`server did not start: ${stderr}`)),
+      30000,
+    );
+    const check = () => {
+      const m = /oag-mcp listening on (\S+)/.exec(stderr);
+      if (m) {
+        clearTimeout(timer);
+        resolve(m[1]);
+      }
+    };
+    child.stderr!.on("data", check);
+    child.on("exit", (code) => {
+      clearTimeout(timer);
+      reject(new Error(`server exited ${code}: ${stderr}`));
+    });
+  });
+  return {
+    child,
+    url,
+    stderr: () => stderr,
+    stop: () =>
+      new Promise((resolve) => {
+        if (child.exitCode !== null) return resolve();
+        child.on("exit", () => resolve());
+        child.kill("SIGTERM");
+      }),
+  };
+}
+
+/** Run the CLI and capture output. */
+export function runCli(
+  args: string[],
+  env: Record<string, string> = {},
+): { status: number; stdout: string; stderr: string } {
+  const res = spawnSync(process.execPath, [BIN, ...args], {
+    encoding: "utf8",
+    env: { ...process.env, ...env },
+    timeout: 180000,
+  });
+  return { status: res.status ?? 1, stdout: res.stdout, stderr: res.stderr };
+}

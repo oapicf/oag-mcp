@@ -17,13 +17,24 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
+      # Java is only needed for the SDK generation integration tests.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/oag-mcp
+          key: oag-mcp-openapi-generator-7.26.0
       - run: make deps
       - run: make ci
+      - run: npm run typecheck
+      - run: npm run test:integration
       - uses: coverallsapp/github-action@v2.3.6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path-to-lcov: .bob/coverage/c8/lcov.info
       - uses: peaceiris/actions-gh-pages@v4
         with:
-          github_token: ${{ secrets.null_GITHUB_TOKEN }}
+          github_token: ${{ secrets.OAPICF_GITHUB_TOKEN }}
           publish_dir: .bob
