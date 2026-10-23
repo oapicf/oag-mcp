@@ -80,15 +80,26 @@ docker run --rm -v "$PWD":/local openapitools/openapi-generator-cli:v7.26.0 \
   --output /local/generated-sdk
 ```
 
-The `gen-sdk` target in [`Makefile-extras`](Makefile-extras) is an example of
-the same command in a Makefile; in this repository it writes the SDK to
-`stage/generated-sdk/`:
+The SDK can be used as that directory or packed into an npm archive. To pack
+it, generate it with `--additional-properties npmName=<name>,npmVersion=<version>`
+(so it has a `package.json`), then in the SDK directory run:
 
 ```bash
-make -f Makefile-extras gen-sdk SPEC=path/to/openapi.yaml
+npm install && npm pack
 ```
 
-The SDK can be used as that directory or as an `npm pack` archive.
+`npm pack` runs the SDK's own build script, which needs its TypeScript dev
+dependency, hence the `npm install`; the archive contains both the sources
+and the compiled JavaScript.
+
+The `gen-sdk` target in [`Makefile-extras`](Makefile-extras) is an example of
+both steps in a Makefile. It writes the SDK to `stage/generated-sdk/` and the
+archive to `stage/<SDK_NAME>-<SDK_VERSION>.tgz`:
+
+```bash
+make -f Makefile-extras gen-sdk SPEC=path/to/openapi.yaml \
+  SDK_NAME=petstore-sdk SDK_VERSION=1.0.0
+```
 
 ### 2. Serve it
 

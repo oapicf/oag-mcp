@@ -30,11 +30,16 @@ docker run --rm -v "$PWD":/local openapitools/openapi-generator-cli:v7.26.0 \
 
 Generator options go in `--additional-properties` (e.g.
 `--additional-properties=npmName=petstore-sdk,npmVersion=1.0.0`, recommended
-so the SDK is a complete npm package). The `gen-sdk` target in
-[`Makefile-extras`](../Makefile-extras) is an example of this command in a
-Makefile (`make -f Makefile-extras gen-sdk SPEC=path/to/openapi.yaml`,
-output in `stage/generated-sdk/`). Docker is only needed for this step, not
-to run oag-mcp.
+so the SDK is a complete npm package). To turn the generated directory into
+an archive, run `npm install && npm pack` in it (see
+[Package archive](#package-archive---sdk-sdk-100tgz)).
+
+The `gen-sdk` target in [`Makefile-extras`](../Makefile-extras) is an example
+of generating and packing in a Makefile:
+`make -f Makefile-extras gen-sdk SPEC=path/to/openapi.yaml [SDK_NAME=…]
+[SDK_VERSION=…]` writes `stage/generated-sdk/` and
+`stage/<SDK_NAME>-<SDK_VERSION>.tgz`. Docker is only needed for generation
+and npm for packing; neither is needed to run oag-mcp.
 
 ## Generator options
 
@@ -92,9 +97,18 @@ uncompressed size (256 MiB) are bounded. After extraction every path is
 verified to resolve inside the private workspace, which is removed when the
 server stops.
 
-Archives produced by `npm pack` normally contain the compiled `dist/` (and,
-for typescript-fetch packages, `src/`); use `--sdk-layout compiled` to serve
-the compiled JavaScript, or the default to prefer sources.
+To create one from a generated SDK (generated with `npmName`/`npmVersion`, so
+it has a `package.json`):
+
+```bash
+cd generated-sdk
+npm install   # the SDK's TypeScript dev dependency, for its build script
+npm pack      # runs the SDK's prepare/build script, then writes <name>-<version>.tgz
+```
+
+`npm pack` always runs the SDK's `prepare` script (`tsc`), so the archive
+contains both `src/` and the compiled `dist/`. oag-mcp serves the sources by
+default; use `--sdk-layout compiled` to serve the compiled JavaScript.
 
 ### Source versus compiled packages
 

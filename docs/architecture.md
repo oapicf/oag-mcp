@@ -156,7 +156,7 @@ Mocha, bagofcli, Suntory/Bob). Changes:
 - **CI**: the workflow keeps `make deps`/`make ci` and adds an
   `npm run test:integration` step.
 - **Makefile-extras**: a `gen-sdk` target generates a typescript-fetch SDK
-  with OpenAPI Generator's Docker image
+  with OpenAPI Generator's Docker image and packs it with `npm pack`
   (`make -f Makefile-extras gen-sdk SPEC=path/to/openapi.yaml`).
 - **Changelog**: the template's CHANGELOG contained another project's
   release history; it was replaced with this project's.

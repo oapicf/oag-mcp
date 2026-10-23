@@ -39,8 +39,10 @@ rather than passing silently.
 The SDK fixtures are generated output committed to the repository; tests
 never run the generator. To regenerate one, run OpenAPI Generator's Docker
 image as described in [SDK compatibility](sdk-compatibility.md#generating-an-sdk)
-(e.g. `make -f Makefile-extras gen-sdk SPEC=test/fixtures/petclinic/openapi.yaml`),
-with `--additional-properties` matching the fixture.
+with `--additional-properties` matching the fixture. For example,
+`make -f Makefile-extras gen-sdk SPEC=test/fixtures/petclinic/openapi.yaml SDK_NAME=petclinic-sdk SDK_VERSION=1.2.0`
+produces both `sdk-7.26.0/` and `petclinic-sdk-1.2.0.tgz` equivalents under
+`stage/`.
 
 ## What is verified where
 
