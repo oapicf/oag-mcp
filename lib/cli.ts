@@ -7,49 +7,30 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import bag from "bagofcli";
+import bag, { type CommandArg } from "bagofcli";
 
 import { loadRuntimeConfig } from "./config/runtime-config.js";
 import { OagMcpError, formatCliError } from "./errors.js";
-import {
-  LOG_LEVELS,
-  type LogLevel,
-  Logs,
-  type LoggingOptions,
-} from "./logging/logger.js";
+import { type LogLevel, Logs, type LoggingOptions } from "./logging/logger.js";
 import { type RunningServer, serve } from "./runtime/serve.js";
 
 const DIRNAME = path.dirname(fileURLToPath(import.meta.url));
 
-/** Options parsed by bagofcli/commander. */
-type CommandArgs = Record<string, unknown> & { args?: string[] };
-
 /**
  * Build logging options from CLI flags and an optional config section.
+ * Values are already validated: flags by bagofcli (`choices` in
+ * conf/commands.json), the config section by its zod schema.
  *
  * @private
  */
 function _loggingOptions(
-  args: CommandArgs,
+  args: CommandArg,
   fromConfig: LoggingOptions = {},
 ): LoggingOptions {
-  const level = (args.logLevel as string | undefined) ?? fromConfig.level;
-  if (level && !(LOG_LEVELS as readonly string[]).includes(level)) {
-    throw new OagMcpError(
-      "CLI_ARGS_INVALID",
-      `--log-level must be one of ${LOG_LEVELS.join(", ")}`,
-    );
-  }
-  const format = (args.logFormat as string | undefined) ?? fromConfig.format;
-  if (format && format !== "json" && format !== "pretty") {
-    throw new OagMcpError(
-      "CLI_ARGS_INVALID",
-      "--log-format must be json or pretty",
-    );
-  }
   return {
-    level: level as LogLevel | undefined,
-    format: format as "json" | "pretty" | undefined,
+    level: (args.logLevel as LogLevel | undefined) ?? fromConfig.level,
+    format:
+      (args.logFormat as "json" | "pretty" | undefined) ?? fromConfig.format,
     file: (args.logFile as string | undefined) ?? fromConfig.file,
     auditFile:
       (args.auditLogFile as string | undefined) ?? fromConfig.auditFile,
@@ -75,56 +56,22 @@ function _fail(logs: Logs | undefined, command: string, err: unknown): never {
 }
 
 /**
- * `serve` action.
+ * `serve` action. bagofcli has already validated every flag against
+ * conf/commands.json (required inputs, allowed values, the port range, no
+ * positional arguments) before calling it.
  *
  * @private
  */
-async function _serve(args: CommandArgs): Promise<void> {
-  // bagofcli invokes this action from commander.parse() and only then
-  // applies the commands.json rules (e.g. `required` on --spec/--sdk) in the
-  // same tick. Yield once so a rule failure exits before anything here runs:
-  // no logs, no config loading, no preparation workspace.
-  await new Promise<void>((resolve) => setImmediate(resolve));
+async function _serve(args: CommandArg): Promise<void> {
   let logs: Logs | undefined;
   try {
-    if (args.args && args.args.length > 0) {
-      throw new OagMcpError(
-        "CLI_ARGS_INVALID",
-        `Unexpected argument "${args.args[0]}"`,
-        {
-          hint: "serve takes no positional arguments; pass the inputs as options: oag-mcp serve --spec ./openapi.yaml --sdk ./generated-sdk",
-        },
-      );
-    }
-    const layout = (args.sdkLayout as string | undefined) ?? "auto";
-    if (!["auto", "source", "compiled"].includes(layout)) {
-      throw new OagMcpError(
-        "CLI_ARGS_INVALID",
-        "--sdk-layout must be auto, source or compiled",
-      );
-    }
-    const transport = (args.transport as string | undefined) ?? "stdio";
-    if (transport !== "stdio" && transport !== "streamable-http") {
-      throw new OagMcpError(
-        "CLI_ARGS_INVALID",
-        "--transport must be stdio or streamable-http",
-        {
-          hint: "Legacy HTTP+SSE is not supported; use streamable-http.",
-        },
-      );
-    }
+    const transport =
+      (args.transport as "stdio" | "streamable-http" | undefined) ?? "stdio";
     const { config, baseDir } = loadRuntimeConfig(
       args.config as string | undefined,
     );
     if (args.port !== undefined) {
-      const port = Number(args.port);
-      if (!Number.isInteger(port) || port < 0 || port > 65535) {
-        throw new OagMcpError(
-          "CLI_ARGS_INVALID",
-          "--port must be an integer between 0 and 65535",
-        );
-      }
-      config.http.port = port;
+      config.http.port = Number(args.port);
     }
     if (args.host) {
       config.http.host = String(args.host);
@@ -173,7 +120,7 @@ async function _serve(args: CommandArgs): Promise<void> {
     const running = await serve({
       spec: String(args.spec),
       sdk: String(args.sdk),
-      sdkLayout: layout as "auto" | "source" | "compiled",
+      sdkLayout: args.sdkLayout as "auto" | "source" | "compiled" | undefined,
       sdkOagVersion: args.sdkOagVersion as string | undefined,
       allowUntestedOagVersion: Boolean(args.allowUntestedOagVersion),
       transport,
@@ -207,7 +154,7 @@ async function _serve(args: CommandArgs): Promise<void> {
 function exec(): void {
   const actions = {
     commands: {
-      serve: { action: (args: CommandArgs) => void _serve(args) },
+      serve: { action: (args: CommandArg) => void _serve(args) },
     },
   };
   bag.command(DIRNAME, actions);

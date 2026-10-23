@@ -2,11 +2,24 @@
   "options": [
     {
       "arg": "--log-level <logLevel>",
-      "desc": "Operational log level: fatal|error|warn|info|debug|trace|silent (security audit records are always written), default: info"
+      "desc": "Operational log level (security audit records are always written), default: info",
+      "choices": [
+        "fatal",
+        "error",
+        "warn",
+        "info",
+        "debug",
+        "trace",
+        "silent"
+      ]
     },
     {
       "arg": "--log-format <logFormat>",
-      "desc": "Log format: json (default) or pretty (human-readable, for local development; stderr only)"
+      "desc": "Log format: json (default) or pretty (human-readable, for local development; stderr only)",
+      "choices": [
+        "json",
+        "pretty"
+      ]
     },
     {
       "arg": "--log-file <logFile>",
@@ -24,6 +37,7 @@
   "commands": {
     "serve": {
       "desc": "Prepare an OpenAPI document and an existing OpenAPI Generator typescript-fetch SDK, then serve them as an MCP server exposing the search and execute tools",
+      "allowExcessArguments": false,
       "options": [
         {
           "arg": "--spec <spec>",
@@ -41,7 +55,12 @@
         },
         {
           "arg": "--sdk-layout <sdkLayout>",
-          "desc": "SDK layout to use: auto (default), source (src/*.ts) or compiled (dist/*.js + .d.ts)"
+          "desc": "SDK layout to use: source (src/*.ts), compiled (dist/*.js + .d.ts) or auto (sources when present), default: auto",
+          "choices": [
+            "auto",
+            "source",
+            "compiled"
+          ]
         },
         {
           "arg": "--sdk-oag-version <sdkOagVersion>",
@@ -53,11 +72,18 @@
         },
         {
           "arg": "--transport <transport>",
-          "desc": "stdio (default) or streamable-http"
+          "desc": "MCP transport, default: stdio",
+          "choices": [
+            "stdio",
+            "streamable-http"
+          ]
         },
         {
           "arg": "--port <port>",
-          "desc": "Streamable HTTP port, default: 3000"
+          "desc": "Streamable HTTP port, default: 3000",
+          "integer": true,
+          "min": 0,
+          "max": 65535
         },
         {
           "arg": "--host <host>",

@@ -7,6 +7,7 @@ import bag from "bagofcli";
 import sinon from "sinon";
 
 import cli from "../lib/cli.js";
+import { LOG_LEVELS } from "../lib/logging/logger.js";
 import { ROOT } from "./helpers/paths.js";
 
 const { assert } = referee;
@@ -57,6 +58,36 @@ describe("cli - exec", function () {
     for (const ex of commands.commands.serve.examples) {
       assert.match(ex, /^oag-mcp serve --spec \S+ --sdk \S+/);
     }
+  });
+
+  it("should declare argument validation for bagofcli in conf/commands.json", function () {
+    const commands = JSON.parse(
+      fs.readFileSync(path.join(ROOT, "conf", "commands.json"), "utf8"),
+    );
+    type Opt = { arg: string; [k: string]: unknown };
+    const find = (opts: Opt[], flag: string) =>
+      opts.find((o) => o.arg.startsWith(`${flag} `))!;
+    const serve = commands.commands.serve;
+    assert.isFalse(serve.allowExcessArguments);
+    assert.equals(find(serve.options, "--sdk-layout").choices, [
+      "auto",
+      "source",
+      "compiled",
+    ]);
+    assert.equals(find(serve.options, "--transport").choices, [
+      "stdio",
+      "streamable-http",
+    ]);
+    const port = find(serve.options, "--port");
+    assert.equals([port.integer, port.min, port.max], [true, 0, 65535]);
+    // The allowed log levels must stay in step with the logger.
+    assert.equals(find(commands.options, "--log-level").choices, [
+      ...LOG_LEVELS,
+    ]);
+    assert.equals(find(commands.options, "--log-format").choices, [
+      "json",
+      "pretty",
+    ]);
   });
 });
 
