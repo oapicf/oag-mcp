@@ -38,6 +38,12 @@ describe("cli - exec", function () {
       (o: { arg: string }) => o.arg.split(" ")[0],
     );
     assert.isUndefined(commands.commands.serve.args);
+    for (const flag of ["--spec", "--sdk"]) {
+      const opt = commands.commands.serve.options.find((o: { arg: string }) =>
+        o.arg.startsWith(`${flag} `),
+      );
+      assert.equals(opt.rules, ["required"], flag);
+    }
     for (const flag of [
       "--spec",
       "--sdk",

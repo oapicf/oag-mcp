@@ -80,6 +80,11 @@ function _fail(logs: Logs | undefined, command: string, err: unknown): never {
  * @private
  */
 async function _serve(args: CommandArgs): Promise<void> {
+  // bagofcli invokes this action from commander.parse() and only then
+  // applies the commands.json rules (e.g. `required` on --spec/--sdk) in the
+  // same tick. Yield once so a rule failure exits before anything here runs:
+  // no logs, no config loading, no preparation workspace.
+  await new Promise<void>((resolve) => setImmediate(resolve));
   let logs: Logs | undefined;
   try {
     if (args.args && args.args.length > 0) {
@@ -90,13 +95,6 @@ async function _serve(args: CommandArgs): Promise<void> {
           hint: "serve takes no positional arguments; pass the inputs as options: oag-mcp serve --spec ./openapi.yaml --sdk ./generated-sdk",
         },
       );
-    }
-    for (const required of ["spec", "sdk"]) {
-      if (!args[required]) {
-        throw new OagMcpError("CLI_ARGS_INVALID", `--${required} is required`, {
-          hint: "Usage: oag-mcp serve --spec ./openapi.yaml --sdk ./generated-sdk [--transport stdio|streamable-http]",
-        });
-      }
     }
     const layout = (args.sdkLayout as string | undefined) ?? "auto";
     if (!["auto", "source", "compiled"].includes(layout)) {

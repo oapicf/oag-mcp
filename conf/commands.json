@@ -27,11 +27,17 @@
       "options": [
         {
           "arg": "--spec <spec>",
-          "desc": "OpenAPI 3.0/3.1 document (YAML or JSON), required"
+          "desc": "OpenAPI 3.0/3.1 document (YAML or JSON), required",
+          "rules": [
+            "required"
+          ]
         },
         {
           "arg": "--sdk <sdk>",
-          "desc": "Existing typescript-fetch SDK: a package directory or an npm package archive (.tgz), required; never modified"
+          "desc": "Existing typescript-fetch SDK: a package directory or an npm package archive (.tgz), required; never modified",
+          "rules": [
+            "required"
+          ]
         },
         {
           "arg": "--sdk-layout <sdkLayout>",

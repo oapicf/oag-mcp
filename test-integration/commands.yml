@@ -17,14 +17,19 @@
   output: "unknown command 'frobnicate'"
 
 - description: Serve should reject positional arguments and show the expected options
-  command: "oag-mcp serve ./openapi.yaml --log-level silent 2>&1"
+  command: "oag-mcp serve ./openapi.yaml --spec {base}/test/fixtures/petclinic/openapi.yaml --sdk {base}/test/fixtures/petclinic/sdk-7.26.0 --log-level silent 2>&1"
   exitcode: 1
   output: "--spec ./openapi.yaml --sdk ./generated-sdk"
 
 - description: Serve should require an SDK
   command: "oag-mcp serve --spec {base}/test/fixtures/petclinic/openapi.yaml --log-level silent 2>&1"
   exitcode: 1
-  output: "--sdk is required"
+  output: "<--sdk <sdk>> must be required"
+
+- description: Serve should require a spec
+  command: "oag-mcp serve --sdk {base}/test/fixtures/petclinic/sdk-7.26.0 --log-level silent 2>&1"
+  exitcode: 1
+  output: "<--spec <spec>> must be required"
 
 - description: Serve should reject a missing SDK with an actionable error
   command: "oag-mcp serve --spec {base}/test/fixtures/petclinic/openapi.yaml --sdk does-not-exist --log-level silent 2>&1"
