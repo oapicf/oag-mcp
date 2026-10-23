@@ -17,15 +17,6 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
-      # Java is only needed for the SDK generation integration tests.
-      - uses: actions/setup-java@v6
-        with:
-          distribution: temurin
-          java-version: '21'
-      - uses: actions/cache@v6
-        with:
-          path: ~/.cache/oag-mcp
-          key: oag-mcp-openapi-generator-7.26.0
       - run: make deps
       - run: make ci
       - run: npm run typecheck

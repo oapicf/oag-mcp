@@ -154,8 +154,9 @@ Mocha, bagofcli, Suntory/Bob). Changes:
 - **Packaging**: `package.json` gained `exports`, `files`, `types`,
   pinned dependencies, scripts and Node 22+. `.gitignore` ignores `dist/`.
 - **CI**: the workflow keeps `make deps`/`make ci` and adds an
-  `npm run test:integration` step. Java is only needed by the optional
-  fixture-generation tests (`scripts/dev/generate-sdk.ts`, a development
-  tool that is not part of the package).
+  `npm run test:integration` step.
+- **Makefile-extras**: a `gen-sdk` target generates a typescript-fetch SDK
+  with OpenAPI Generator's Docker image
+  (`make -f Makefile-extras gen-sdk SPEC=path/to/openapi.yaml`).
 - **Changelog**: the template's CHANGELOG contained another project's
   release history; it was replaced with this project's.

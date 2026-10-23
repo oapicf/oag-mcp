@@ -16,7 +16,6 @@ export const FIXTURES = path.join(ROOT, "test", "fixtures", "petclinic");
 
 export const SPEC = path.join(FIXTURES, "openapi.yaml");
 export const SDK_726 = path.join(FIXTURES, "sdk-7.26.0");
-export const SDK_725 = path.join(FIXTURES, "sdk-7.25.0");
 export const SDK_VARIANT = path.join(FIXTURES, "sdk-variant-7.26.0");
 export const SDK_TGZ = path.join(FIXTURES, "petclinic-sdk-1.2.0.tgz");
 

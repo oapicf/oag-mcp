@@ -8,8 +8,7 @@
   "include": [
     "lib/**/*.ts",
     "test/**/*.ts",
-    "test-integration/**/*.ts",
-    "scripts/**/*.ts"
+    "test-integration/**/*.ts"
   ],
   "exclude": ["test/fixtures/**", "dist", "node_modules"]
 }

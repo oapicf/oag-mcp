@@ -4,14 +4,11 @@ import path from "node:path";
 
 import referee from "@sinonjs/referee";
 
-import {
-  inspectSdk,
-  validateGeneratorOptions,
-} from "../../lib/prepare/compat.js";
+import { inspectSdk } from "../../lib/prepare/compat.js";
 import { extractArchive } from "../../lib/prepare/sdk-input.js";
+import { SUPPORTED_OAG_VERSIONS } from "../../lib/version.js";
 import { OagMcpError } from "../../lib/errors.js";
 import {
-  SDK_725,
   SDK_726,
   SDK_TGZ,
   SDK_VARIANT,
@@ -46,8 +43,17 @@ describe("compat - inspectSdk", function () {
     assert.equals(insp.pkg?.name, "petclinic-sdk");
   });
 
-  it("should accept the 7.25.0 fixture", function () {
-    assert.equals(inspectSdk(SDK_725).oagVersion, "7.25.0");
+  it("should accept every version in SUPPORTED_OAG_VERSIONS as tested", function () {
+    for (const v of SUPPORTED_OAG_VERSIONS) {
+      const dir = copyFixture(SDK_726);
+      fs.writeFileSync(
+        path.join(dir, ".openapi-generator", "VERSION"),
+        `${v}\n`,
+      );
+      const insp = inspectSdk(dir);
+      assert.equals(insp.oagVersion, v);
+      assert.isTrue(insp.oagVersionTested);
+    }
   });
 
   it("should detect generator options from the variant fixture", function () {
@@ -133,31 +139,5 @@ describe("compat - inspectSdk", function () {
       if (f !== "index.ts") fs.rmSync(path.join(dir, "src", "apis", f));
     }
     expectCode(() => inspectSdk(dir), "SDK_LAYOUT_UNSUPPORTED");
-  });
-});
-
-describe("compat - validateGeneratorOptions", function () {
-  it("should accept tested options and reject unsupported or unknown ones", function () {
-    validateGeneratorOptions({
-      npmName: "x",
-      withInterfaces: "true",
-      useSingleRequestParameter: "false",
-    });
-    expectCode(
-      () => validateGeneratorOptions({ sagasAndRecords: "true" }),
-      "SDK_OPTION_UNSUPPORTED",
-    );
-    expectCode(
-      () => validateGeneratorOptions({ stringEnums: "true" }),
-      "SDK_OPTION_UNSUPPORTED",
-    );
-    expectCode(
-      () => validateGeneratorOptions({ dateLibrary: "temporal" }),
-      "SDK_OPTION_UNSUPPORTED",
-    );
-    expectCode(
-      () => validateGeneratorOptions({ somethingElse: "1" }),
-      "SDK_OPTION_UNTESTED",
-    );
   });
 });

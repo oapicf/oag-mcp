@@ -1,0 +1,24 @@
+OPENAPI_GENERATOR_VERSION = 7.26.0
+
+x-post-deps:
+	docker pull openapitools/openapi-generator-cli:v$(OPENAPI_GENERATOR_VERSION)
+
+# Generate a typescript-fetch SDK from an OpenAPI document, e.g.
+#   make gen-sdk SPEC=path/to/openapi.yaml
+# SPEC is relative to this directory (the same document you pass to
+# `oag-mcp serve --spec`). The SDK is written to stage/generated-sdk/.
+gen-sdk:
+	$(if $(SPEC),,$(error SPEC is required, e.g. make gen-sdk SPEC=path/to/openapi.yaml))
+	mkdir -p stage/generated-sdk/
+	docker \
+	  run \
+	  --rm \
+	  --user $$(id -u):$$(id -g) \
+	  -v $(CURDIR):/local \
+	  openapitools/openapi-generator-cli:v$(OPENAPI_GENERATOR_VERSION) \
+	  generate \
+	  --input-spec /local/$(SPEC) \
+	  --generator-name typescript-fetch \
+	  --output /local/stage/generated-sdk/
+
+.PHONY: x-post-deps gen-sdk

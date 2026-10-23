@@ -57,11 +57,11 @@ npm install -g oag-mcp
 | --- | --- | --- |
 | Node.js 22+ | everything | |
 | Deno 2.x | `execute`, and checking the SDK bundle at start-up | Installed automatically through the `deno` npm dependency; or set `OAG_MCP_DENO_PATH` / put `deno` on `PATH`. |
-| A typescript-fetch SDK | everything | Generated with [OpenAPI Generator](https://openapi-generator.tech) 7.25.0 or 7.26.0 (`-g typescript-fetch`). |
+| A typescript-fetch SDK | everything | Generated with [OpenAPI Generator](https://openapi-generator.tech)'s `typescript-fetch` generator, version 7.26.0. |
 
-oag-mcp works with the SDK you already have; it never generates, installs or
-builds anything itself, so Java, Docker and OpenAPI Generator are not needed
-on the machine running the server. No account, licence, cloud service or
+oag-mcp serves the SDK you give it; generating that SDK is done with
+OpenAPI Generator itself, so the machine running the server needs neither
+Docker nor OpenAPI Generator. No account, licence, cloud service or
 telemetry is involved; at runtime the server only connects to your API and
 to any OAuth endpoints you configure.
 
@@ -69,13 +69,23 @@ to any OAuth endpoints you configure.
 
 ### 1. Generate a typescript-fetch SDK
 
-If you don't have one yet, generate it from your OpenAPI document, for
-example with the OpenAPI Generator CLI:
+Generate the SDK from your OpenAPI document with OpenAPI Generator's official
+Docker image:
 
 ```bash
-openapi-generator-cli generate -g typescript-fetch \
-  -i openapi.yaml -o ./generated-sdk \
-  --additional-properties=npmName=petstore-sdk,npmVersion=1.0.0
+docker run --rm -v "$PWD":/local openapitools/openapi-generator-cli:v7.26.0 \
+  generate \
+  --input-spec /local/openapi.yaml \
+  --generator-name typescript-fetch \
+  --output /local/generated-sdk
+```
+
+The `gen-sdk` target in [`Makefile-extras`](Makefile-extras) is an example of
+the same command in a Makefile; in this repository it writes the SDK to
+`stage/generated-sdk/`:
+
+```bash
+make -f Makefile-extras gen-sdk SPEC=path/to/openapi.yaml
 ```
 
 The SDK can be used as that directory or as an `npm pack` archive.

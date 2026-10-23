@@ -24,7 +24,6 @@ import { sha256Tree } from "../lib/util/hash.js";
 import {
   BIN,
   LOCAL,
-  SDK_725,
   SDK_726,
   SDK_TGZ,
   SDK_VARIANT,
@@ -147,10 +146,8 @@ describe("prepare - supported SDK inputs", function () {
     assert(fs.existsSync(path.join(compiled.workspaceDir, "input", "package")));
   });
 
-  it("should support the other tested generator version and option variant", async function () {
-    const v725 = await prepared("source-7.25.0", { spec: SPEC, sdk: SDK_725 });
+  it("should support the generator option variant", async function () {
     const variant = await prepared("variant", { spec: SPEC, sdk: SDK_VARIANT });
-    assert.equals(v725.info.target.oagVersion, "7.25.0");
     assert.equals(variant.info.target.options.withInterfaces, true);
     assert.equals(variant.records.map((r) => r.id).sort(), EXPECTED_IDS);
     assert.match(

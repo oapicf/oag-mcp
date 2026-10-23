@@ -10,8 +10,8 @@ A deployment needs four things, all supplied at runtime:
 | **Runtime configuration and secrets** | `--config` plus environment variables or a `0600` secrets file. |
 
 The spec and SDK are prepared when the server starts, so deploying is a
-matter of putting these inputs next to oag-mcp. Java, Docker and OpenAPI
-Generator are not needed on the server.
+matter of putting these inputs next to oag-mcp. Docker and OpenAPI
+Generator are only needed where you generate the SDK, not on the server.
 
 ## Running
 

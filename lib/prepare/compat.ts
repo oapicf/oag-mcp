@@ -16,25 +16,6 @@ import path from "node:path";
 import { OagMcpError } from "../errors.js";
 import { SUPPORTED_GENERATOR, SUPPORTED_OAG_VERSIONS } from "../version.js";
 
-/** Generator options covered by oag-mcp's test matrix. */
-export const SUPPORTED_GENERATOR_OPTIONS: Record<string, string> = {
-  npmName: "package name",
-  npmVersion: "package version",
-  supportsES6: "true|false",
-  withInterfaces: "true|false",
-  useSingleRequestParameter: "true|false",
-  prefixParameterInterfaces: "true|false",
-  withoutRuntimeChecks: "true|false",
-  importFileExtension: "'' | .js",
-  fileNaming: "PascalCase|camelCase|kebab-case",
-  modelPropertyNaming: "camelCase|original",
-  paramNaming: "camelCase|original",
-  enumPropertyNaming: "any",
-  sortParamsByRequiredFlag: "true|false",
-  sortModelPropertiesByRequiredFlag: "true|false",
-  ensureUniqueParams: "true|false",
-};
-
 /** Options known to produce unsupported output. */
 export const UNSUPPORTED_GENERATOR_OPTIONS: Record<string, string> = {
   sagasAndRecords:
@@ -411,36 +392,4 @@ export function inspectSdk(
     apiFiles,
     warnings,
   };
-}
-
-/**
- * Validate generator options before generating an SDK (used by the
- * development fixture generator).
- *
- * @param {Object} options - option name to value
- */
-export function validateGeneratorOptions(
-  options: Record<string, string>,
-): void {
-  for (const [k, v] of Object.entries(options)) {
-    if (UNSUPPORTED_GENERATOR_OPTIONS[k]) {
-      if (k === "dateLibrary" && v === "date") {
-        continue;
-      }
-      throw new OagMcpError(
-        "SDK_OPTION_UNSUPPORTED",
-        `Generator option ${k}=${v} is not supported`,
-        { hint: UNSUPPORTED_GENERATOR_OPTIONS[k] },
-      );
-    }
-    if (!SUPPORTED_GENERATOR_OPTIONS[k]) {
-      throw new OagMcpError(
-        "SDK_OPTION_UNTESTED",
-        `Generator option ${k} is not in oag-mcp's tested option set`,
-        {
-          hint: `Supported options: ${Object.keys(SUPPORTED_GENERATOR_OPTIONS).join(", ")}.`,
-        },
-      );
-    }
-  }
 }

@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 ### Added
 - `oag-mcp serve --spec <openapi> --sdk <typescript-fetch SDK dir|.tgz>` over stdio and Streamable HTTP, exposing exactly two MCP tools, `search` and `execute`
-- Start-up preparation, once per process and logged per stage: input validation, SDK compatibility checks (OpenAPI Generator 7.25.0/7.26.0, options, source or compiled layout, installed dependencies), safe archive extraction, an esbuild-prepared execution bundle, static method-to-operation binding analysis and an in-memory MiniSearch index
+- Start-up preparation, once per process and logged per stage: input validation, SDK compatibility checks (OpenAPI Generator 7.26.0, options, source or compiled layout, installed dependencies), safe archive extraction, an esbuild-prepared execution bundle, static method-to-operation binding analysis and an in-memory MiniSearch index
 - Private, self-cleaning preparation workspace (removed on shutdown, start-up failure and stale-process sweep); the supplied SDK is never modified and no packages are installed
 - Deno subprocess executor with no permissions, string code generation disabled, timeouts, memory/output limits and a host-side request broker
 - MCP access control: none (loopback only), static bearer and OAuth resource server (JWKS or introspection, RFC 9728 metadata)

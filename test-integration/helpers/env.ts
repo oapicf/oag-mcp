@@ -2,7 +2,7 @@
 /**
  * Shared integration-test environment: fixture paths, SDK preparations
  * shared across tests (one per input combination, as a server process would
- * hold), prerequisite detection and service/CLI helpers.
+ * hold), and service/CLI helpers.
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
@@ -10,7 +10,6 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { cachedJarPath } from "../../scripts/dev/generate-sdk.js";
 import {
   parseRuntimeConfig,
   type RuntimeConfig,
@@ -43,7 +42,6 @@ export const ROOT = path.resolve(
 export const FIXTURES = path.join(ROOT, "test", "fixtures", "petclinic");
 export const SPEC = path.join(FIXTURES, "openapi.yaml");
 export const SDK_726 = path.join(FIXTURES, "sdk-7.26.0");
-export const SDK_725 = path.join(FIXTURES, "sdk-7.25.0");
 export const SDK_VARIANT = path.join(FIXTURES, "sdk-variant-7.26.0");
 export const SDK_TGZ = path.join(FIXTURES, "petclinic-sdk-1.2.0.tgz");
 export const BIN = path.join(ROOT, "bin", "oag-mcp.js");
@@ -118,45 +116,6 @@ export function workDir(name: string): string {
   const d = path.join(WORK, `${name}-${Math.random().toString(36).slice(2)}`);
   fs.mkdirSync(d, { recursive: true });
   return d;
-}
-
-/** Whether the Java backend prerequisites are available. */
-export function javaAvailable(): { ok: boolean; reason?: string } {
-  const res = spawnSync("java", ["-version"], { encoding: "utf8" });
-  if (res.status !== 0) {
-    return { ok: false, reason: "java is not installed" };
-  }
-  if (!process.env.OAG_MCP_OAG_JAR && !fs.existsSync(cachedJarPath("7.26.0"))) {
-    return {
-      ok: false,
-      reason: `OpenAPI Generator 7.26.0 JAR not cached at ${cachedJarPath("7.26.0")} and Maven Central may be unreachable`,
-    };
-  }
-  return { ok: true };
-}
-
-/** Whether the Docker backend prerequisites are available. */
-export function dockerAvailable(): { ok: boolean; reason?: string } {
-  const res = spawnSync(
-    "docker",
-    ["version", "--format", "{{.Server.Version}}"],
-    { encoding: "utf8" },
-  );
-  if (res.status !== 0) {
-    return { ok: false, reason: "docker daemon is not available" };
-  }
-  const img = spawnSync(
-    "docker",
-    ["image", "inspect", "openapitools/openapi-generator-cli:v7.26.0"],
-    { encoding: "utf8" },
-  );
-  if (img.status !== 0) {
-    return {
-      ok: false,
-      reason: "image openapitools/openapi-generator-cli:v7.26.0 is not pulled",
-    };
-  }
-  return { ok: true };
 }
 
 /** Upstream auth configuration covering every fixture scheme. */

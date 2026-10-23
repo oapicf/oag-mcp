@@ -11,22 +11,35 @@ SDKs are rejected with `SDK_GENERATOR_UNSUPPORTED` or
 | Version | Status |
 | --- | --- |
 | 7.26.0 | Tested |
-| 7.25.0 | Tested |
 | anything else | Rejected (`SDK_OAG_VERSION_UNSUPPORTED`); `--allow-untested-oag-version` proceeds at your own risk and logs `oagVersionTested: false` |
 
 The version is read from `.openapi-generator/VERSION`. If that file was
 removed, declare it with `--sdk-oag-version <version>`.
 
-Generate the SDK with one of these versions using whichever OpenAPI
-Generator distribution you prefer (npm CLI wrapper, JAR or the
-`openapitools/openapi-generator-cli` Docker image), e.g.
-`openapi-generator-cli generate -g typescript-fetch -i openapi.yaml -o
-./generated-sdk`. Generation is your step; the server itself needs neither
-Java nor Docker.
+## Generating an SDK
+
+Use OpenAPI Generator's official Docker image, pinned to an exact version:
+
+```bash
+docker run --rm -v "$PWD":/local openapitools/openapi-generator-cli:v7.26.0 \
+  generate \
+  --input-spec /local/openapi.yaml \
+  --generator-name typescript-fetch \
+  --output /local/generated-sdk
+```
+
+Generator options go in `--additional-properties` (e.g.
+`--additional-properties=npmName=petstore-sdk,npmVersion=1.0.0`, recommended
+so the SDK is a complete npm package). The `gen-sdk` target in
+[`Makefile-extras`](../Makefile-extras) is an example of this command in a
+Makefile (`make -f Makefile-extras gen-sdk SPEC=path/to/openapi.yaml`,
+output in `stage/generated-sdk/`). Docker is only needed for this step, not
+to run oag-mcp.
 
 ## Generator options
 
-Tested (detected from the SDK sources at start-up):
+Tested (detected from the SDK sources at start-up; pass them with
+`--additional-properties` when generating):
 
 | Option | Notes |
 | --- | --- |
