@@ -40,7 +40,8 @@ import type {
 import { OagMcpError } from "../errors.js";
 import type { Logs } from "../logging/logger.js";
 import type { SecretRegistry } from "../logging/redact.js";
-import { type Principal, opaquePrincipalId } from "./policy.js";
+import type { Principal } from "../types.js";
+import { opaquePrincipalId } from "./policy.js";
 
 /** Result of authenticating a request. */
 export type AuthResult =

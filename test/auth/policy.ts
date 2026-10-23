@@ -3,11 +3,10 @@ import referee from "@sinonjs/referee";
 
 import {
   AuthorizationPolicy,
-  type Principal,
   matchesOperation,
   opaquePrincipalId,
 } from "../../lib/auth/policy.js";
-import type { OperationBinding } from "../../lib/types.js";
+import type { OperationBinding, Principal } from "../../lib/types.js";
 
 const { assert, refute } = referee;
 

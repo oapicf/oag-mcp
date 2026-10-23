@@ -32,9 +32,10 @@ export type {
   CredentialProvider,
   CredentialContext,
   AppliedCredential,
-} from "./upstream/credentials.js";
+} from "./upstream/types.js";
 export type {
   PreparedSdkInfo,
   MethodRecord,
   OperationBinding,
+  Principal,
 } from "./types.js";

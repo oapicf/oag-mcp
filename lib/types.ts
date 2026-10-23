@@ -137,6 +137,24 @@ export interface MethodRecord {
   example: string;
 }
 
+/**
+ * An authenticated caller of the MCP server. Created by MCP authentication,
+ * checked by the authorization policy, and carried through the runtime,
+ * the request broker and credential providers.
+ */
+export interface Principal {
+  /** Stable opaque identifier used in logs and policies. */
+  id: string;
+  kind: "local" | "anonymous" | "static" | "oauth";
+  /** Configured name (static bearer / stdio), when not personal data. */
+  name?: string;
+  /** OAuth client id, when present. */
+  clientId?: string;
+  scopes: string[];
+  /** Token expiry (seconds since epoch), when known. */
+  expiresAt?: number;
+}
+
 /** Minimal operation data used by the runtime request broker. */
 export interface OperationBinding {
   id: string;

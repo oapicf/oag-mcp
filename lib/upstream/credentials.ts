@@ -2,7 +2,7 @@
 /**
  * Upstream API credential providers.
  *
- * A {@link CredentialProvider} turns an OpenAPI security scheme into
+ * A {@link CredentialProvider} (see upstream/types) turns an OpenAPI security scheme into
  * request headers or query parameters on the trusted host side. Agent code
  * never sees provider objects, configuration or credential values.
  *
@@ -14,7 +14,6 @@
  *
  * @module upstream/credentials
  */
-import type { Principal } from "../auth/policy.js";
 import type {
   SecretResolver,
   UpstreamSchemeConfig,
@@ -22,38 +21,12 @@ import type {
 import { OagMcpError } from "../errors.js";
 import type { Logs } from "../logging/logger.js";
 import { type SecretRegistry, sanitizeError } from "../logging/redact.js";
-import type { OperationBinding, SecuritySchemeInfo } from "../types.js";
-
-/** Context passed to credential providers. */
-export interface CredentialContext {
-  principal: Principal;
-  operation: OperationBinding;
-  executionId?: string;
-  requestId?: string;
-  logs: Logs;
-  signal?: AbortSignal;
-}
-
-/** Credentials applied to one outgoing request. */
-export interface AppliedCredential {
-  headers: Record<string, string>;
-  query: Record<string, string>;
-}
-
-/** Provider boundary for upstream credentials. */
-export interface CredentialProvider {
-  readonly id: string;
-  /** Whether credentials are configured for the scheme. */
-  has(schemeName: string): boolean;
-  /** Produce credentials for one scheme. */
-  apply(
-    scheme: SecuritySchemeInfo,
-    scopes: string[],
-    ctx: CredentialContext,
-  ): Promise<AppliedCredential>;
-  /** Forget cached credentials after the upstream rejected them. */
-  invalidate(schemeName: string, ctx: CredentialContext): void;
-}
+import type { SecuritySchemeInfo } from "../types.js";
+import type {
+  AppliedCredential,
+  CredentialContext,
+  CredentialProvider,
+} from "./types.js";
 
 /** Error raised when upstream credentials cannot be produced. */
 export class UpstreamAuthError extends Error {

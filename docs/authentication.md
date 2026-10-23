@@ -106,7 +106,7 @@ For each SDK call the broker uses the operation's effective requirement
 Version one uses one explicitly configured **service identity**: all MCP
 callers share the same upstream credentials (`sharedIdentity: true` is
 audited at startup). Per-caller upstream authorization can be added by
-implementing `CredentialProvider` (`lib/upstream/credentials.ts`), which
+implementing `CredentialProvider` (`lib/upstream/types.ts`), which
 receives the request principal and operation. Arbitrary token passthrough is
 deliberately not implemented.
 

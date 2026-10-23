@@ -21,10 +21,14 @@ Boundaries are interfaces rather than a plugin system:
 
 - `Executor` (`lib/executor/types.ts`) is all the tools depend on; the Deno
   executor can be replaced without touching search.
-- `CredentialProvider` (`lib/upstream/credentials.ts`) receives the request
+- `CredentialProvider` (`lib/upstream/types.ts`) receives the request
   principal, so a per-caller provider can be added later.
 - The SDK adapter (compat + analyze) is the only code that knows the
   typescript-fetch layout; other generators would add sibling adapters.
+
+The convention for where types live (contracts in `<module>/types.ts`,
+shared data in `lib/types.ts`, and so on) is in
+[AGENTS-extras.md](../AGENTS-extras.md#where-types-live).
 
 ## Start-up preparation
 

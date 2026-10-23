@@ -17,7 +17,7 @@
  *
  * @module upstream/broker
  */
-import type { AuthorizationPolicy, Principal } from "../auth/policy.js";
+import type { AuthorizationPolicy } from "../auth/policy.js";
 import type {
   BridgeFetchRequest,
   BridgeFetchResult,
@@ -25,8 +25,13 @@ import type {
 } from "../executor/types.js";
 import type { Logs } from "../logging/logger.js";
 import { sanitizeError } from "../logging/redact.js";
-import type { OperationBinding, SecuritySchemeInfo } from "../types.js";
-import { type CredentialProvider, UpstreamAuthError } from "./credentials.js";
+import type {
+  OperationBinding,
+  Principal,
+  SecuritySchemeInfo,
+} from "../types.js";
+import { UpstreamAuthError } from "./credentials.js";
+import type { CredentialProvider } from "./types.js";
 import { resolveSecurity } from "./security.js";
 
 /** Network and size policy for upstream calls. */

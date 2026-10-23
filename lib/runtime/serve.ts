@@ -34,7 +34,6 @@ import { createMcpHandler } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 
 import { createHttpAuthenticator, isLoopbackHost } from "../auth/mcp-auth.js";
-import type { Principal } from "../auth/policy.js";
 import {
   type RuntimeConfig,
   SecretResolver,
@@ -48,6 +47,7 @@ import {
   prepareSdk,
   runStage,
 } from "../prepare/prepare.js";
+import type { Principal } from "../types.js";
 import { TOOL_NAMES, createMcpServer } from "./mcp-server.js";
 import { OagMcpService } from "./service.js";
 

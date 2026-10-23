@@ -7,12 +7,12 @@
  * @module upstream/security
  */
 import type { SecurityRequirement, SecuritySchemeInfo } from "../types.js";
-import {
-  type AppliedCredential,
-  type CredentialContext,
-  type CredentialProvider,
-  UpstreamAuthError,
-} from "./credentials.js";
+import { UpstreamAuthError } from "./credentials.js";
+import type {
+  AppliedCredential,
+  CredentialContext,
+  CredentialProvider,
+} from "./types.js";
 
 /** Result of credential resolution. */
 export interface ResolvedSecurity extends AppliedCredential {

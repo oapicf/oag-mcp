@@ -10,7 +10,7 @@
 import crypto from "node:crypto";
 import path from "node:path";
 
-import { AuthorizationPolicy, type Principal } from "../auth/policy.js";
+import { AuthorizationPolicy } from "../auth/policy.js";
 import {
   type RuntimeConfig,
   SecretResolver,
@@ -29,6 +29,7 @@ import type {
   MethodRecord,
   OperationBinding,
   PreparedSdkInfo,
+  Principal,
 } from "../types.js";
 import { RequestBroker } from "../upstream/broker.js";
 import { ServiceIdentityCredentialProvider } from "../upstream/credentials.js";

@@ -12,21 +12,7 @@
 import crypto from "node:crypto";
 
 import type { AuthorizationRule } from "../config/runtime-config.js";
-import type { OperationBinding } from "../types.js";
-
-/** An authenticated caller of the MCP server. */
-export interface Principal {
-  /** Stable opaque identifier used in logs and policies. */
-  id: string;
-  kind: "local" | "anonymous" | "static" | "oauth";
-  /** Configured name (static bearer / stdio), when not personal data. */
-  name?: string;
-  /** OAuth client id, when present. */
-  clientId?: string;
-  scopes: string[];
-  /** Token expiry (seconds since epoch), when known. */
-  expiresAt?: number;
-}
+import type { OperationBinding, Principal } from "../types.js";
 
 /**
  * Derive an opaque, stable principal id from identifying values.

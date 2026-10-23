@@ -1,7 +1,7 @@
 "use strict";
 import referee from "@sinonjs/referee";
 
-import type { Principal } from "../../lib/auth/policy.js";
+import type { Principal } from "../../lib/types.js";
 import { SecretResolver } from "../../lib/config/runtime-config.js";
 import { OagMcpError } from "../../lib/errors.js";
 import { SecretRegistry } from "../../lib/logging/redact.js";
