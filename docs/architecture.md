@@ -12,7 +12,7 @@ reuses that preparation for every session and call.
 | --- | --- | --- |
 | Start-up preparation | `lib/prepare/prepare.ts`, `workspace.ts` | Run the preparation stages in order with logging; own the private temporary workspace and its cleanup. |
 | SDK adapter and compatibility | `lib/prepare/sdk-input.ts`, `compat.ts`, `bundle.ts` | Resolve directory inputs in place (read-only) and extract archives safely, reject unsupported generators/versions/options/layouts and missing dependencies, bundle the SDK for Deno, emit or copy declarations. |
-| Method indexing and search | `lib/prepare/spec.ts`, `analyze.ts`, `index-builder.ts`, `lib/search/search-index.ts` | Parse OpenAPI, statically map SDK methods to operations, extract signatures and types, build and query the in-memory MiniSearch index. |
+| Method indexing and search | `lib/prepare/spec.ts`, `analyze.ts`, `index-builder.ts`, `lib/search/search-index.ts` | Parse OpenAPI, statically map SDK methods to operations, extract signatures and types, build and query the in-memory MiniSearch index (English stop words from `stopword`, Porter stemming from `stemmer`). |
 | MCP transport and tool handlers | `lib/runtime/mcp-server.ts`, `serve.ts`, `lib/auth/mcp-auth.ts` | Register `search`/`execute`, stdio and Streamable HTTP, MCP access control. |
 | Execution and SDK initialisation | `lib/executor/*`, `assets/deno-runner.js`, `lib/upstream/*` | Code policy, type checking, the Deno subprocess executor, the SDK-shaped bridge, the trusted request broker and upstream credential providers. |
 | Cross-cutting | `lib/logging/*`, `lib/config/*`, `lib/runtime/service.ts` | Pino logging and redaction, runtime configuration, assembling the runtime. |

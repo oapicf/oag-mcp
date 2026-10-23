@@ -1,12 +1,15 @@
 "use strict";
 /**
  * Local lexical search over SDK method records using MiniSearch (BM25-style
- * full-text ranking, prefix and fuzzy matching). No embeddings or external
- * services are involved.
+ * full-text ranking, prefix and fuzzy matching), with English stop words
+ * from the stopword package and Porter stemming from the stemmer package.
+ * No embeddings or external services are involved.
  *
  * @module search/search-index
  */
 import MiniSearch from "minisearch";
+import { stemmer } from "stemmer";
+import { eng } from "stopword";
 
 import type { MethodRecord } from "../types.js";
 
@@ -40,49 +43,37 @@ const SEARCH_OPTIONS = {
   combineWith: "OR" as const,
 };
 
-const STOP_WORDS = new Set([
-  "a",
-  "an",
-  "and",
-  "the",
-  "of",
-  "for",
-  "to",
-  "in",
-  "on",
-  "by",
-  "with",
-  "all",
-  "me",
-  "my",
-  "how",
-  "do",
-  "i",
+/**
+ * Words in the stopword package's English list that carry meaning in API
+ * search: "get" is a method-name verb (getPetById), and the others are
+ * common query-parameter names (since, before, after, between, from).
+ */
+const API_TERMS = new Set([
+  "get",
+  "since",
+  "before",
+  "after",
+  "between",
+  "from",
 ]);
 
+/** English stop words (the stopword package's list) minus API terms. */
+const STOP_WORDS = new Set(eng.filter((w) => !API_TERMS.has(w)));
+
 /**
- * Normalise a search term: lower-case, drop stop words, light stemming so
- * "cats" matches "cat" and "visits" matches "visit".
+ * Normalise a search term, at indexing and at query time alike: lower-case,
+ * drop English stop words, and reduce the word to its Porter stem, so
+ * "cats" matches "cat" and "vaccinated" matches "vaccination".
  *
  * @param {String} term - raw term
  * @return {String|null} processed term, or null to drop it
  */
 export function processTerm(term: string): string | null {
-  let t = term.toLowerCase().replace(/'s$/, "");
+  const t = term.toLowerCase().replace(/'s$/, "");
   if (STOP_WORDS.has(t)) {
     return null;
   }
-  if (t.length > 4 && t.endsWith("ies")) {
-    t = `${t.slice(0, -3)}y`;
-  } else if (
-    t.length > 3 &&
-    t.endsWith("s") &&
-    !t.endsWith("ss") &&
-    !t.endsWith("us")
-  ) {
-    t = t.slice(0, -1);
-  }
-  return t;
+  return stemmer(t);
 }
 
 /**
@@ -116,7 +107,9 @@ function _doc(r: MethodRecord): Record<string, string> {
     path: `${r.httpMethod} ${splitWords(r.path)}`,
     params: [
       ...r.apiParameters.map(
-        (p) => `${p.name} ${splitWords(p.name)} ${p.description ?? ""}`,
+        // The schema type carries enum values, e.g. "dog" | "cat".
+        (p) =>
+          `${p.name} ${splitWords(p.name)} ${p.description ?? ""} ${p.schemaType ?? ""}`,
       ),
       ...r.parameters.map((p) => p.name),
     ].join(" "),

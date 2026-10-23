@@ -41,12 +41,26 @@ before(async function () {
 });
 
 describe("search-index - helpers", function () {
-  it("should split identifiers and stem terms", function () {
+  it("should split identifiers into words", function () {
     assert.equals(splitWords("listPetVisits"), "list pet visits");
+  });
+
+  it("should stem terms so word forms meet", function () {
     assert.equals(processTerm("Cats"), "cat");
-    assert.equals(processTerm("inventories"), "inventory");
-    assert.equals(processTerm("the"), null);
-    assert.equals(processTerm("address"), "address");
+    assert.equals(processTerm("cat's"), "cat");
+    assert.equals(processTerm("inventories"), processTerm("inventory"));
+    assert.equals(processTerm("vaccinated"), processTerm("vaccination"));
+    assert.equals(processTerm("visits"), processTerm("visit"));
+    assert.equals(processTerm("listing"), "list");
+  });
+
+  it("should drop English stop words but keep API terms", function () {
+    for (const w of ["the", "a", "of", "how", "me", "all", "with"]) {
+      assert.equals(processTerm(w), null, w);
+    }
+    for (const w of ["get", "since", "before", "after", "between", "from"]) {
+      assert.isString(processTerm(w), w);
+    }
   });
 });
 
@@ -70,9 +84,23 @@ describe("search-index - MethodSearchIndex.search", function () {
       idx.search("get-store-inventory", { visible: all, limit: 1 }).hits[0].id,
       "StoreApi.getStoreInventory",
     );
-    assert.contains(
-      idx.search("cats", { visible: all, limit: 5 }).hits.map((h) => h.id),
-      "PetsApi.listPets",
+    // Enum values of a filter parameter lead to the method that filters.
+    for (const q of ["cats", "rabbits"]) {
+      assert.equals(
+        idx.search(q, { visible: all, limit: 3 }).hits[0].id,
+        "PetsApi.listPets",
+        q,
+      );
+    }
+    // "since" is a stop word in prose but a parameter name here.
+    assert.equals(
+      idx.search("visits since a date", { visible: all, limit: 3 }).hits[0].id,
+      "PetsApi.listPetVisits",
+    );
+    // Stemming joins word forms.
+    assert.equals(
+      idx.search("inventories", { visible: all, limit: 3 }).hits[0].id,
+      "StoreApi.getStoreInventory",
     );
   });
 
