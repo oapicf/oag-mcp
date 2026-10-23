@@ -36,7 +36,9 @@ Each `execute` call:
    (`maxLogBytes`, 200 entries), total sandbox stdout.
 7. **Isolation between executions**: no state survives (new process, new
    temporary directory, nothing writable).
-8. **Concurrency**: `maxConcurrent` sandboxes with a bounded queue.
+8. **Concurrency**: at most `maxConcurrent` sandboxes run at once; up to
+   `maxQueue` further calls wait in arrival order, and beyond that calls are
+   refused immediately with `resource_limit` (`executor_busy`).
 
 Violations produce structured errors (`permission_denied` with `capability`
 or `reason`, `timeout`, `output_limit`, `resource_limit`) and

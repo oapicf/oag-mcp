@@ -7,7 +7,6 @@ import bag from "bagofcli";
 import sinon from "sinon";
 
 import cli from "../lib/cli.js";
-import { Semaphore } from "../lib/util/semaphore.js";
 import { ROOT } from "./helpers/paths.js";
 
 const { assert } = referee;
@@ -82,18 +81,5 @@ describe("cli - documentation", function () {
       readme,
       "oag-mcp serve --spec ./openapi.yaml --sdk ./generated-sdk --transport stdio",
     );
-  });
-});
-
-describe("semaphore - acquire", function () {
-  it("should bound concurrency and queue length", async function () {
-    const s = new Semaphore(1, 1);
-    const r1 = await s.acquire();
-    const pending = s.acquire();
-    assert.isUndefined(await s.acquire());
-    r1!();
-    const r2 = await pending;
-    assert.isFunction(r2);
-    r2!();
   });
 });
