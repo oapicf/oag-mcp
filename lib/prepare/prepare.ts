@@ -35,7 +35,11 @@ import type {
   SpecSummary,
 } from "../types.js";
 import { sha256File } from "../util/hash.js";
-import { dependencyVersion, oagMcpVersion, packageRoot } from "../version.js";
+import {
+  dependencyVersion,
+  oagMcpVersion,
+  packageRoot,
+} from "../util/version.js";
 import { SdkAnalyzer, scanImplementation } from "./analyze.js";
 import {
   bundleSdk,

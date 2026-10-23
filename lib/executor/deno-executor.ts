@@ -26,10 +26,12 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 
+import semver from "semver";
+
 import { OagMcpError } from "../errors.js";
 import type { Logs } from "../logging/logger.js";
 import type { OperationBinding } from "../types.js";
-import { DENO_VERSION_RANGE, compareVersions } from "../version.js";
+import { DENO_VERSION_RANGE } from "../util/version.js";
 import type {
   BridgeFetchRequest,
   ExecutionError,
@@ -89,13 +91,10 @@ export function resolveDeno(configured?: string): DenoRuntime {
       continue;
     }
     const version = m[1];
-    if (
-      compareVersions(version, DENO_VERSION_RANGE.min) < 0 ||
-      compareVersions(version, DENO_VERSION_RANGE.maxExclusive) >= 0
-    ) {
+    if (!semver.satisfies(version, DENO_VERSION_RANGE)) {
       throw new OagMcpError(
         "DENO_VERSION_UNSUPPORTED",
-        `Deno ${version} at ${c.path} is outside the supported range >=${DENO_VERSION_RANGE.min} <${DENO_VERSION_RANGE.maxExclusive}`,
+        `Deno ${version} at ${c.path} is outside the supported range ${DENO_VERSION_RANGE}`,
         {
           hint: "Install a supported Deno 2.x release or set OAG_MCP_DENO_PATH.",
         },

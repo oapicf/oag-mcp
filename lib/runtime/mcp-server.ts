@@ -11,7 +11,7 @@ import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod";
 
 import type { Principal } from "../auth/policy.js";
-import { oagMcpVersion } from "../version.js";
+import { oagMcpVersion } from "../util/version.js";
 import type { OagMcpService } from "./service.js";
 
 /** The only tools oag-mcp exposes. */

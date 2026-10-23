@@ -14,7 +14,10 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { OagMcpError } from "../errors.js";
-import { SUPPORTED_GENERATOR, SUPPORTED_OAG_VERSIONS } from "../version.js";
+import {
+  SUPPORTED_GENERATOR,
+  SUPPORTED_OAG_VERSIONS,
+} from "../util/version.js";
 
 /** Options known to produce unsupported output. */
 export const UNSUPPORTED_GENERATOR_OPTIONS: Record<string, string> = {

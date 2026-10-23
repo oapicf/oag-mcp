@@ -24,7 +24,7 @@ import fs from "node:fs";
 import pino, { type Logger as PinoLogger } from "pino";
 import pinoPretty from "pino-pretty";
 
-import { SERVICE_NAME, oagMcpVersion } from "../version.js";
+import { oagMcpName, oagMcpVersion } from "../util/version.js";
 import { REDACTED, boundValue, secrets } from "./redact.js";
 
 /** Operational log levels accepted by the CLI. */
@@ -96,7 +96,7 @@ class SyncFdWriter {
             `${JSON.stringify({
               time: new Date().toISOString(),
               level: "error",
-              service: SERVICE_NAME,
+              service: oagMcpName(),
               logCategory: "operational",
               event: "logging.destination_failed",
               outcome: "failure",
@@ -260,7 +260,7 @@ export class Logs {
     }
     const format = opts.format ?? "json";
     const base: Record<string, unknown> = {
-      service: SERVICE_NAME,
+      service: oagMcpName(),
       version: oagMcpVersion(),
     };
     base.instanceId = opts.instanceId ?? `inst_${crypto.randomUUID()}`;

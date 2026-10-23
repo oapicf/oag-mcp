@@ -2,7 +2,7 @@
 /**
  * Version information for oag-mcp and the tools it pins.
  *
- * @module version
+ * @module util/version
  */
 import fs from "node:fs";
 import { createRequire } from "node:module";
@@ -22,13 +22,10 @@ export const SUPPORTED_OAG_VERSIONS = ["7.26.0"] as const;
 /** The only OpenAPI Generator target supported by this release. */
 export const SUPPORTED_GENERATOR = "typescript-fetch";
 
-/** Deno version range accepted by the executor. */
-export const DENO_VERSION_RANGE = { min: "2.5.0", maxExclusive: "3.0.0" };
+/** Deno versions accepted by the executor, as a semver range. */
+export const DENO_VERSION_RANGE = ">=2.5.0 <3.0.0";
 
-/** Service name used in structured logs. */
-export const SERVICE_NAME = "oag-mcp";
-
-let cachedVersion: string | undefined;
+let cachedPackage: { name: string; version: string } | undefined;
 
 /**
  * Locate the oag-mcp package root by walking up from this module.
@@ -51,18 +48,39 @@ export function packageRoot(): string {
 }
 
 /**
+ * Read (once) oag-mcp's own package.json.
+ *
+ * @private
+ */
+function _package(): { name: string; version: string } {
+  if (!cachedPackage) {
+    const pkg = JSON.parse(
+      fs.readFileSync(path.join(packageRoot(), "package.json"), "utf8"),
+    );
+    cachedPackage = {
+      name: pkg.name as string,
+      version: pkg.version as string,
+    };
+  }
+  return cachedPackage;
+}
+
+/**
+ * Read the oag-mcp package name from package.json.
+ *
+ * @return {String} package name
+ */
+export function oagMcpName(): string {
+  return _package().name;
+}
+
+/**
  * Read the oag-mcp version from package.json.
  *
  * @return {String} version string
  */
 export function oagMcpVersion(): string {
-  if (!cachedVersion) {
-    const pkg = JSON.parse(
-      fs.readFileSync(path.join(packageRoot(), "package.json"), "utf8"),
-    );
-    cachedVersion = pkg.version as string;
-  }
-  return cachedVersion;
+  return _package().version;
 }
 
 /**
@@ -78,23 +96,4 @@ export function dependencyVersion(name: string): string {
   } catch {
     return "unknown";
   }
-}
-
-/**
- * Compare two dotted numeric versions.
- *
- * @param {String} a - first version
- * @param {String} b - second version
- * @return {Number} negative, zero or positive
- */
-export function compareVersions(a: string, b: string): number {
-  const pa = a.split(/[.-]/).map((x) => parseInt(x, 10) || 0);
-  const pb = b.split(/[.-]/).map((x) => parseInt(x, 10) || 0);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
-    if (diff !== 0) {
-      return diff;
-    }
-  }
-  return 0;
 }

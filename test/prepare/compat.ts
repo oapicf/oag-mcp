@@ -6,7 +6,7 @@ import referee from "@sinonjs/referee";
 
 import { inspectSdk } from "../../lib/prepare/compat.js";
 import { extractArchive } from "../../lib/prepare/sdk-input.js";
-import { SUPPORTED_OAG_VERSIONS } from "../../lib/version.js";
+import { SUPPORTED_OAG_VERSIONS } from "../../lib/util/version.js";
 import { OagMcpError } from "../../lib/errors.js";
 import {
   SDK_726,
