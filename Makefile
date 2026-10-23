@@ -77,7 +77,7 @@ style:
 
 lint: stage
 	bob lint
-	mdl -r ~MD013,~MD029 $(shell find . -path ./stage -prune -o -path ./node_modules -prune -o -name "CHANGELOG.md" -prune -o -name "*.md" -print)
+	mdl -r ~MD013,~MD029 $(shell find . -path ./stage -prune -o -path ./node_modules -path ./test/fixtures/ -prune -o -prune -o -name "CHANGELOG.md" -prune -o -name "*.md" -print)
 	$(call run_hook,x-post-lint)
 
 complexity: stage
