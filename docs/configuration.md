@@ -29,8 +29,10 @@ read-only).
 ```
 
 Secrets are not accepted as CLI arguments and are never written to the
-index, the preparation workspace or logs; they are resolved host-side when a
-credential is first needed.
+index, the preparation workspace or logs. They are resolved host-side at
+start-up, so a missing environment variable or secrets-file key stops the
+server with a configuration error; OAuth2 access tokens are obtained when
+first needed.
 
 ## Full example
 
