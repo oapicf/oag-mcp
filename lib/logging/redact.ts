@@ -120,21 +120,6 @@ export function isSensitiveKey(key: string): boolean {
   return SENSITIVE_KEY.test(key);
 }
 
-/**
- * Reduce a URL to origin and path, dropping user info, query and fragment.
- *
- * @param {String} url - URL to sanitise
- * @return {String} sanitised URL
- */
-export function sanitizeUrl(url: string | URL): string {
-  try {
-    const u = new URL(String(url));
-    return `${u.origin}${u.pathname}`;
-  } catch {
-    return "[invalid-url]";
-  }
-}
-
 /** Limits applied by {@link boundValue}. */
 export interface BoundOptions {
   maxString?: number;

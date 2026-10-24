@@ -27,7 +27,7 @@ import pinoPretty from "pino-pretty";
 import sonicBoomModule, { type SonicBoomOpts } from "sonic-boom";
 
 import { oagMcpName, oagMcpVersion } from "../util/version.js";
-import { boundValue, secrets } from "./redact.js";
+import { boundValue } from "./redact.js";
 
 /** An operational log level: one of pino's levels, or `silent`. */
 export type LogLevel = pino.LevelWithSilent;
@@ -440,9 +440,4 @@ export class Logs {
       }
     }
   }
-}
-
-/** Register a secret with the global scrubber (re-exported for callers). */
-export function registerSecret(value: string | undefined | null): void {
-  secrets.add(value);
 }

@@ -7,7 +7,6 @@ import {
   boundValue,
   isSensitiveKey,
   sanitizeError,
-  sanitizeUrl,
 } from "../../lib/logging/redact.js";
 
 const { assert, refute } = referee;
@@ -55,19 +54,6 @@ describe("redact - SecretRegistry.scrub", function () {
     reg.add("rotating-token-1");
     reg.remove("rotating-token-1");
     assert.equals(reg.scrubKnown("rotating-token-1"), "rotating-token-1");
-  });
-});
-
-describe("redact - sanitizeUrl", function () {
-  it("should drop user info, query and fragment when sanitising", function () {
-    assert.equals(
-      sanitizeUrl("https://user:pw@api.test:8443/v1/pets?api_key=s3cr3t#frag"),
-      "https://api.test:8443/v1/pets",
-    );
-  });
-
-  it("should return a marker when the URL is invalid", function () {
-    assert.equals(sanitizeUrl("not a url"), "[invalid-url]");
   });
 });
 
