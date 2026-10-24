@@ -6,7 +6,7 @@
  * match no operation, or more than one, are reported as errors rather than
  * guessed.
  *
- * @module prepare/index-builder
+ * @module prepare/method-records
  */
 import { OagMcpError } from "../errors.js";
 import type {

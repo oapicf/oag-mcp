@@ -16,7 +16,7 @@ import {
   hintsForOperation,
   normalisePathTemplate,
   summariseAuth,
-} from "../../lib/prepare/index-builder.js";
+} from "../../lib/prepare/method-records.js";
 import { loadSpec } from "../../lib/prepare/spec.js";
 import { OagMcpError } from "../../lib/errors.js";
 import type { MethodRecord, SpecSummary } from "../../lib/types.js";
@@ -168,7 +168,7 @@ describe("analyze - SdkAnalyzer.analyze", function () {
   });
 });
 
-describe("index-builder - buildRecords", function () {
+describe("method-records - buildRecords", function () {
   it("should fail when the SDK has methods the spec does not define", async function () {
     const spec = await loadSpec(SPEC);
     const { methods } = await analyse(SDK_726, spec);

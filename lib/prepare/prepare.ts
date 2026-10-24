@@ -48,7 +48,7 @@ import {
   emitDeclarations,
 } from "./bundle.js";
 import { type SdkInspection, inspectSdk } from "./compat.js";
-import { buildRecords, hintsForOperation } from "./index-builder.js";
+import { buildRecords, hintsForOperation } from "./method-records.js";
 import {
   type StagedSdk,
   missingDependencies,

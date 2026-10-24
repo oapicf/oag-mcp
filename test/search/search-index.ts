@@ -10,7 +10,7 @@ import { inspectSdk } from "../../lib/prepare/compat.js";
 import {
   buildRecords,
   hintsForOperation,
-} from "../../lib/prepare/index-builder.js";
+} from "../../lib/prepare/method-records.js";
 import { loadSpec } from "../../lib/prepare/spec.js";
 import {
   MethodSearchIndex,
