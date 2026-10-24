@@ -27,17 +27,19 @@ import pinoPretty from "pino-pretty";
 import { oagMcpName, oagMcpVersion } from "../util/version.js";
 import { boundValue, secrets } from "./redact.js";
 
-/** Operational log levels accepted by the CLI. */
-export const LOG_LEVELS = [
-  "fatal",
-  "error",
-  "warn",
-  "info",
-  "debug",
-  "trace",
+/** An operational log level: one of pino's levels, or `silent`. */
+export type LogLevel = pino.LevelWithSilent;
+
+/**
+ * Operational log levels accepted by the CLI and configuration, taken from
+ * pino: its levels from most to least severe, then `silent`.
+ */
+export const LOG_LEVELS: readonly LogLevel[] = [
+  ...Object.entries(pino.levels.values)
+    .sort(([, a], [, b]) => b - a)
+    .map(([label]) => label as pino.Level),
   "silent",
-] as const;
-export type LogLevel = (typeof LOG_LEVELS)[number];
+];
 
 /** Log event categories. */
 export type LogCategory = "operational" | "security_audit";
@@ -323,7 +325,7 @@ export class Logs {
    * @param {String} [message] - optional human message
    */
   op(
-    level: "fatal" | "error" | "warn" | "info" | "debug" | "trace",
+    level: pino.Level,
     event: string,
     fields: Record<string, unknown> = {},
     message?: string,
