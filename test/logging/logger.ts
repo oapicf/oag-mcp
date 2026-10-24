@@ -106,6 +106,37 @@ describe("logger - Logs", function () {
     refute.contains(text, "abc12345");
   });
 
+  it("should censor credential keys at any depth and in any case when values are not registered", function () {
+    const file = path.join(this.dir, "keys.log");
+    const logs = new Logs({ file, auditFile: file });
+    const keys = [
+      "authorization",
+      "Authorization",
+      "cookie",
+      "password",
+      "token",
+      "accessToken",
+      "access_token",
+      "refresh_token",
+      "clientSecret",
+      "client_secret",
+      "apiKey",
+      "X-Api-Key",
+    ];
+    const values = Object.fromEntries(keys.map((k) => [k, `plain-${k}-value`]));
+    logs.op("info", "test.keys", {
+      ...values,
+      headers: { ...values },
+      deep: { a: { b: { ...values } } },
+    });
+    logs.audit("test.keys", "success", { request: { headers: values } });
+    const text = fs.readFileSync(file, "utf8");
+    for (const k of keys) {
+      refute.contains(text, `plain-${k}-value`, k);
+    }
+    assert.contains(text, "[REDACTED]");
+  });
+
   it("should report audit destination failure and block execution when fail-closed", function () {
     const logs = new Logs({
       file: path.join(this.dir, "op.log"),

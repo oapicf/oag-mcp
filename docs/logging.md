@@ -69,9 +69,9 @@ Fluent Bit, a SIEM).
 
 ## Redaction
 
-- Pino redaction plus a structural sanitizer censor keys such as
+- A structural sanitizer, applied to every record, censors keys such as
   `authorization`, `cookie`, `password`, `token`, `apiKey`, `client_secret`
-  at any depth.
+  at any depth and in any letter case.
 - Every resolved secret and issued token is registered and scrubbed from all
   strings (including base64 forms used by Basic auth); bearer/basic header
   values, JWT-shaped strings and credential-bearing query parameters are

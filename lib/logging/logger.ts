@@ -25,7 +25,7 @@ import pino, { type Logger as PinoLogger } from "pino";
 import pinoPretty from "pino-pretty";
 
 import { oagMcpName, oagMcpVersion } from "../util/version.js";
-import { REDACTED, boundValue, secrets } from "./redact.js";
+import { boundValue, secrets } from "./redact.js";
 
 /** Operational log levels accepted by the CLI. */
 export const LOG_LEVELS = [
@@ -165,25 +165,14 @@ function _openDestination(spec: string | undefined): {
   }
 }
 
-const REDACT_PATHS = [
-  "authorization",
-  "headers.authorization",
-  "headers.cookie",
-  "*.authorization",
-  "*.Authorization",
-  "*.password",
-  "*.token",
-  "*.accessToken",
-  "*.access_token",
-  "*.refresh_token",
-  "*.clientSecret",
-  "*.client_secret",
-  "*.apiKey",
-  "*.cookie",
-];
-
 /**
  * Build a pino logger writing to a destination.
+ *
+ * Redaction is done by the `log` formatter: {@link boundValue} censors
+ * credential key names at any depth (case-insensitively), scrubs registered
+ * secret values and credential-looking text, and bounds every record. Pino's
+ * path-based `redact` option is not used; it would only repeat that for a
+ * fixed set of case-sensitive paths.
  *
  * @private
  */
@@ -199,7 +188,6 @@ function _buildPino(
     base,
     messageKey: "message",
     timestamp: pino.stdTimeFunctions.isoTime,
-    redact: { paths: REDACT_PATHS, censor: REDACTED },
     formatters: {
       level: (label) => ({ level: label, severity: label.toUpperCase() }),
       log: (obj) => boundValue(obj, { maxDepth: 5 }) as Record<string, unknown>,
