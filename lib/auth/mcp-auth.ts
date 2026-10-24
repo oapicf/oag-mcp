@@ -33,7 +33,8 @@ import {
 } from "@modelcontextprotocol/server";
 import * as jose from "jose";
 
-import type { Config, SecretResolver } from "../config.js";
+import type { Config } from "../config.js";
+import type { SecretResolver } from "../util/secrets.js";
 import { OagMcpError } from "../errors.js";
 import type { Logs } from "../logger.js";
 import type { SecretRegistry } from "../util/redact.js";

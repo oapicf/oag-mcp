@@ -11,7 +11,8 @@ import crypto from "node:crypto";
 import path from "node:path";
 
 import { AuthorizationPolicy } from "../auth/policy.js";
-import { type Config, SecretResolver } from "../config.js";
+import type { Config } from "../config.js";
+import { SecretResolver } from "../util/secrets.js";
 import { OagMcpError } from "../errors.js";
 import { prepareCode } from "../executor/code-policy.js";
 import { DenoExecutor, resolveDeno } from "../executor/deno-executor.js";

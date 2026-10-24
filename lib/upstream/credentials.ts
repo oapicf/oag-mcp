@@ -14,7 +14,8 @@
  *
  * @module upstream/credentials
  */
-import type { SecretResolver, UpstreamSchemeConfig } from "../config.js";
+import type { UpstreamSchemeConfig } from "../config.js";
+import type { SecretResolver } from "../util/secrets.js";
 import { OagMcpError } from "../errors.js";
 import type { Logs } from "../logger.js";
 import { type SecretRegistry, sanitizeError } from "../util/redact.js";

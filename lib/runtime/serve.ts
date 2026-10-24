@@ -34,7 +34,8 @@ import { createMcpHandler } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 
 import { createHttpAuthenticator, isLoopbackHost } from "../auth/mcp-auth.js";
-import { type Config, SecretResolver } from "../config.js";
+import type { Config } from "../config.js";
+import { SecretResolver } from "../util/secrets.js";
 import { OagMcpError } from "../errors.js";
 import type { Logs } from "../logger.js";
 import { secrets } from "../util/redact.js";

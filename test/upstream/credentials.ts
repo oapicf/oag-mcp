@@ -2,7 +2,7 @@
 import referee from "@sinonjs/referee";
 
 import type { Principal } from "../../lib/types.js";
-import { SecretResolver } from "../../lib/config.js";
+import { SecretResolver } from "../../lib/util/secrets.js";
 import { OagMcpError } from "../../lib/errors.js";
 import { SecretRegistry } from "../../lib/util/redact.js";
 import {
