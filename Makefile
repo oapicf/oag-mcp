@@ -48,11 +48,11 @@ ci: clean build typecheck style lint test coverage complexity doc package reinst
 
 # Ensure stage directory exists
 stage:
-	mkdir -p stage
+	mkdir -p stage stage/gh-pages/
 
 # Remove all temporary (staged, generated, cached) files
 clean:
-	rm -rf .bob/ coverage/ dist/ stage/
+	rm -rf coverage/ dist/ stage/
 
 ################################################################
 # Build targets
@@ -97,12 +97,12 @@ typecheck:
 
 lint: stage
 	eslint .
-	mdl -r ~MD013,~MD029 $(shell find . -path ./stage -prune -o -path ./node_modules -prune -o -path ./.bob -prune -o -path ./test/fixtures -prune -o -name "CHANGELOG.md" -prune -o -name "*.md" -print)
+	mdl -r ~MD013,~MD029 $(shell find . -path ./stage -prune -o -path ./node_modules -prune -o -path ./test/fixtures -prune -o -name "CHANGELOG.md" -prune -o -name "*.md" -print)
 	$(call run_hook,x-post-lint)
 
 complexity: stage
-	mkdir -p .bob/complexity/eslint/
-	eslint lib --rule '{"complexity": ["warn", $(COMPLEXITY_MAX)]}' --format html --output-file .bob/complexity/eslint/index.html
+	mkdir -p stage/gh-pages/complexity/eslint/
+	eslint lib --rule '{"complexity": ["warn", $(COMPLEXITY_MAX)]}' --format html --output-file stage/gh-pages/complexity/eslint/index.html
 
 # Tests run through tsx, which does not type-check, so type-check first
 test: typecheck
@@ -119,14 +119,14 @@ test-examples:
 	done
 
 coverage: typecheck
-	c8 --include=lib --reports-dir=.bob/coverage/c8 --reporter=text-summary --reporter=lcov --reporter=html mocha
+	c8 --include=lib --reports-dir=stage/gh-pages/coverage/c8 --reporter=text-summary --reporter=lcov --reporter=html mocha
 
 ################################################################
 # Packaging, installation, and publishing targets
 
 package:
-	mkdir -p .bob/package/
-	npm pack --pack-destination .bob/package/
+	mkdir -p stage/package/
+	npm pack --pack-destination stage/package/
 
 install: package
 	npm link .
@@ -143,7 +143,7 @@ publish:
 # Documentation targets
 
 doc: stage
-	typedoc --entryPointStrategy expand --tsconfig tsconfig.build.json --out .bob/doc/typedoc lib
+	typedoc --entryPointStrategy expand --tsconfig tsconfig.build.json --out stage/gh-pages/doc/typedoc lib
 
 ################################################################
 # MAKE IT SO - Utility Makefile functions and targets
