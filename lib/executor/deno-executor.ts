@@ -51,8 +51,33 @@ export interface DenoRuntime {
 }
 
 /**
+ * Name of the `deno` npm package's binary package for this platform, e.g.
+ * `@deno/darwin-arm64` or `@deno/linux-x64-glibc` (the same naming the
+ * `deno` package's own installer uses).
+ *
+ * @param {String} [platform] - Node.js platform, default: this process's
+ * @param {String} [arch] - Node.js architecture, default: this process's
+ * @return {String} package name
+ */
+export function denoPlatformPackage(
+  platform: string = process.platform,
+  arch: string = os.arch(),
+): string {
+  return platform === "linux"
+    ? `@deno/linux-${arch}-glibc`
+    : `@deno/${platform}-${arch}`;
+}
+
+/**
  * Locate a Deno binary: configured path, OAG_MCP_DENO_PATH, the `deno` npm
  * package installed with oag-mcp, or `deno` on PATH.
+ *
+ * From the npm package, the binary in this platform's package
+ * ({@link denoPlatformPackage}) is tried first, then the copy the `deno`
+ * package's install step places in its own folder. That copy is made once,
+ * for the platform that first installed it, so it can be a binary for
+ * another operating system when `node_modules` is shared, e.g. between a
+ * macOS host and a Linux container.
  *
  * @param {String} [configured] - configured path
  * @return {Object} runtime
@@ -65,14 +90,14 @@ export function resolveDeno(configured?: string): DenoRuntime {
   if (process.env.OAG_MCP_DENO_PATH) {
     candidates.push({ path: process.env.OAG_MCP_DENO_PATH, source: "env" });
   }
-  try {
-    const dir = path.dirname(require.resolve("deno/package.json"));
-    candidates.push({
-      path: path.join(dir, process.platform === "win32" ? "deno.exe" : "deno"),
-      source: "npm-package",
-    });
-  } catch {
-    // The optional npm package is not installed.
+  const exe = process.platform === "win32" ? "deno.exe" : "deno";
+  for (const pkg of [denoPlatformPackage(), "deno"]) {
+    try {
+      const dir = path.dirname(require.resolve(`${pkg}/package.json`));
+      candidates.push({ path: path.join(dir, exe), source: "npm-package" });
+    } catch {
+      // The optional npm package is not installed.
+    }
   }
   candidates.push({ path: "deno", source: "path" });
   for (const c of candidates) {
