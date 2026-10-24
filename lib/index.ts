@@ -22,8 +22,8 @@ export {
   serve,
   type RunningServer,
   type ServeOptions,
-} from "./runtime/serve.js";
-export { OagMcpService } from "./runtime/service.js";
+} from "./server/serve.js";
+export { OagMcpService } from "./server/service.js";
 export type {
   CredentialProvider,
   CredentialContext,

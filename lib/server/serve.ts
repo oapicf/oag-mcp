@@ -4,7 +4,7 @@
  * typescript-fetch SDK once, then serve them over stdio or Streamable HTTP.
  *
  * Start-up order: inputs → compatibility → SDK bundle/declarations → index
- * (prepare/prepare) → bridge and executor (runtime/service) → tool
+ * (prepare/prepare) → bridge and executor (server/service) → tool
  * registration → transport. No request is accepted until every stage has
  * succeeded; on any failure the private workspace is removed and the error
  * is returned (no partially functional server).
@@ -14,10 +14,10 @@
  * protocol traffic; logs go to stderr or configured files.
  *
  * Streamable HTTP binds to loopback by default and authenticates every
- * protected request (see auth/mcp-auth). This is the 2025-03-26+ Streamable
+ * protected request (see server/authentication). This is the 2025-03-26+ Streamable
  * HTTP transport, not the legacy HTTP+SSE transport.
  *
- * @module runtime/serve
+ * @module server/serve
  */
 import crypto from "node:crypto";
 import http from "node:http";
@@ -33,7 +33,7 @@ import {
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 
-import { createHttpAuthenticator, isLoopbackHost } from "../auth/mcp-auth.js";
+import { createHttpAuthenticator, isLoopbackHost } from "./authentication.js";
 import type { Config } from "../config.js";
 import { SecretResolver } from "../util/secrets.js";
 import { OagMcpError } from "../errors.js";
@@ -46,7 +46,7 @@ import {
   runStage,
 } from "../prepare/prepare.js";
 import type { Principal } from "../types.js";
-import { TOOL_NAMES, createMcpServer } from "./mcp-server.js";
+import { TOOL_NAMES, createMcpServer } from "./tools.js";
 import { OagMcpService } from "./service.js";
 
 /** A running server. */

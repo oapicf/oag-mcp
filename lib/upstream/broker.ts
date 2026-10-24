@@ -17,7 +17,7 @@
  *
  * @module upstream/broker
  */
-import type { AuthorizationPolicy } from "../auth/policy.js";
+import type { AuthorizationPolicy } from "../server/authorization.js";
 import type {
   BridgeFetchRequest,
   BridgeFetchResult,

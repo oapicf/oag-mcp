@@ -19,7 +19,7 @@ import referee from "@sinonjs/referee";
 import { OagMcpError } from "../lib/errors.js";
 import { prepareSdk } from "../lib/prepare/prepare.js";
 import { WORKSPACE_PREFIX } from "../lib/prepare/workspace.js";
-import { serve } from "../lib/runtime/serve.js";
+import { serve } from "../lib/server/serve.js";
 import { sha256Tree } from "../lib/util/hash.js";
 import {
   BIN,

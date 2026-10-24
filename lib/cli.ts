@@ -12,7 +12,7 @@ import bag, { type CommandArg } from "bagofcli";
 import { loadConfig } from "./config.js";
 import { OagMcpError, formatCliError } from "./errors.js";
 import { type LogLevel, Logs, type LoggingOptions } from "./logger.js";
-import { type RunningServer, serve } from "./runtime/serve.js";
+import { type RunningServer, serve } from "./server/serve.js";
 
 const DIRNAME = path.dirname(fileURLToPath(import.meta.url));
 

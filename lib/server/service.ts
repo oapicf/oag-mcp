@@ -5,12 +5,12 @@
  * start-up, and implements the behaviour of the two MCP tools independent
  * of transport.
  *
- * @module runtime/service
+ * @module server/service
  */
 import crypto from "node:crypto";
 import path from "node:path";
 
-import { AuthorizationPolicy } from "../auth/policy.js";
+import { AuthorizationPolicy } from "./authorization.js";
 import type { Config } from "../config.js";
 import { SecretResolver } from "../util/secrets.js";
 import { OagMcpError } from "../errors.js";

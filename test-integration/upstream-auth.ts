@@ -7,7 +7,7 @@
 import referee from "@sinonjs/referee";
 
 import { OagMcpError } from "../lib/errors.js";
-import type { OagMcpService } from "../lib/runtime/service.js";
+import type { OagMcpService } from "../lib/server/service.js";
 import {
   LOCAL,
   SECRET_ENV,

@@ -62,7 +62,7 @@ npm install -g oag-mcp
 oag-mcp serves the SDK you give it; generating that SDK is done with
 OpenAPI Generator itself, so the machine running the server needs neither
 Docker nor OpenAPI Generator. No account, licence, cloud service or
-telemetry is involved; at runtime the server only connects to your API and
+telemetry is involved; while running, the server only connects to your API and
 to any OAuth endpoints you configure.
 
 ## Quick start
@@ -154,7 +154,7 @@ upstreamAuth:
 oag-mcp serve --spec ./openapi.yaml --sdk ./generated-sdk --config ./oag-mcp.config.yaml
 ```
 
-Secrets are resolved at runtime from environment variables or a `0600`
+Secrets are resolved at start-up from environment variables or a `0600`
 secrets file. They are never accepted as CLI arguments and never written to
 the method index, the prepared SDK bundle, logs or anything agent code can
 read. See [authentication](docs/authentication.md) for MCP access control

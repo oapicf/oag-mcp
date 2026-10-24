@@ -6,7 +6,7 @@
  */
 import referee from "@sinonjs/referee";
 
-import type { OagMcpService } from "../lib/runtime/service.js";
+import type { OagMcpService } from "../lib/server/service.js";
 import {
   LOCAL,
   SDK_VARIANT,

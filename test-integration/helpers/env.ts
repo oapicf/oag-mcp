@@ -17,7 +17,7 @@ import {
   type PreparedSdk,
   prepareSdk,
 } from "../../lib/prepare/prepare.js";
-import { OagMcpService } from "../../lib/runtime/service.js";
+import { OagMcpService } from "../../lib/server/service.js";
 import {
   ADMIN_PASSWORD,
   ADMIN_USER,

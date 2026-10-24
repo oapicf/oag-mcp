@@ -7,7 +7,7 @@
  * the host broker before it reaches the upstream API. Hiding a method from
  * search is not the control; the broker check is.
  *
- * @module auth/policy
+ * @module server/authorization
  */
 import crypto from "node:crypto";
 

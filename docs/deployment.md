@@ -1,6 +1,6 @@
 # Deployment
 
-A deployment needs four things, all supplied at runtime:
+A deployment needs four things, all supplied when the server starts:
 
 | What | Notes |
 | --- | --- |

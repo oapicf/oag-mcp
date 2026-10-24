@@ -5,7 +5,7 @@ import {
   AuthorizationPolicy,
   matchesOperation,
   opaquePrincipalId,
-} from "../../lib/auth/policy.js";
+} from "../../lib/server/authorization.js";
 import type { OperationBinding, Principal } from "../../lib/types.js";
 
 const { assert, refute } = referee;
@@ -37,7 +37,7 @@ const admin: Principal = {
   scopes: ["pets:read", "admin"],
 };
 
-describe("policy - matchesOperation", function () {
+describe("authorization - matchesOperation", function () {
   it("should match globs, tags, methods and operationIds", function () {
     assert.isTrue(matchesOperation("PetsApi.*", op("PetsApi.listPets")));
     assert.isTrue(matchesOperation("*.list*", op("PetsApi.listPets")));
@@ -57,7 +57,7 @@ describe("policy - matchesOperation", function () {
   });
 });
 
-describe("policy - AuthorizationPolicy.decide", function () {
+describe("authorization - AuthorizationPolicy.decide", function () {
   it("should allow everything with an implicit policy when none is configured", function () {
     const p = new AuthorizationPolicy();
     const d = p.decide(reader, op("AdminApi.deletePet"));
@@ -129,7 +129,7 @@ describe("policy - AuthorizationPolicy.decide", function () {
   });
 });
 
-describe("policy - opaquePrincipalId", function () {
+describe("authorization - opaquePrincipalId", function () {
   it("should be stable and not reveal the subject", function () {
     const a = opaquePrincipalId("oauth", [
       "https://issuer",

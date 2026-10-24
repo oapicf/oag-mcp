@@ -3,7 +3,7 @@
  * MCP server definition: exactly two tools, `search` and `execute`, with the
  * same behaviour on every transport.
  *
- * @module runtime/mcp-server
+ * @module server/tools
  */
 import crypto from "node:crypto";
 

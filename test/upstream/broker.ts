@@ -1,7 +1,7 @@
 "use strict";
 import referee from "@sinonjs/referee";
 
-import { AuthorizationPolicy } from "../../lib/auth/policy.js";
+import { AuthorizationPolicy } from "../../lib/server/authorization.js";
 import { SecretResolver } from "../../lib/util/secrets.js";
 import { SecretRegistry } from "../../lib/util/redact.js";
 import type { OperationBinding, Principal } from "../../lib/types.js";
