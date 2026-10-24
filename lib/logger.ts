@@ -16,7 +16,7 @@
  * failing audit destination is detected immediately; with fail-closed
  * enabled, callers must refuse execution while auditing is unavailable.
  *
- * @module logging/logger
+ * @module logger
  */
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -26,8 +26,8 @@ import pino, { type Logger as PinoLogger } from "pino";
 import pinoPretty from "pino-pretty";
 import sonicBoomModule, { type SonicBoomOpts } from "sonic-boom";
 
-import { oagMcpName, oagMcpVersion } from "../util/version.js";
-import { boundValue } from "./redact.js";
+import { oagMcpName, oagMcpVersion } from "./util/version.js";
+import { boundValue } from "./util/redact.js";
 
 /** An operational log level: one of pino's levels, or `silent`. */
 export type LogLevel = pino.LevelWithSilent;

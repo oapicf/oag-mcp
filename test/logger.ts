@@ -6,8 +6,8 @@ import path from "node:path";
 import referee from "@sinonjs/referee";
 import sinon from "sinon";
 
-import { Logs, MAX_WRITE_RETRIES } from "../../lib/logging/logger.js";
-import { secrets } from "../../lib/logging/redact.js";
+import { Logs, MAX_WRITE_RETRIES } from "../lib/logger.js";
+import { secrets } from "../lib/util/redact.js";
 
 const { assert, refute } = referee;
 

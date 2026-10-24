@@ -7,7 +7,7 @@ import {
   boundValue,
   isSensitiveKey,
   sanitizeError,
-} from "../../lib/logging/redact.js";
+} from "../../lib/util/redact.js";
 
 const { assert, refute } = referee;
 

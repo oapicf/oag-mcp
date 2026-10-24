@@ -3,7 +3,7 @@
  * Redaction and sanitisation of values before they reach logs, errors,
  * search results or tool output.
  *
- * @module logging/redact
+ * @module util/redact
  */
 
 /** Placeholder written in place of a sensitive value. */
