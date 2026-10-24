@@ -11,6 +11,7 @@ import {
   LOCAL,
   SDK_VARIANT,
   SPEC,
+  fileLogs,
   prepared,
   defaultPrepared,
   runtimeConfig,
@@ -408,5 +409,166 @@ describe("execute - limits, isolation and denied capabilities", function () {
       ["Biscuit", "Mochi", "Pepper", "Nori"],
     );
     assert.equals(new Set(results.map((r) => r.executionId)).size, 4);
+  });
+});
+
+describe("execute - forged bridge messages from agent code", function () {
+  // Agent code can write to the sandbox's stdout directly, bypassing the SDK
+  // binding, so it can forge bridge `fetch` messages with any binding tag,
+  // URL, method and headers. The broker must treat every message as untrusted:
+  // a forged message may do nothing a legitimate SDK call could not.
+  let guarded: OagMcpService;
+  let audit: ReturnType<typeof fileLogs>;
+
+  before(async function () {
+    this.timeout(60000);
+    audit = fileLogs("forged-bridge");
+    guarded = await service(
+      await defaultPrepared(),
+      runtimeConfig(
+        api,
+        {
+          authorization: {
+            default: "deny",
+            rules: [{ id: "get-only", allow: ["method:GET"] }],
+          },
+        },
+        auth,
+      ),
+      audit.logs,
+    );
+  });
+
+  /**
+   * Run agent code that writes raw bridge messages to stdout, then waits long
+   * enough for the host to act on them before reporting its result.
+   */
+  const forge = (messages: Array<Record<string, unknown>>) =>
+    guarded.execute(
+      {
+        language: "javascript",
+        code: `const out = new TextEncoder();
+for (const m of ${JSON.stringify(messages)}) {
+  Deno.stdout.writeSync(out.encode(JSON.stringify({ type: "fetch", rid: 9000, body: null, headers: {}, ...m }) + "\\n"));
+}
+await new Promise((r) => setTimeout(r, 750));
+return "sent";`,
+      },
+      LOCAL,
+    );
+
+  const auditFor = (executionId: string, event: string) => {
+    audit.logs.flush();
+    return audit
+      .records()
+      .filter((r) => r.executionId === executionId && r.event === event);
+  };
+
+  it("should refuse a forged request for an operation the caller may not call", async function () {
+    // The legitimate route is denied too, so forging gains nothing.
+    const direct = await guarded.execute(
+      { code: `await sdk.AdminApi.deletePet({ petId: 1 });\nreturn 1;` },
+      LOCAL,
+    );
+    assert.equals(direct.error!.reason, "authorization_denied");
+
+    const before = api.requests.length;
+    const res = await forge([
+      {
+        binding: "AdminApi.deletePet",
+        method: "DELETE",
+        url: `${api.baseUrl}/pets/1`,
+      },
+    ]);
+    assert.isTrue(res.ok, JSON.stringify(res.error));
+    assert.equals(api.requests.length, before, "nothing reached the API");
+    const denied = auditFor(res.executionId, "authorization.denied");
+    assert.equals(denied.length, 1);
+    assert.equals(denied[0].operation, "AdminApi.deletePet");
+    assert.equals(denied[0].outcome, "denied");
+  });
+
+  it("should refuse a forged request that does not match its claimed operation", async function () {
+    const before = api.requests.length;
+    const res = await forge([
+      // An allowed GET binding used to smuggle a DELETE.
+      {
+        binding: "PetsApi.getPetById",
+        method: "DELETE",
+        url: `${api.baseUrl}/pets/1`,
+      },
+      // An allowed binding pointed at another path of the API.
+      {
+        binding: "PetsApi.listPets",
+        method: "GET",
+        url: `${api.baseUrl}/store/inventory`,
+      },
+      // An allowed binding pointed at another host (SSRF).
+      {
+        binding: "PetsApi.listPets",
+        method: "GET",
+        url: "http://169.254.169.254/v1/pets",
+      },
+    ]);
+    assert.isTrue(res.ok, JSON.stringify(res.error));
+    assert.equals(api.requests.length, before, "nothing reached the API");
+    const reasons = auditFor(res.executionId, "network.destination_denied")
+      .map((r) => r.reason)
+      .sort();
+    assert.equals(reasons, [
+      "method_mismatch",
+      "origin_not_allowed",
+      "path_mismatch",
+    ]);
+  });
+
+  it("should refuse a forged request with an unknown binding", async function () {
+    const before = api.requests.length;
+    const res = await forge([
+      { binding: "EvilApi.steal", method: "GET", url: `${api.baseUrl}/pets` },
+    ]);
+    assert.isTrue(res.ok, JSON.stringify(res.error));
+    assert.equals(api.requests.length, before, "nothing reached the API");
+    const violations = auditFor(
+      res.executionId,
+      "execution.boundary_violation",
+    );
+    assert.equals(violations.length, 1);
+    assert.equals(violations[0].reason, "unknown_binding");
+    assert.equals(violations[0].binding, "EvilApi.steal");
+  });
+
+  it("should replace credentials in a forged request with the configured ones", async function () {
+    const before = api.requests.length;
+    const res = await forge([
+      {
+        binding: "PetsApi.listPets",
+        method: "GET",
+        url: `${api.baseUrl}/pets?limit=1`,
+        headers: {
+          authorization: "Bearer forged-token",
+          "x-api-key": "forged-key",
+        },
+      },
+    ]);
+    assert.isTrue(res.ok, JSON.stringify(res.error));
+    const reached = api.requests.slice(before);
+    assert.equals(
+      reached.map((r) => `${r.method} ${r.path}`),
+      ["GET /v1/pets"],
+    );
+    assert.equals(reached[0].headers["x-api-key"], process.env.PC_API_KEY);
+    refute.contains(JSON.stringify(reached[0].headers), "forged");
+    const stripped = auditFor(
+      res.executionId,
+      "credential.agent_supplied_stripped",
+    );
+    assert.equals(stripped.length, 1);
+    assert.equals((stripped[0].fields as string[]).sort(), [
+      "authorization",
+      "x-api-key",
+    ]);
+    // The reply went to an rid the runner never issued, so it was ignored.
+    assert.equals(res.result, "sent");
   });
 });

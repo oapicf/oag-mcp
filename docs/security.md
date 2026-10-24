@@ -30,6 +30,10 @@ Each `execute` call:
    must match the operation's method and path template on the configured base
    URL (after URL normalisation), credential injection, manual redirect
    handling, bounded request/response sizes, per-call timeouts, `maxSdkCalls`.
+   Every bridge message is treated as untrusted: agent code can write to the
+   sandbox's stdout directly and forge `fetch` messages with any binding tag,
+   URL, method or headers, so the broker re-checks each one and a forged
+   message can do nothing a legitimate SDK call could not (verified by tests).
 5. **Wall-clock timeout**: the process is killed with `SIGKILL`; in-flight
    upstream requests are aborted.
 6. **Bounded output**: result size (`maxResultBytes`), console capture

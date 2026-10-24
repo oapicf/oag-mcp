@@ -63,5 +63,6 @@ produces both `sdk-7.26.0/` and `petclinic-sdk-1.2.0.tgz` equivalents under
 | upstream authentication for each mechanism; OAuth caching and renewal | `upstream-auth.ts`, `test/upstream/*` |
 | per-operation authorization, concurrent caller isolation, no MCP token forwarding | `http-auth.ts`, `test/auth/*` |
 | sandbox limits, isolation and denied capabilities | `execute.ts` "limits, isolation and denied capabilities" |
+| forged bridge messages written by agent code are refused or re-checked (denied operation, mismatched method/path/origin, unknown binding, agent-supplied credentials) | `execute.ts` "forged bridge messages from agent code" |
 | agent code cannot obtain credentials; none in the workspace | `upstream-auth.ts`, `execute.ts`, `serve.ts` "keep secrets out of the workspace" |
 | logging: separable categories, audit independent of level, redaction, correlation, audit failure policy | `logging.ts`, `test/logging/*` |
