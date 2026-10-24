@@ -9,7 +9,7 @@ SUNTORY_VERSION = 1.8.0
 UPDATE_GH_ID = cliffano
 UPDATE_MAKEFILE = suntory
 UPDATE_GENERATOR = node
-UPDATE_DOTFILES = .github/. .bob.json .gitignore eslint.config.js .rtk.json AGENTS.md
+UPDATE_DOTFILES = .github/. .gitignore eslint.config.js .rtk.json AGENTS.md
 UPDATE_PARTIALS = AVATAR BADGES BUILD_REPORTS DEVELOPERS_GUIDE
 
 ################################################################
@@ -28,14 +28,23 @@ $(info Building node.js package using Suntory with user configurations...)
 $(info - Package name = ${PACKAGE_NAME})
 $(info - Author = ${AUTHOR})
 
-export PATH := node_modules/bin:$(PATH)
+export PATH := node_modules/.bin:$(PATH)
+
+################################################################
+# TypeScript tool configuration
+
+# Paths formatted by Prettier
+STYLE_PATHS = lib test test-integration assets bin eslint.config.js
+
+# Functions above this cyclomatic complexity are listed in the complexity report
+COMPLEXITY_MAX ?= 10
 
 ################################################################
 # Base targets
 
 # CI target to be executed by CI/CD tool
 all: ci
-ci: clean style lint test coverage complexity doc package reinstall test-integration
+ci: clean build typecheck style lint test coverage complexity doc package reinstall test-integration
 
 # Ensure stage directory exists
 stage:
@@ -43,7 +52,18 @@ stage:
 
 # Remove all temporary (staged, generated, cached) files
 clean:
-	bob clean
+	rm -rf .bob/ coverage/ dist/ stage/
+
+################################################################
+# Build targets
+
+# Compile TypeScript sources to dist/
+build:
+	tsc -p tsconfig.build.json
+
+# Type-check sources and tests without emitting files
+typecheck:
+	tsc -p tsconfig.json --noEmit
 
 ################################################################
 # Dependencies targets
@@ -51,8 +71,7 @@ clean:
 # Retrieve the Node.js package dependencies
 deps:
 	$(call deps_extra)
-	npm install -g bob@5.3.0
-	bob dep
+	npm install
 
 deps-extra-apt:
 	apt-get update
@@ -60,34 +79,36 @@ deps-extra-apt:
 	$(call run_hook,x-post-deps-extra-apt)
 
 deps-upgrade:
-	bob updep
+	npm-check-updates --upgrade
+	npm install
 
 rmdeps:
-	bob rmdep
+	rm -rf node_modules/
 
 ################################################################
 # Formatting targets
 
 style:
-	bob style
+	prettier --write $(STYLE_PATHS)
 	$(call run_hook,x-post-style)
 
 ################################################################
 # Testing targets
 
 lint: stage
-	bob lint
-	mdl -r ~MD013,~MD029 $(shell find . -path ./stage -prune -o -path ./node_modules -path ./test/fixtures/ -prune -o -prune -o -name "CHANGELOG.md" -prune -o -name "*.md" -print)
+	eslint .
+	mdl -r ~MD013,~MD029 $(shell find . -path ./stage -prune -o -path ./node_modules -prune -o -path ./.bob -prune -o -path ./test/fixtures -prune -o -name "CHANGELOG.md" -prune -o -name "*.md" -print)
 	$(call run_hook,x-post-lint)
 
 complexity: stage
-	bob complexity
+	mkdir -p .bob/complexity/eslint/
+	eslint lib --rule '{"complexity": ["warn", $(COMPLEXITY_MAX)]}' --format html --output-file .bob/complexity/eslint/index.html
 
 test:
-	MOCHA_OPTIONS="--timeout 5000" bob test
+	mocha
 
 test-integration:
-	MOCHA_OPTIONS="--timeout 5000" bob test-integration
+	mocha --no-package --node-option import=tsx --extension ts --recursive --timeout 180000 --ignore 'test-integration/helpers/**' 'test-integration/**/*.ts'
 
 test-examples:
 	mkdir -p stage/test-examples/
@@ -97,13 +118,14 @@ test-examples:
 	done
 
 coverage:
-	MOCHA_OPTIONS="--timeout 5000" bob coverage
+	c8 --include=lib --reports-dir=.bob/coverage/c8 --reporter=text-summary --reporter=lcov --reporter=html mocha
 
 ################################################################
 # Packaging, installation, and publishing targets
 
 package:
-	bob package
+	mkdir -p .bob/package/
+	npm pack --pack-destination .bob/package/
 
 install: package
 	npm link .
@@ -120,7 +142,7 @@ publish:
 # Documentation targets
 
 doc: stage
-	bob doc
+	typedoc --entryPointStrategy expand --tsconfig tsconfig.build.json --out .bob/doc/typedoc lib
 
 ################################################################
 # MAKE IT SO - Utility Makefile functions and targets
@@ -237,4 +259,4 @@ release-patch:
 
 ################################################################
 
-.PHONY: $(1) all ci stage clean deps deps-extra-apt deps-upgrade rmdeps style lint complexity test test-integration test-examples coverage package install uninstall reinstall publish doc update-to-latest update-to-main update-to-version update-dotfiles update-partials release-major release-minor release-patch
+.PHONY: $(1) all ci stage clean build typecheck deps deps-extra-apt deps-upgrade rmdeps style lint complexity test test-integration test-examples coverage package install uninstall reinstall publish doc update-to-latest update-to-main update-to-version update-dotfiles update-partials release-major release-minor release-patch

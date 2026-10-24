@@ -138,6 +138,14 @@ which is where credentials live. See [security](security.md).
 The repository started from the `generator-node` CLI template (JavaScript,
 Mocha, bagofcli, Suntory/Bob). Changes:
 
+- **Build tooling**: Bob is not used. The Makefile's targets run the
+  project's own tools directly: `tsc` (`build`, `typecheck`), Prettier
+  (`style`), ESLint (`lint`, and `complexity` through its `complexity` rule),
+  Mocha and c8 (`test`, `test-integration`, `coverage`), TypeDoc (`doc`) and
+  `npm pack` (`package`). The only npm script left is the `prepare` lifecycle
+  hook, which builds `dist/` on `npm install` and before `npm pack`/`npm
+  publish`.
+
 - **Language**: sources are TypeScript in `lib/` (template layout kept),
   compiled by `tsc` to `dist/`; `bin/oag-mcp.js` loads `dist/cli.js`. Added
   `tsconfig.json` (type-check incl. tests) and `tsconfig.build.json`.
@@ -151,14 +159,15 @@ Mocha, bagofcli, Suntory/Bob). Changes:
   through `tsx` (Mocha configuration in `package.json`, so Suntory dotfile
   updates cannot remove it). Unit tests use local fixture files;
   integration tests (`test-integration/*.ts`) add a mock API and a local
-  authorisation server. The cmdt `commands.yml` smoke tests cover the `serve`
-  command instead of the sample command. `.bob.json` runs unit tests via `npm test`.
+  authorisation server. `test-integration/cli.ts` runs the CLI as a process
+  to cover help and option validation (it replaces the template's cmdt
+  `commands.yml`).
 - **Lint/format**: `eslint.config.js` now uses `typescript-eslint`; Prettier
   config ignores fixtures and build output.
 - **Packaging**: `package.json` gained `exports`, `files`, `types`,
   pinned dependencies, scripts and Node 22+. `.gitignore` ignores `dist/`.
-- **CI**: the workflow keeps `make deps`/`make ci` and adds an
-  `npm run test:integration` step.
+- **CI**: the workflow runs `make deps` and `make ci`; the upgrade workflow
+  runs `make deps-upgrade` (npm-check-updates) followed by `make ci`.
 - **Makefile-extras**: a `gen-sdk` target generates a typescript-fetch SDK
   with OpenAPI Generator's Docker image and packs it with `npm pack`
   (`make -f Makefile-extras gen-sdk SPEC=path/to/openapi.yaml`).

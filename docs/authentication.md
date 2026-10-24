@@ -44,14 +44,14 @@ in the `Authorization` header — `?access_token=` is rejected with `400`.
   `WWW-Authenticate: Bearer … resource_metadata="…"` (built with the
   official MCP TypeScript SDK's bearer helpers).
 - **Validation** of every request:
-  - JWT access tokens via the configured (or discovered) JWKS using `jose`:
-    signature and algorithm allowlist, `iss` = issuer, `aud` includes the
-    resource (or configured audiences), `exp` required, `nbf`, clock
-    tolerance;
-  - opaque tokens via **RFC 7662 introspection** (`mcpAuth.oauth.introspection`):
-    `active`, issuer, audience and expiry are checked;
-  - `requiredScopes` for using the server at all; per-operation permissions
-    via `authorization` rules on token scopes and client id.
+   - JWT access tokens via the configured (or discovered) JWKS using `jose`:
+     signature and algorithm allowlist, `iss` = issuer, `aud` includes the
+     resource (or configured audiences), `exp` required, `nbf`, clock
+     tolerance;
+   - opaque tokens via **RFC 7662 introspection** (`mcpAuth.oauth.introspection`):
+     `active`, issuer, audience and expiry are checked;
+   - `requiredScopes` for using the server at all; per-operation permissions
+     via `authorization` rules on token scopes and client id.
 - Principals are identified by an opaque id derived from issuer + subject
   (`oauth:<hash>`), so logs do not record personal identifiers.
 - oag-mcp does not implement an authorization server and needs no

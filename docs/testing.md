@@ -1,16 +1,18 @@
 # Testing
 
 ```bash
-npm install                 # also builds dist/ (prepare)
-npm run typecheck && npm run lint && npm run style
-npm test                    # unit tests (test/**/*.ts)
-npm run test:integration    # integration tests (test-integration/**/*.ts)
-npm run coverage
-make ci                     # Suntory/Bob pipeline (needs bob, yq, mdl)
+make deps                   # npm install (also builds dist/ via prepare)
+make build typecheck        # compile to dist/, type-check sources and tests
+make style lint             # format with Prettier, then ESLint and mdl
+make test                   # unit tests (test/**/*.ts)
+make test-integration       # integration tests (test-integration/**/*.ts)
+make coverage               # unit test coverage in .bob/coverage/c8/
+make complexity doc         # complexity report and TypeDoc in .bob/
+make ci                     # the full pipeline (needs yq and mdl)
 ```
 
-Mocha configuration lives in `package.json` (`"mocha"`); the integration
-script passes its own flags.
+Mocha configuration for unit tests lives in `package.json` (`"mocha"`); the
+`test-integration` target passes its own flags.
 
 No account, paid service, Docker or external network is needed by the
 tests except `npm ping`/`npm install` for the packaging test. Tests whose
@@ -54,11 +56,11 @@ produces both `sdk-7.26.0/` and `petclinic-sdk-1.2.0.tgz` equivalents under
 | search describes the callable SDK methods accurately | `serve.ts` "index every method accurately", `execute.ts` "search and binding agreement", `test/search/*`, `test/prepare/*` |
 | execute calls the real SDK against a local mock API | `execute.ts`, `serve.ts` |
 | supported inputs: source and compiled layouts, archives, the supported generator version, option variants | `serve.ts` "supported SDK inputs", `test/prepare/*` |
-| actionable errors: invalid inputs, missing dependencies, incompatible SDKs, spec/SDK mismatch | `serve.ts` "actionable errors" and CLI failure test, cmdt `commands.yml`, `test/prepare/*` |
+| actionable errors: invalid inputs, missing dependencies, incompatible SDKs, spec/SDK mismatch | `serve.ts` "actionable errors" and CLI failure test, `test-integration/cli.ts`, `test/prepare/*` |
 | the supplied SDK is never modified | `serve.ts` "should never modify or add files…", the missing-dependency test, `test/prepare/sdk-input.ts` |
 | the workspace is removed on shutdown, start-up failure, signals during start-up, stdio disconnect, and after a killed process | `serve.ts`, `test/prepare/workspace.ts` |
 | stdio stdout carries only MCP traffic, including during preparation | `serve.ts` stdio test, `logging.ts` |
-| CLI surface and help | `test/cli.ts`, cmdt `commands.yml` |
+| CLI surface and help | `test/cli.ts`, `test-integration/cli.ts` |
 | MCP authentication on HTTP (missing/invalid/expired/mis-targeted credentials), stdio principals | `http-auth.ts`, `logging.ts` |
 | upstream authentication for each mechanism; OAuth caching and renewal | `upstream-auth.ts`, `test/upstream/*` |
 | per-operation authorization, concurrent caller isolation, no MCP token forwarding | `http-auth.ts`, `test/server/*` |

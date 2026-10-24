@@ -7,7 +7,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          token: ${{ secrets.null_GITHUB_TOKEN }}
+          token: ${{ secrets.OAPICF_GITHUB_TOKEN }}
       - uses: actions/setup-node@v7
         with:
           node-version: '26'
@@ -16,4 +16,4 @@ jobs:
       - uses: cliffano/save-changes-action@v2.0.0
         with:
           message: "Upgrade dependencies to latest"
-          github_token: ${{ secrets.null_GITHUB_TOKEN }}
+          github_token: ${{ secrets.OAPICF_GITHUB_TOKEN }}

@@ -11,11 +11,11 @@ The inputs themselves are CLI options only:
 | Option | Meaning |
 | --- | --- |
 | `--spec <file>` | OpenAPI 3.0/3.1 document (YAML or JSON); required |
-| `--sdk <dir\|file.tgz>` | existing typescript-fetch SDK directory or `npm pack` archive; required, never modified |
-| `--sdk-layout auto\|source\|compiled` | which layout of the SDK to use (default `auto`: sources when present) |
+| `--sdk <path>` | existing typescript-fetch SDK: a directory or an `npm pack` archive (`.tgz`); required, never modified |
+| `--sdk-layout <layout>` | which layout of the SDK to use: `auto` (default: sources when present), `source` or `compiled` |
 | `--sdk-oag-version <x.y.z>` | generator version for SDKs without `.openapi-generator/VERSION` |
 | `--allow-untested-oag-version` | accept a generator version outside the tested set |
-| `--transport stdio\|streamable-http` | default `stdio` |
+| `--transport <transport>` | `stdio` (default) or `streamable-http` |
 
 Temporary preparation files go to the OS temporary directory; set `TMPDIR`
 to move them (e.g. to a writable volume when the root filesystem is

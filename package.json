@@ -56,17 +56,7 @@
     "test": "./test"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "clean": "node scripts/clean.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint .",
-    "style": "prettier --check lib test test-integration assets scripts bin eslint.config.js",
-    "style:fix": "prettier --write lib test test-integration assets scripts bin eslint.config.js",
-    "test": "mocha",
-    "test:integration": "mocha --no-package --node-option import=tsx --extension ts --recursive --timeout 180000 --ignore 'test-integration/helpers/**' 'test-integration/**/*.ts'",
-    "coverage": "c8 --reporter=text-summary --reporter=lcov --reports-dir=.bob/coverage/c8 --include=lib mocha",
-    "prepare": "npm run build",
-    "test:all": "npm run typecheck && npm run lint && npm run style && npm test && npm run test:integration"
+    "prepare": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
     "@apidevtools/swagger-parser": "13.1.0",
@@ -102,9 +92,11 @@
     "eslint": "10.13.0",
     "esmock": "2.8.0",
     "mocha": "12.0.3",
+    "npm-check-updates": "23.1.0",
     "prettier": "3.9.10",
     "sinon": "22.1.0",
     "tsx": "4.23.15",
+    "typedoc": "0.28.20",
     "typescript-eslint": "8.72.0"
   },
   "engines": {
