@@ -14,7 +14,7 @@ import {
   parseRuntimeConfig,
   type RuntimeConfig,
 } from "../../lib/config/runtime-config.js";
-import { Logs } from "../../lib/logging/logger.js";
+import { Logs } from "../../lib/logger.js";
 import {
   type PrepareOptions,
   type PreparedSdk,

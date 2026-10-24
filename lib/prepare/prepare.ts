@@ -26,7 +26,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { OagMcpError } from "../errors.js";
-import type { Logs } from "../logging/logger.js";
+import type { Logs } from "../logger.js";
 import { MethodSearchIndex } from "../search/search-index.js";
 import type {
   MethodRecord,

@@ -11,7 +11,7 @@ import path from "node:path";
 
 import referee from "@sinonjs/referee";
 
-import { Logs } from "../lib/logging/logger.js";
+import { Logs } from "../lib/logger.js";
 import type { PreparedSdk } from "../lib/prepare/prepare.js";
 import {
   BIN,

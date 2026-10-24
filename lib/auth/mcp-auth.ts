@@ -38,8 +38,8 @@ import type {
   SecretResolver,
 } from "../config/runtime-config.js";
 import { OagMcpError } from "../errors.js";
-import type { Logs } from "../logging/logger.js";
-import type { SecretRegistry } from "../logging/redact.js";
+import type { Logs } from "../logger.js";
+import type { SecretRegistry } from "../util/redact.js";
 import type { Principal } from "../types.js";
 import { opaquePrincipalId } from "./policy.js";
 

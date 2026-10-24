@@ -11,7 +11,7 @@ import bag, { type CommandArg } from "bagofcli";
 
 import { loadRuntimeConfig } from "./config/runtime-config.js";
 import { OagMcpError, formatCliError } from "./errors.js";
-import { type LogLevel, Logs, type LoggingOptions } from "./logging/logger.js";
+import { type LogLevel, Logs, type LoggingOptions } from "./logger.js";
 import { type RunningServer, serve } from "./runtime/serve.js";
 
 const DIRNAME = path.dirname(fileURLToPath(import.meta.url));

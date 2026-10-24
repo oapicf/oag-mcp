@@ -29,7 +29,7 @@ import path from "node:path";
 import semver from "semver";
 
 import { OagMcpError } from "../errors.js";
-import type { Logs } from "../logging/logger.js";
+import type { Logs } from "../logger.js";
 import type { OperationBinding } from "../types.js";
 import { DENO_VERSION_RANGE } from "../util/version.js";
 import type {

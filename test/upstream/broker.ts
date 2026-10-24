@@ -3,7 +3,7 @@ import referee from "@sinonjs/referee";
 
 import { AuthorizationPolicy } from "../../lib/auth/policy.js";
 import { SecretResolver } from "../../lib/config/runtime-config.js";
-import { SecretRegistry } from "../../lib/logging/redact.js";
+import { SecretRegistry } from "../../lib/util/redact.js";
 import type { OperationBinding, Principal } from "../../lib/types.js";
 import {
   RequestBroker,

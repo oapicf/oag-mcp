@@ -39,8 +39,8 @@ import {
   SecretResolver,
 } from "../config/runtime-config.js";
 import { OagMcpError } from "../errors.js";
-import type { Logs } from "../logging/logger.js";
-import { secrets } from "../logging/redact.js";
+import type { Logs } from "../logger.js";
+import { secrets } from "../util/redact.js";
 import {
   type PrepareOptions,
   type PreparedSdk,

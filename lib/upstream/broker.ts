@@ -23,8 +23,8 @@ import type {
   BridgeFetchResult,
   ExecutionError,
 } from "../executor/types.js";
-import type { Logs } from "../logging/logger.js";
-import { sanitizeError } from "../logging/redact.js";
+import type { Logs } from "../logger.js";
+import { sanitizeError } from "../util/redact.js";
 import type {
   OperationBinding,
   Principal,

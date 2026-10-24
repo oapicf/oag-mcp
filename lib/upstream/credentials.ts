@@ -19,8 +19,8 @@ import type {
   UpstreamSchemeConfig,
 } from "../config/runtime-config.js";
 import { OagMcpError } from "../errors.js";
-import type { Logs } from "../logging/logger.js";
-import { type SecretRegistry, sanitizeError } from "../logging/redact.js";
+import type { Logs } from "../logger.js";
+import { type SecretRegistry, sanitizeError } from "../util/redact.js";
 import type { SecuritySchemeInfo } from "../types.js";
 import type {
   AppliedCredential,

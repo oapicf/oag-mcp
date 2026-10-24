@@ -7,7 +7,7 @@ import bag from "bagofcli";
 import sinon from "sinon";
 
 import cli from "../lib/cli.js";
-import { LOG_LEVELS } from "../lib/logging/logger.js";
+import { LOG_LEVELS } from "../lib/logger.js";
 import { ROOT } from "./helpers/paths.js";
 
 const { assert } = referee;

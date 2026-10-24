@@ -16,7 +16,7 @@ export type {
   ExecutionRequest,
 } from "./executor/types.js";
 export { DenoExecutor, resolveDeno } from "./executor/deno-executor.js";
-export { Logs, type LoggingOptions } from "./logging/logger.js";
+export { Logs, type LoggingOptions } from "./logger.js";
 export {
   prepareSdk,
   type PrepareOptions,

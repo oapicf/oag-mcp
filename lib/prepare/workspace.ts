@@ -12,7 +12,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import type { Logs } from "../logging/logger.js";
+import type { Logs } from "../logger.js";
 import type { MethodRecord } from "../types.js";
 
 /** Prefix of workspace directory names under the temporary directory. */

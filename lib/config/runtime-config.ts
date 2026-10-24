@@ -17,7 +17,7 @@ import YAML from "yaml";
 import * as z from "zod";
 
 import { OagMcpError } from "../errors.js";
-import { LOG_LEVELS } from "../logging/logger.js";
+import { LOG_LEVELS } from "../logger.js";
 
 /** Reference to a secret value. */
 export const SecretRef = z.union([
