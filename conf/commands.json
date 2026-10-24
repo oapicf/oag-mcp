@@ -95,7 +95,7 @@
         },
         {
           "arg": "--config <config>",
-          "desc": "Runtime configuration file (YAML/JSON): upstream, upstreamAuth, mcpAuth, authorization, execution, logging"
+          "desc": "Configuration file (YAML/JSON): upstream, upstreamAuth, mcpAuth, authorization, execution, http, logging"
         }
       ],
       "examples": [

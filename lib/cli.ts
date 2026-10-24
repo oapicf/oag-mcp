@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 
 import bag, { type CommandArg } from "bagofcli";
 
-import { loadRuntimeConfig } from "./config/runtime-config.js";
+import { loadConfig } from "./config.js";
 import { OagMcpError, formatCliError } from "./errors.js";
 import { type LogLevel, Logs, type LoggingOptions } from "./logger.js";
 import { type RunningServer, serve } from "./runtime/serve.js";
@@ -67,9 +67,7 @@ async function _serve(args: CommandArg): Promise<void> {
   try {
     const transport =
       (args.transport as "stdio" | "streamable-http" | undefined) ?? "stdio";
-    const { config, baseDir } = loadRuntimeConfig(
-      args.config as string | undefined,
-    );
+    const { config, baseDir } = loadConfig(args.config as string | undefined);
     if (args.port !== undefined) {
       config.http.port = Number(args.port);
     }

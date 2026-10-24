@@ -10,10 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  parseRuntimeConfig,
-  type RuntimeConfig,
-} from "../../lib/config/runtime-config.js";
+import { parseConfig, type Config } from "../../lib/config.js";
 import { Logs } from "../../lib/logger.js";
 import {
   type PrepareOptions,
@@ -143,13 +140,13 @@ export function upstreamAuthConfig(auth?: AuthServer): Record<string, unknown> {
   };
 }
 
-/** Runtime configuration against the mock API. */
-export function runtimeConfig(
+/** Configuration against the mock API. */
+export function configFor(
   api: MockApi,
   extra: Record<string, unknown> = {},
   auth?: AuthServer,
-): RuntimeConfig {
-  return parseRuntimeConfig({
+): Config {
+  return parseConfig({
     upstream: { baseUrl: api.baseUrl },
     upstreamAuth: upstreamAuthConfig(auth),
     ...extra,
@@ -159,7 +156,7 @@ export function runtimeConfig(
 /** Create a service for a prepared SDK. */
 export async function service(
   sdk: PreparedSdk,
-  config: RuntimeConfig,
+  config: Config,
   logs?: Logs,
 ): Promise<OagMcpService> {
   return OagMcpService.create({
@@ -182,7 +179,7 @@ export const LOCAL = {
   transport: "stdio" as const,
 };
 
-/** Write a YAML/JSON runtime config file. */
+/** Write a YAML/JSON configuration file. */
 export function writeConfig(
   dir: string,
   config: Record<string, unknown>,

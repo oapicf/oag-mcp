@@ -34,10 +34,7 @@ import { createMcpHandler } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 
 import { createHttpAuthenticator, isLoopbackHost } from "../auth/mcp-auth.js";
-import {
-  type RuntimeConfig,
-  SecretResolver,
-} from "../config/runtime-config.js";
+import { type Config, SecretResolver } from "../config.js";
 import { OagMcpError } from "../errors.js";
 import type { Logs } from "../logger.js";
 import { secrets } from "../util/redact.js";
@@ -62,7 +59,7 @@ export interface RunningServer {
 /** Options for {@link serve}. */
 export interface ServeOptions extends Omit<PrepareOptions, "logs"> {
   transport: "stdio" | "streamable-http";
-  config: RuntimeConfig;
+  config: Config;
   configBaseDir: string;
   logs: Logs;
   fetchImpl?: typeof fetch;

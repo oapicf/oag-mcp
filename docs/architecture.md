@@ -15,7 +15,7 @@ reuses that preparation for every session and call.
 | Method indexing and search | `lib/prepare/spec.ts`, `analyze.ts`, `index-builder.ts`, `lib/search/search-index.ts` | Parse OpenAPI, statically map SDK methods to operations, extract signatures and types, build and query the in-memory MiniSearch index (English stop words from `stopword`, Porter stemming from `stemmer`). |
 | MCP transport and tool handlers | `lib/runtime/mcp-server.ts`, `serve.ts`, `lib/auth/mcp-auth.ts` | Register `search`/`execute`, stdio and Streamable HTTP, MCP access control. |
 | Execution and SDK initialisation | `lib/executor/*`, `assets/deno-runner.js`, `lib/upstream/*` | Code policy, type checking, the Deno subprocess executor, the SDK-shaped bridge, the trusted request broker and upstream credential providers. |
-| Cross-cutting | `lib/logger.ts`, `lib/util/redact.ts`, `lib/config/*`, `lib/runtime/service.ts` | Pino logging and redaction, runtime configuration, assembling the runtime. |
+| Cross-cutting | `lib/logger.ts`, `lib/util/redact.ts`, `lib/config.ts`, `lib/runtime/service.ts` | Pino logging and redaction, configuration, assembling the runtime. |
 
 Boundaries are interfaces rather than a plugin system:
 

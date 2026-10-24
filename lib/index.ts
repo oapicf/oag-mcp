@@ -4,11 +4,7 @@
  *
  * @module oag-mcp
  */
-export {
-  loadRuntimeConfig,
-  parseRuntimeConfig,
-  type RuntimeConfig,
-} from "./config/runtime-config.js";
+export { loadConfig, parseConfig, type Config } from "./config.js";
 export { OagMcpError } from "./errors.js";
 export type {
   Executor,

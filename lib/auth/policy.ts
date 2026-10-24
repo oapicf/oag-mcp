@@ -11,7 +11,7 @@
  */
 import crypto from "node:crypto";
 
-import type { AuthorizationRule } from "../config/runtime-config.js";
+import type { AuthorizationRule } from "../config.js";
 import type { OperationBinding, Principal } from "../types.js";
 
 /**

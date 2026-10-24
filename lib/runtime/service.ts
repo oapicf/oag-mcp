@@ -11,10 +11,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 
 import { AuthorizationPolicy } from "../auth/policy.js";
-import {
-  type RuntimeConfig,
-  SecretResolver,
-} from "../config/runtime-config.js";
+import { type Config, SecretResolver } from "../config.js";
 import { OagMcpError } from "../errors.js";
 import { prepareCode } from "../executor/code-policy.js";
 import { DenoExecutor, resolveDeno } from "../executor/deno-executor.js";
@@ -102,7 +99,7 @@ export class OagMcpService {
    */
   private constructor(
     readonly workspaceDir: string,
-    readonly config: RuntimeConfig,
+    readonly config: Config,
     readonly logs: Logs,
     parts: {
       info: PreparedSdkInfo;
@@ -136,7 +133,7 @@ export class OagMcpService {
    */
   static async create(opts: {
     prepared: PreparedSdk;
-    config: RuntimeConfig;
+    config: Config;
     configBaseDir: string;
     logs: Logs;
     executor?: Executor;
@@ -158,7 +155,7 @@ export class OagMcpService {
       throw new OagMcpError(
         "CONFIG_BASE_URL_REQUIRED",
         `No absolute upstream base URL is available (spec servers: ${info.api.servers.join(", ") || "none"})`,
-        { hint: "Set upstream.baseUrl in the runtime configuration." },
+        { hint: "Set upstream.baseUrl in the configuration file." },
       );
     }
     const resolver = new SecretResolver({

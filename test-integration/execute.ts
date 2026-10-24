@@ -14,7 +14,7 @@ import {
   fileLogs,
   prepared,
   defaultPrepared,
-  runtimeConfig,
+  configFor,
   service,
 } from "./helpers/env.js";
 import { type MockApi, PETS, startMockApi } from "./helpers/mock-api.js";
@@ -32,7 +32,7 @@ before(async function () {
   api = await startMockApi({ oauthTokens: auth.upstreamTokens });
   svc = await service(
     await defaultPrepared(),
-    runtimeConfig(
+    configFor(
       api,
       {
         execution: {
@@ -174,7 +174,7 @@ return { count: report.length, totalCents: report.reduce((s, r) => s + r.spentCe
   it("should work with positional SDK signatures", async function () {
     const variant = await service(
       await prepared("variant", { spec: SPEC, sdk: SDK_VARIANT }),
-      runtimeConfig(api, {}, auth),
+      configFor(api, {}, auth),
     );
     const res = await variant.execute(
       {
@@ -425,7 +425,7 @@ describe("execute - forged bridge messages from agent code", function () {
     audit = fileLogs("forged-bridge");
     guarded = await service(
       await defaultPrepared(),
-      runtimeConfig(
+      configFor(
         api,
         {
           authorization: {

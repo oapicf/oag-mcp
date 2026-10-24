@@ -33,10 +33,7 @@ import {
 } from "@modelcontextprotocol/server";
 import * as jose from "jose";
 
-import type {
-  RuntimeConfig,
-  SecretResolver,
-} from "../config/runtime-config.js";
+import type { Config, SecretResolver } from "../config.js";
 import { OagMcpError } from "../errors.js";
 import type { Logs } from "../logger.js";
 import type { SecretRegistry } from "../util/redact.js";
@@ -354,7 +351,7 @@ function _challenge(
 
 /** Options for {@link createHttpAuthenticator}. */
 export interface AuthenticatorOptions {
-  config: RuntimeConfig;
+  config: Config;
   resolver: SecretResolver;
   registry: SecretRegistry;
   logs: Logs;

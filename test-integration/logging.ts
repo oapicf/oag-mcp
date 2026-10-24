@@ -19,7 +19,7 @@ import {
   SECRET_ENV,
   SERVE_ARGS,
   defaultPrepared,
-  runtimeConfig,
+  configFor,
   service,
   upstreamAuthConfig,
   workDir,
@@ -255,7 +255,7 @@ describe("logging - records from executions", function () {
   it("should record an authorization audit event for each attempted SDK operation, correlated per execution", async function () {
     const file = path.join(workDir("correlation"), "all.log");
     const logs = new Logs({ file, auditFile: file });
-    const svc = await service(art, runtimeConfig(api, {}, auth), logs);
+    const svc = await service(art, configFor(api, {}, auth), logs);
     const runs = await Promise.all(
       [1, 2, 3, 4, 5].map((id) =>
         svc.execute(
@@ -289,7 +289,7 @@ describe("logging - records from executions", function () {
   it("should redact secrets from logs of successful and failed requests, including query api keys", async function () {
     const file = path.join(workDir("redaction"), "all.log");
     const logs = new Logs({ file, auditFile: file, level: "trace" });
-    const svc = await service(art, runtimeConfig(api, {}, auth), logs);
+    const svc = await service(art, configFor(api, {}, auth), logs);
     const codes = [
       `return await sdk.OwnersApi.listOwners({ city: "Melbourne" });`,
       `return await sdk.PetsApi.getPetById({ petId: 404 });`,

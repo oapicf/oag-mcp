@@ -14,10 +14,7 @@
  *
  * @module upstream/credentials
  */
-import type {
-  SecretResolver,
-  UpstreamSchemeConfig,
-} from "../config/runtime-config.js";
+import type { SecretResolver, UpstreamSchemeConfig } from "../config.js";
 import { OagMcpError } from "../errors.js";
 import type { Logs } from "../logger.js";
 import { type SecretRegistry, sanitizeError } from "../util/redact.js";
@@ -83,7 +80,7 @@ function _secureUrl(u: URL): boolean {
 }
 
 /**
- * Single upstream service identity loaded from runtime configuration.
+ * Single upstream service identity loaded from the configuration.
  */
 export class ServiceIdentityCredentialProvider implements CredentialProvider {
   readonly id = "service-identity";

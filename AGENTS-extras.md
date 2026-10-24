@@ -14,7 +14,7 @@ happen to be used first:
 | A replaceable contract: an interface meant to have other implementations, with the types of its inputs and outputs | `lib/<module>/types.ts` | `Executor`, `ExecutionRequest` in `lib/executor/types.ts`; `CredentialProvider`, `CredentialContext` in `lib/upstream/types.ts` |
 | Data shared between stages or modules | `lib/types.ts` | `MethodRecord`, `OperationBinding`, `PreparedSdkInfo`, `Principal` |
 | A function's own options and result | next to the function | `PrepareOptions`, `ServeOptions`, `RunningServer` |
-| Types derived from a zod schema (`z.infer`) | next to the schema | `RuntimeConfig`, `AuthorizationRule` |
+| Types derived from a zod schema (`z.infer`) | next to the schema | `Config`, `AuthorizationRule` |
 | Types used inside one module only | in that file | `ResolvedSecurity`, `DenoRuntime` |
 
 Guidelines:

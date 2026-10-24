@@ -5,7 +5,7 @@ oag-mcp has two independent layers with separate configuration namespaces:
 | Layer | Namespace | Protects | Credentials come from |
 | --- | --- | --- | --- |
 | MCP access | `mcpAuth` | callers of the oag-mcp server | the MCP client (bearer token) or the OS process boundary (stdio) |
-| Upstream API | `upstreamAuth` | your API | runtime configuration (env vars / secrets file) |
+| Upstream API | `upstreamAuth` | your API | the configuration file (env vars / secrets file) |
 
 **An MCP access token is never forwarded upstream** and is never treated as
 an upstream credential. Upstream credentials are attached by the trusted

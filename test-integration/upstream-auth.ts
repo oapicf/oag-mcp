@@ -13,7 +13,7 @@ import {
   SECRET_ENV,
   defaultPrepared,
   fileLogs,
-  runtimeConfig,
+  configFor,
   service,
 } from "./helpers/env.js";
 import {
@@ -41,7 +41,7 @@ before(async function () {
   logRecords = l.records;
   svc = await service(
     await defaultPrepared(),
-    runtimeConfig(api, {}, auth),
+    configFor(api, {}, auth),
     l.logs,
   );
 });
@@ -115,7 +115,7 @@ describe("upstream-auth - OAuth2 token caching and renewal", function () {
     auth.upstreamTokenLifetime = 32; // 30s refresh skew → valid for ~2s
     const fresh = await service(
       await defaultPrepared(),
-      runtimeConfig(api, {}, auth),
+      configFor(api, {}, auth),
       l.logs,
     );
     const create = `return (await sdk.PetsApi.createPet({ newPet: { name: "C", species: "cat" } })).id;`;
@@ -143,7 +143,7 @@ describe("upstream-auth - OAuth2 token caching and renewal", function () {
   it("should renew a token that the API rejects", async function () {
     const fresh = await service(
       await defaultPrepared(),
-      runtimeConfig(api, {}, auth),
+      configFor(api, {}, auth),
     );
     const create = `return (await sdk.PetsApi.createPet({ newPet: { name: "D", species: "dog" } })).id;`;
     await fresh.execute({ code: create }, LOCAL);
@@ -163,7 +163,7 @@ describe("upstream-auth - configuration and confidentiality", function () {
     try {
       await service(
         await defaultPrepared(),
-        runtimeConfig(api, {
+        configFor(api, {
           upstreamAuth: {
             schemes: {
               bearerAuth: { token: { env: "OAG_MCP_TEST_UNSET_VAR" } },
@@ -181,7 +181,7 @@ describe("upstream-auth - configuration and confidentiality", function () {
   it("should not silently downgrade when no credentials are configured", async function () {
     const noAuth = await service(
       await defaultPrepared(),
-      runtimeConfig(api, { upstreamAuth: { schemes: {} } }),
+      configFor(api, { upstreamAuth: { schemes: {} } }),
     );
     const before = api.requests.length;
     const res = await noAuth.execute(

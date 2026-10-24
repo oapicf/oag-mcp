@@ -32,7 +32,7 @@ import {
   defaultPrepared,
   fileLogs,
   prepared,
-  runtimeConfig,
+  configFor,
   service,
   startHttpServer,
   upstreamAuthConfig,
@@ -192,7 +192,7 @@ describe("prepare - supported SDK inputs", function () {
     const p = await defaultPrepared();
     const api = await startMockApi();
     try {
-      const svc = await service(p, runtimeConfig(api));
+      const svc = await service(p, configFor(api));
       const res = await svc.execute(
         { code: "return (await sdk.PetsApi.listPets({ limit: 1 })).length;" },
         LOCAL,
@@ -311,7 +311,7 @@ describe("serve - start-up preparation and lifecycle", function () {
       sdk: SDK_726,
       workspaceRoot: root,
       transport: "streamable-http",
-      config: runtimeConfig(api, { http: { port: 0 } }),
+      config: configFor(api, { http: { port: 0 } }),
       configBaseDir: process.cwd(),
       logs,
     });
@@ -406,7 +406,7 @@ describe("serve - start-up preparation and lifecycle", function () {
         sdk: SDK_726,
         workspaceRoot: root,
         transport: "streamable-http",
-        config: runtimeConfig(api, {
+        config: configFor(api, {
           http: { port: 0 },
           execution: { denoPath: fakeDeno },
         }),
