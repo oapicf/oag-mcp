@@ -28,6 +28,11 @@ declare module "@sinonjs/referee" {
     defined(value: unknown, message?: string): void;
     isNull(value: unknown, message?: string): void;
   }
-  const referee: { assert: Assert; refute: Refute };
+  const referee: {
+    assert: Assert;
+    refute: Refute;
+    /** Create a matcher, e.g. `match({ message: "boom" })`, for assertions. */
+    match(expectation: unknown, message?: string): unknown;
+  };
   export default referee;
 }

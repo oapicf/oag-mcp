@@ -1,9 +1,9 @@
 <!-- BEGIN:AVATAR -->
-To be populated by generator-node node-cli-partials
+To be populated by generator-node typescript-cli-partials
 <!-- END:AVATAR -->
 
 <!-- BEGIN:BADGES -->
-To be populated by generator-node node-cli-partials
+To be populated by generator-node typescript-cli-partials
 <!-- END:BADGES -->
 
 # OAG MCP
@@ -271,9 +271,9 @@ diagnostics), `api_error` (HTTP status and body), `sdk_error`,
 ## Colophon
 
 <!-- BEGIN:DEVELOPERS_GUIDE -->
-To be populated by generator-node node-cli-partials
+To be populated by generator-node typescript-cli-partials
 <!-- END:DEVELOPERS_GUIDE -->
 
 <!-- BEGIN:BUILD_REPORTS -->
-To be populated by generator-node node-cli-partials
+To be populated by generator-node typescript-cli-partials
 <!-- END:BUILD_REPORTS -->

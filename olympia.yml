@@ -2,7 +2,7 @@
 package_name: oag-mcp
 author: OpenAPI Clients Factory
 generator:
-  component: node-cli
+  component: typescript-cli
   inputs:
     project_id: oag-mcp
     project_name: OAG MCP

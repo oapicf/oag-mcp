@@ -1,30 +1,30 @@
 ################################################################
-# Suntory: Makefile for building Node.js packages
-# https://github.com/cliffano/suntory
+# Olympia: Makefile for building TypeScript packages
+# https://github.com/cliffano/olympia
 ################################################################
 
-# Suntory info
-SUNTORY_VERSION = 1.8.0
+# Olympia info
+OLYMPIA_VERSION = 0.9.0-pre.0
 
 UPDATE_GH_ID = cliffano
-UPDATE_MAKEFILE = suntory
+UPDATE_MAKEFILE = olympia
 UPDATE_GENERATOR = node
 UPDATE_DOTFILES = .github/. .gitignore eslint.config.js .rtk.json AGENTS.md
 UPDATE_PARTIALS = AVATAR BADGES BUILD_REPORTS DEVELOPERS_GUIDE
 
 ################################################################
 # User configuration variables
-# https://github.com/cliffano/suntory#configuration
-# Configuration variables should be stored in suntory.yml config file
+# https://github.com/cliffano/olympia#configuration
+# Configuration variables should be stored in olympia.yml config file
 
 # PACKAGE_NAME is the name of the node.js package
-PACKAGE_NAME=$(shell yq .package_name suntory.yml)
+PACKAGE_NAME=$(shell yq .package_name olympia.yml)
 
 # AUTHOR is the author of the node.js package
-AUTHOR ?= $(shell yq .author suntory.yml)
+AUTHOR ?= $(shell yq .author olympia.yml)
 
 $(info ################################################################)
-$(info Building node.js package using Suntory with user configurations...)
+$(info Building TypeScript package using Olympia with user configurations...)
 $(info - Package name = ${PACKAGE_NAME})
 $(info - Author = ${AUTHOR})
 

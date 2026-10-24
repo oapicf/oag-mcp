@@ -16,4 +16,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pino structured logging with separate operational and security_audit categories, redaction and fail-closed auditing
 
 ### Changed
-- Convert the generator-node template to TypeScript (tsc, tsx, typescript-eslint) while keeping bagofcli, Mocha/Sinon/referee and the Suntory/Bob pipeline
+- Convert the generator-node template to TypeScript (tsc, tsx, typescript-eslint) while keeping bagofcli and Mocha/Sinon/referee
+- Replace the Suntory/Bob pipeline with Olympia: Makefile targets that run the project's own tools (tsc, Prettier, ESLint, Mocha, c8, TypeDoc, npm pack)

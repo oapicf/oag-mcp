@@ -1,95 +1,105 @@
 # AGENTS.md
 
-This repository contains a Node.js project following a unified standard for tooling, build automation, and coding conventions. All projects share the same tooling stack and conventions to ensure consistency and maintainability.
+This repository contains a TypeScript Node.js project following a unified standard for tooling, build automation, and coding conventions. All projects share the same tooling stack and conventions to ensure consistency and maintainability.
 
 The key components of the standard include:
 
-- Build automation (Suntory)
+- Build automation (Olympia)
 - Project definition and dependency management (npm)
+- Language and compilation (TypeScript, `tsc`)
 - Code formatting (Prettier)
-- Static analysis (ESLint)
-- Testing (Mocha + Sinon)
+- Static analysis (ESLint with typescript-eslint)
+- Testing (Mocha + Sinon + referee, run through `tsx`)
+- Coverage (c8)
+- API documentation (TypeDoc)
 
-This document outlines the common conventions that apply across the Node.js projects.
+This document outlines the common conventions that apply across the TypeScript projects. Project-specific conventions live in [AGENTS-extras.md](AGENTS-extras.md).
 
 ## Node.js Version & Dependencies
 
 - **Node.js Version**: 22+
 - **Dependency Manager**: npm
 - **Lock File**: `package-lock.json` (checked in)
-- **Dependency Specification**: `package.json`
+- **Dependency Specification**: `package.json`, with exact version pins
 
 ### Adding Dependencies
 
 ```bash
-npm install package_name          # Add to runtime deps
-npm install --save-dev pkg_name   # Add to dev deps
-make deps                         # Install all deps
+npm install --save-exact package_name          # Add to runtime deps
+npm install --save-dev --save-exact pkg_name   # Add to dev deps
+make deps                                      # Install all deps
 ```
 
 ## Project Structure
 
 ```text
 project/
-├── bin/                      # CLI entry points
-│   └── <project>.js
+├── bin/                      # CLI entry points (plain JavaScript)
+│   └── <project>.js          # loads the compiled CLI from dist/
 ├── conf/                     # Configuration files (commands.json, etc.)
 ├── examples/                 # Example configs and usage
 │   └── *.sh
-├── lib/                      # Main module source files
-│   ├── <module>.js
-│   └── ...
-├── test/                     # Unit tests
-│   ├── <module>.js
+├── lib/                      # TypeScript sources
+│   ├── <module>.ts
+│   └── <area>/<module>.ts
+├── test/                     # Unit tests, mirroring lib/
+│   ├── <module>.ts
 │   └── ...
 ├── test-integration/         # Integration tests
+│   ├── cli.ts                # CLI help and option validation, run as a process
+│   └── helpers/
+├── dist/                     # Compiled JavaScript and declarations (generated, not committed)
 ├── stage/                    # Temporary stage files
-├── .bob/                     # Bob build output directory
-├── .bob.json                 # Bob build tool configuration
+├── .bob/                     # Build report output (coverage, complexity, docs, package)
 ├── .github/                  # GitHub workflows
 ├── .gitignore                # Git ignore rules
 ├── .rtk.json                 # RTK configuration
 ├── avatar.jpg                # Project avatar (80x80 pixels)
 ├── AGENTS.md                 # Agent instructions (this file)
+├── AGENTS-extras.md          # Project-specific agent instructions
 ├── CHANGELOG.md              # Changelog file following Keep a Changelog format
-├── eslint.config.js          # ESLint configuration
+├── eslint.config.js          # ESLint configuration (typescript-eslint)
 ├── LICENSE                   # License file
-├── Makefile                  # Build automation (Suntory)
+├── Makefile                  # Build automation (Olympia)
 ├── Makefile-extras           # Additional Makefile targets specific to the project
+├── olympia.yml               # Olympia configuration
 ├── package.json              # npm package definition
 ├── package-lock.json         # Locked dependencies
 ├── README.md                 # Project README
-└── suntory.yml               # Suntory configuration
+├── tsconfig.build.json       # Compiles lib/ to dist/
+└── tsconfig.json             # Type-checks sources and tests (no emit)
 ```
 
-## Build Automation (Suntory)
+## Build Automation (Olympia)
 
-This Node.js project uses **Suntory** as a standard build automation tool that unifies the build pipeline across all projects. The Makefile is sourced from the Suntory project and managed via `make update-to-latest` / `make update-to-version`.
+This TypeScript project uses **Olympia** as a standard build automation tool that unifies the build pipeline across all projects. The Makefile is sourced from the Olympia project and managed via `make update-to-latest` / `make update-to-version`.
 
-Build tasks are delegated to **Bob** (`bob` CLI), which is the underlying build executor called by the Makefile targets.
+Every target runs the project's own tools from `node_modules/.bin` (no separate build executor), so tool versions come from `package.json` and the lock file. The only npm script is the `prepare` lifecycle hook, which builds `dist/` on `npm install` and before `npm pack` / `npm publish`; everything else is a Makefile target.
 
 ### Common Commands
 
 ```bash
 make ci                # Run full CI pipeline
 make all               # Alias for ci
-make clean             # Remove temporary files using bob clean
+make clean             # Remove .bob/, coverage/, dist/ and stage/
 make stage             # Create stage directory using mkdir
-make deps              # Install bob globally and run bob dep
-make deps-upgrade      # Upgrade dependencies using bob updep
-make rmdeps            # Remove node_modules and package-lock.json using bob rmdep
-make style             # Check/format code using Prettier (bob style)
-make lint              # Run static analysis using ESLint (bob lint)
-make test              # Run unit tests using Mocha (bob test)
+make build             # Compile lib/ to dist/ using tsc (tsconfig.build.json)
+make typecheck         # Type-check sources and tests using tsc --noEmit (tsconfig.json)
+make deps              # Install dependencies using npm install (and mdl via apt)
+make deps-upgrade      # Upgrade dependencies using npm-check-updates, then npm install
+make rmdeps            # Remove node_modules
+make style             # Format code using Prettier (rewrites files)
+make lint              # Run static analysis using ESLint, and mdl on Markdown
+make test              # Run unit tests using Mocha
 make test-examples     # Run example shell scripts using bash
-make coverage          # Generate coverage reports using c8 (bob coverage)
-make complexity        # Run complexity analysis (bob complexity)
-make doc               # Generate documentation using JSDoc (bob doc)
-make package           # Build package (bob package)
+make coverage          # Generate unit test coverage reports using c8
+make complexity        # Report functions above COMPLEXITY_MAX using ESLint's complexity rule
+make doc               # Generate API documentation using TypeDoc
+make package           # Build the npm package archive using npm pack
 make install           # Link package locally using npm link
 make uninstall         # Unlink package using npm unlink
 make reinstall         # Uninstall then install
-make test-integration  # Run integration tests (bob test-integration)
+make test-integration  # Run integration tests using Mocha
 ```
 
 ### Release Targets
@@ -103,9 +113,9 @@ make release-patch     # Create patch release using RTK
 ### Update Targets
 
 ```bash
-make update-to-latest  # Update Makefile to latest Suntory tag using curl + GitHub API + jq
-make update-to-main    # Update Makefile to Suntory main branch using curl
-make update-to-version # Update Makefile to specific Suntory version using curl
+make update-to-latest  # Update Makefile to latest Olympia tag using curl + GitHub API + jq
+make update-to-main    # Update Makefile to Olympia main branch using curl
+make update-to-version # Update Makefile to specific Olympia version using curl
 make update-dotfiles   # Refresh project dotfiles using generator-node (git clone + plop + cp)
 ```
 
@@ -115,14 +125,14 @@ This project is designed to be developed in a consistent environment via Docker 
 
 You can run the container using: `docker run --rm --workdir /opt/workspace -v /var/run/docker.sock:/var/run/docker.sock -v $PWD:/opt/workspace -i -t cliffano/studio` and then run the build commands inside the container.
 
-Alternatively you can run the Suntory Makefile targets via Docker container entrypoint, e.g. `docker run --rm --workdir /opt/workspace -v /var/run/docker.sock:/var/run/docker.sock -v $PWD:/opt/workspace -i -t cliffano/studio make ci`.
+Alternatively you can run the Olympia Makefile targets via Docker container entrypoint, e.g. `docker run --rm --workdir /opt/workspace -v /var/run/docker.sock:/var/run/docker.sock -v $PWD:/opt/workspace -i -t cliffano/studio make ci`.
 
 ## Code Style and Linting
 
-Applies to: `**/*.js`
+Applies to: `**/*.ts`, `**/*.js`
 
 - Formatting uses Prettier via `make style`
-- Static analysis uses ESLint via `make lint`
+- Static analysis uses ESLint (with typescript-eslint) via `make lint`
 
 ### Style & Formatting
 
@@ -131,7 +141,7 @@ Applies to: `**/*.js`
 All code must pass `prettier` formatting:
 
 ```bash
-make style  # Via Suntory
+make style  # Via Olympia; rewrites files in place
 ```
 
 **Guidelines**:
@@ -154,41 +164,48 @@ make lint
 - Use specific rule names, not blanket disables when the exemptions are only specific lines
 - Attempt to fix warning root causes before disabling
 
-### Node.js Conventions
+### TypeScript Conventions
+
+#### Compilation
+
+- Sources are TypeScript in `lib/`, compiled by `tsc` to `dist/` with declarations (`tsconfig.build.json`)
+- `tsconfig.json` extends the build configuration to type-check `lib/`, `test/` and `test-integration/` without emitting
+- `strict` mode is on; avoid `any` and non-null assertions where a type or a check would do
+- `bin/<project>.js` stays plain JavaScript and imports the compiled `dist/cli.js`
 
 #### Module System
 
-Use ES modules (`"type": "module"` in `package.json`):
+Use ES modules (`"type": "module"` in `package.json`, `"module": "NodeNext"`):
 
-```js
+```ts
 "use strict";
-import async from "async";
-import p from "path";
-import fs from "fs";
+import fs from "node:fs";
+import path from "node:path";
+
+import pino from "pino";
+
+import { loadConfig } from "./config.js";
+import type { Logs } from "./logger.js";
 ```
 
 - Always include `"use strict";` at the top of every file
+- Relative imports use the `.js` extension of the compiled file, even in `.ts` sources (`./config.js`, not `./config` or `./config.ts`)
+- Use the `node:` prefix for Node.js built-in modules
+- Use `import type` for imports that are only used as types
 - Use named imports where possible
 - Group imports: built-in Node.js modules first, then third-party, then local
 
-```js
-"use strict";
-import fs from "fs";
-import p from "path";
+#### Types
 
-import async from "async";
-import sinon from "sinon";
-
-import config from "./config.js";
-import runner from "./runner.js";
-```
+- Place types by what kind of type they are (contracts in `<module>/types.ts`, shared data in `lib/types.ts`, options next to their function); see [AGENTS-extras.md](AGENTS-extras.md) for the full rule
+- Prefer libraries' own exported types over re-declaring them
 
 #### Classes
 
-Use ES6 classes for object-oriented modules:
+Use ES6 classes for object-oriented modules, and declare the contract a class fulfils:
 
-```js
-class MyService {
+```ts
+class MyService implements Service {
   /**
    * Constructor for initialising MyService.
    *
@@ -196,17 +213,15 @@ class MyService {
    * @param {String} [opts.configFile] - path to the configuration file
    * @param {Number} [opts.timeout] - request timeout in milliseconds
    */
-  constructor(opts) {
-    this.opts = opts;
-  }
+  constructor(private readonly opts: MyServiceOptions = {}) {}
 
   /**
    * Execute the main operation.
    *
    * @param {Array} items - list of items to process
-   * @param {Function} cb - standard cb(err, result) callback
+   * @return {Promise} processing result
    */
-  execute(items, cb) {
+  async execute(items: Item[]): Promise<Result> {
     // implementation
   }
 }
@@ -214,31 +229,31 @@ class MyService {
 export default MyService;
 ```
 
-#### Callbacks
+#### Asynchronous Code
 
-Use the Node.js standard callback convention `cb(err, result)`:
+Use `async`/`await` and promises. The callback convention (`cb(err, result)`) is not used: the platform APIs and libraries these projects build on (fetch, the TypeScript compiler API, esbuild, the MCP SDK) are promise-based.
 
-```js
-function doSomething(input, cb) {
+```ts
+async function doSomething(input: string): Promise<Result> {
   if (!input) {
-    cb(new Error("Input is required"));
-  } else {
-    cb(null, result);
+    throw new Error("Input is required");
   }
+  return await process(input);
 }
 ```
 
-- Always check for errors before using results
-- Use `async` library for control flow (series, parallel, waterfall)
+- Always `await` (or deliberately return) promises; never leave one floating
+- Run independent work concurrently with `Promise.all`
 
 #### Naming Conventions
 
 - **Classes**: `PascalCase` (e.g., `DataProcessor`, `ConfigManager`)
+- **Interfaces and types**: `PascalCase` (e.g., `ExecutionRequest`)
 - **Functions/Methods**: `camelCase` (e.g., `processData`, `_formatOutput`)
 - **Constants**: `UPPER_SNAKE_CASE` (e.g., `MAX_BATCH_SIZE`, `DEFAULT_TIMEOUT`)
 - **Private/Internal**: Prefix with `_` (e.g., `_internalHelper`, `_formatError`)
 - **Variables**: `camelCase` (e.g., `resultData`, `itemCount`)
-- **Files**: `kebab-case.js` or match the module name (e.g., `bagofcli.js`, `config.js`)
+- **Files**: `kebab-case.ts` or match the module name (e.g., `search-index.ts`, `config.ts`)
 
 #### Logging
 
@@ -246,7 +261,7 @@ Use `bagofcli` or a dedicated logger — never use `console.log` directly in lib
 
 For CLI output, use the logger provided by `bagofcli`:
 
-```js
+```ts
 import bag from "bagofcli";
 
 bag.cli.exit(err, result);
@@ -256,26 +271,30 @@ bag.cli.exit(err, result);
 
 - Use `console.error` only for fatal/unexpected errors in CLI entry points
 - Library modules must not call `console.log` or `process.exit` directly
-- Pass errors back via callbacks or throw them
+- Throw errors and let them propagate
 
 ### File Organization
 
 #### Module Structure
 
-```js
+```ts
 // 1. Strict mode directive
 "use strict";
 
 // 2. Imports — built-ins, then third-party, then local
-import fs from "fs";
-import async from "async";
-import config from "./config.js";
+import fs from "node:fs";
+import pino from "pino";
+import { loadConfig } from "./config.js";
 
 // 3. Constants
 const DEFAULT_TIMEOUT = 30000;
 const MAX_RETRIES = 3;
 
-// 4. Class or function definitions
+// 4. Types, then class or function definitions
+interface MyModuleOptions {
+  timeout?: number;
+}
+
 class MyModule {
   ...
 }
@@ -286,18 +305,18 @@ export default MyModule;
 
 #### CLI Entry Points
 
-CLI files live in `bin/` and delegate all logic to `lib/`:
+CLI files live in `bin/` as plain JavaScript and delegate all logic to the compiled `lib/` in `dist/`:
 
 ```js
 #!/usr/bin/env node
 "use strict";
-import cli from "../lib/cli.js";
+import cli from "../dist/cli.js";
 cli.exec();
 ```
 
 #### Command Configuration
 
-CLI commands are defined in `conf/commands.json`:
+CLI commands are defined in `conf/commands.json`, including argument validation (required options, allowed choices, numeric ranges), which bagofcli enforces:
 
 ```json
 {
@@ -317,54 +336,43 @@ CLI commands are defined in `conf/commands.json`:
 
 ### Error Handling
 
-#### Use Callbacks with Errors, Not Exceptions
+#### Throw Errors, Don't Return Them
 
-```js
-// Good: pass errors via callback
-function readConfig(file, cb) {
-  fs.readFile(file, "utf8", function (err, data) {
-    if (err) {
-      cb(err);
-    } else {
-      cb(null, JSON.parse(data));
-    }
-  });
+```ts
+// Good: throw from async functions and let the caller decide
+async function readConfig(file: string): Promise<Config> {
+  const text = await fs.promises.readFile(file, "utf8");
+  return JSON.parse(text) as Config;
 }
 ```
 
+- Use `Error` subclasses with a stable `code` for errors that callers or users act on
+- Include an actionable hint in user-facing errors
+- Catch errors only where they can be handled or reported (e.g. at the CLI boundary)
+
 #### Propagate Errors Up
 
-```js
-function processAll(items, cb) {
-  async.eachSeries(
-    items,
-    function (item, next) {
-      processOne(item, function (err) {
-        if (err) {
-          next(err);
-        } else {
-          next();
-        }
-      });
-    },
-    cb
-  );
+```ts
+async function processAll(items: Item[]): Promise<void> {
+  for (const item of items) {
+    await processOne(item); // a rejection stops the loop and propagates
+  }
 }
 ```
 
 ### JSDoc Documentation
 
-Add JSDoc comments to all public classes and methods:
+Add JSDoc comments to all public classes and methods; TypeDoc (`make doc`) generates the API documentation from them and the TypeScript types:
 
-```js
+```ts
 /**
  * Process a list of items in batches.
  *
  * @param {Array} items - list of items to process
  * @param {Number} batchSize - number of items per batch
- * @param {Function} cb - standard cb(err, result) callback
+ * @return {Promise} processed items
  */
-function processBatch(items, batchSize, cb) {
+async function processBatch(items: Item[], batchSize: number): Promise<Item[]> {
   ...
 }
 ```
@@ -377,25 +385,25 @@ function processBatch(items, batchSize, cb) {
 - Document object properties as nested params, e.g.
   `@param {Boolean} [opts.dryRun] - description`, using `[name]` for optional
   params and `[name=default]` for defaults
-- Document return value with `@return {Type} description` for synchronous functions
-- Use `@param {Function} cb - standard cb(err, result) callback` for async functions
-- Start each file with a `@module` tag so that JSDoc groups its functions
-  under the module instead of listing them as globals
+- Document return value with `@return {Type} description`
+- Start each file with a `@module` tag so that the documentation groups its
+  functions under the module instead of listing them as globals
 - Mark internal helpers (`_` prefixed) with `@private`
 
 ## Testing
 
-Applies to: `test/**/*.js`, `test-integration/**/*.js`
+Applies to: `test/**/*.ts`, `test-integration/**/*.ts`
 
 - Unit tests live in `test/`
 - Integration tests live in `test-integration/`
+- Tests are TypeScript, run by Mocha through `tsx` (no separate compile step)
 - Run tests with `make test` and `make test-integration`
 
 ### Test Structure
 
 #### Unit Tests
 
-**Location**: `test/<module>.js`
+**Location**: `test/<module>.ts`, mirroring `lib/` (e.g. `test/util/semaphore.ts` for `lib/util/semaphore.ts`)
 
 **Purpose**: Test individual functions/methods in isolation
 
@@ -407,7 +415,7 @@ Applies to: `test/**/*.js`, `test-integration/**/*.js`
 
 #### Integration Tests
 
-**Location**: `test-integration/<module>.js`
+**Location**: `test-integration/<module>.ts`
 
 **Purpose**: Test end-to-end flows with real or semi-real external systems
 
@@ -416,25 +424,27 @@ Applies to: `test/**/*.js`, `test-integration/**/*.js`
 - May use filesystem and network calls (with test fixtures or mocks if needed)
 - Slower execution
 - Broader coverage (fewer, larger tests)
+- CLI behaviour (help, option validation, exit codes) is tested by running the CLI as a process in `test-integration/cli.ts`
 
 #### Test Files
 
 ```text
 test/
-  module1.js          # Tests for lib/module1.js
-  module2.js          # Tests for lib/module2.js
-  util.js             # Tests for lib/util.js
+  config.ts            # Tests for lib/config.ts
+  util/semaphore.ts    # Tests for lib/util/semaphore.ts
+  helpers/             # Shared test helpers (not run as tests)
+  fixtures/            # Test fixtures (not run as tests)
 
 test-integration/
-  cli.js               # Integration tests for CLI
-  commands.yml         # Integration test command definitions
+  cli.ts               # Integration tests for the CLI
+  helpers/             # Shared integration helpers
 ```
 
 #### Test Suites
 
 Use `describe` blocks to group tests by module and method:
 
-```js
+```ts
 describe("modulename - methodname", function () {
   ...
 });
@@ -452,16 +462,16 @@ describe("config - load", function () {
 
 #### Test Cases
 
-```js
-it("should do something when condition", function (done) {
+```ts
+it("should do something when condition", async function () {
   ...
 });
 
-it("should pass error to callback when input is invalid", function (done) {
+it("should reject with an error when input is invalid", async function () {
   ...
 });
 
-it("should construct commands and pass them to series", function (done) {
+it("should construct commands and pass them to series", async function () {
   ...
 });
 ```
@@ -475,9 +485,10 @@ it("should construct commands and pass them to series", function (done) {
 ```bash
 # All tests
 make test
+make test-integration
 
 # Specific file
-node_modules/.bin/mocha test/config.js
+node_modules/.bin/mocha test/config.ts
 
 # Test matching a keyword
 node_modules/.bin/mocha --grep "load"
@@ -486,14 +497,15 @@ node_modules/.bin/mocha --grep "load"
 #### Configuration
 
 - Framework: `mocha`
-- Timeout: `5000ms` (set via `MOCHA_OPTIONS="--timeout 5000"`)
+- Unit test configuration lives in `package.json` (`"mocha"`: `tsx` loader, `.ts` extension, `test/**/*.ts`, timeout `15000ms`)
+- `make test-integration` passes its own flags (`test-integration/**/*.ts`, timeout `180000ms`)
 - Coverage: `c8` (via `make coverage`)
 
 ### Mocking Best Practices
 
 #### Import Mocking
 
-```js
+```ts
 import sinon from "sinon";
 import referee from "@sinonjs/referee";
 ```
@@ -502,10 +514,10 @@ import referee from "@sinonjs/referee";
 
 Use `sinon.mock()` for verifiable mock expectations and `sinon.stub()` for simple replacements:
 
-```js
+```ts
 describe("mymodule - process", function () {
   beforeEach(function () {
-    this.mockFs = sinon.mock(fs);
+    this.mockFs = sinon.mock(fs.promises);
   });
 
   afterEach(function () {
@@ -513,17 +525,14 @@ describe("mymodule - process", function () {
     this.mockFs.restore();
   });
 
-  it("should read file and process contents", function (done) {
+  it("should read file and process contents", async function () {
     this.mockFs
       .expects("readFile")
       .once()
       .withExactArgs("config.json", "utf8")
-      .callsArgWith(2, null, '{"key":"value"}');
-    mymodule.process("config.json", function (err, result) {
-      referee.assert.isNull(err);
-      referee.assert.equals(result.key, "value");
-      done();
-    });
+      .resolves('{"key":"value"}');
+    const result = await mymodule.process("config.json");
+    referee.assert.equals(result.key, "value");
   });
 });
 ```
@@ -532,7 +541,7 @@ describe("mymodule - process", function () {
 
 Use `sinon.stub().value()` to replace module-level imports or object properties:
 
-```js
+```ts
 sinon.stub(bag, "command").value(function (base, actions) {
   actions.commands.release.action({ releaseIncrementType: "minor" });
 });
@@ -542,7 +551,7 @@ sinon.stub(bag, "command").value(function (base, actions) {
 
 Always restore mocks and stubs in `afterEach` to avoid cross-test pollution:
 
-```js
+```ts
 afterEach(function () {
   this.mockDependency.verify();
   this.mockDependency.restore();
@@ -552,7 +561,7 @@ afterEach(function () {
 
 #### Mock Structure
 
-```js
+```ts
 // Create mock
 this.mockRunner = sinon.mock(runner);
 
@@ -560,27 +569,25 @@ this.mockRunner = sinon.mock(runner);
 this.mockRunner
   .expects("execSeries")
   .withArgs(["command1", "command2"])
-  .callsArgWith(2, null, "someresult");
+  .resolves("someresult");
 
 // Verify and restore
 this.mockRunner.verify();
 this.mockRunner.restore();
 ```
 
-#### Mocking Async Callbacks
+#### Mocking Async Functions
 
-Use `callsArgWith(index, err, result)` to simulate async callback invocations:
+Use `resolves(value)` and `rejects(error)` to simulate promise-returning functions:
 
-```js
-this.mockRunner
-  .expects("execSeries")
-  .once()
-  .callsArgWith(2, null, "someresult");
+```ts
+this.mockRunner.expects("execSeries").once().resolves("someresult");
+this.mockRunner.expects("execSeries").once().rejects(new Error("someerror"));
 ```
 
 #### Mocking File I/O
 
-```js
+```ts
 this.mockFs
   .expects("readFileSync")
   .once()
@@ -592,14 +599,14 @@ this.mockFs
 
 Use `@sinonjs/referee` for assertions:
 
-```js
+```ts
 import referee from "@sinonjs/referee";
-const assert = referee.assert;
+const { assert, refute } = referee;
 ```
 
 #### Basic Assertions
 
-```js
+```ts
 // Null / undefined
 referee.assert.isNull(err);
 referee.assert.isUndefined(result);
@@ -617,9 +624,18 @@ referee.assert.isTrue(flag);
 referee.assert.isFalse(flag);
 ```
 
+#### Asserting Rejections
+
+```ts
+await referee.assert.rejects(
+  mymodule.process("missing.json"),
+  referee.match({ message: referee.match(/not found/) }),
+);
+```
+
 #### Mock Assertions
 
-```js
+```ts
 // Expectation set via sinon mock — verified in afterEach
 this.mockRunner.expects("execSeries").once();
 this.mockRunner.verify(); // called in afterEach
@@ -630,12 +646,15 @@ referee.assert.equals(stubFn.callCount, 2);
 
 ### Test File Structure
 
-```js
+```ts
 "use strict";
-import MyClass from "../lib/mymodule.js";
-import dependency from "../lib/dependency.js";
 import referee from "@sinonjs/referee";
 import sinon from "sinon";
+
+import dependency from "../lib/dependency.js";
+import MyClass from "../lib/mymodule.js";
+
+const { assert, match } = referee;
 
 describe("mymodule - methodname", function () {
   beforeEach(function () {
@@ -647,32 +666,24 @@ describe("mymodule - methodname", function () {
     this.mockDependency.restore();
   });
 
-  it("should do expected thing when condition is met", function (done) {
-    this.mockDependency
-      .expects("someMethod")
-      .once()
-      .callsArgWith(1, null, "result");
+  it("should do expected thing when condition is met", async function () {
+    this.mockDependency.expects("someMethod").once().resolves("result");
 
     const instance = new MyClass({});
-    instance.methodname("input", function (err, result) {
-      referee.assert.isNull(err);
-      referee.assert.equals(result, "result");
-      done();
-    });
+    assert.equals(await instance.methodname("input"), "result");
   });
 
-  it("should pass error to callback when dependency fails", function (done) {
+  it("should reject with an error when dependency fails", async function () {
     this.mockDependency
       .expects("someMethod")
       .once()
-      .callsArgWith(1, new Error("someerror"));
+      .rejects(new Error("someerror"));
 
     const instance = new MyClass({});
-    instance.methodname("input", function (err, result) {
-      referee.assert.equals(err.message, "someerror");
-      referee.assert.isUndefined(result);
-      done();
-    });
+    await assert.rejects(
+      instance.methodname("input"),
+      match({ message: "someerror" }),
+    );
   });
 });
 ```
@@ -693,7 +704,7 @@ make coverage
 
 #### Coverage Tooling
 
-- Coverage engine: `c8`
+- Coverage engine: `c8`, limited to `lib/` (`--include=lib`)
 - Unit coverage output: `.bob/coverage/c8/`
 - LCOV report: `.bob/coverage/c8/lcov.info`
 - HTML report: `.bob/coverage/c8/index.html`
@@ -701,7 +712,7 @@ make coverage
 #### Coverage Guidelines
 
 - Prioritise meaningful branch and error-path coverage, not just line coverage
-- Add tests for callback error paths (`cb(err)`) and success paths (`cb(null, result)`)
+- Add tests for both rejected and fulfilled paths of async functions
 - Include coverage for CLI command option parsing and command dispatch
 - Keep unit tests deterministic and isolated from network/filesystem unless explicitly integration tests
 
@@ -718,36 +729,34 @@ All tests must pass before merging.
 
 ## Documentation
 
-- Documentation is generated with JSDoc via `make doc`
+- API documentation is generated with TypeDoc via `make doc`
 - Generated outputs live under `.bob/`
 
-Common generated subdirectories under `.bob/`:
+Generated subdirectories under `.bob/`:
 
-- `dep/` for dependency installation outputs
-- `doc/` for generated API documentation
-- `style/` for code formatting outputs
-- `lint/` for lint reports
-- `package/` for built package artifacts
-- `coverage/` for coverage reports
-- `complexity/` for complexity analysis reports
-- `test/` for unit test reports
-- `test-integration/` for integration test reports
+- `coverage/` for coverage reports (`coverage/c8/`)
+- `complexity/` for the complexity report (`complexity/eslint/index.html`)
+- `doc/` for generated API documentation (`doc/typedoc/`)
+- `package/` for the npm package archive
 
 ## Continuous Integration Pipeline
 
-The Makefile (Suntory) orchestrates standard build targets, with `make ci` running the following steps in sequence:
+The Makefile (Olympia) orchestrates standard build targets, with `make ci` running the following steps in sequence:
 
-- deps              # 1. Install dependencies
-- clean             # 2. Clean temp files
-- style             # 3. Format & check code (prettier)
-- lint              # 4. Static analysis (eslint)
-- test              # 5. Unit tests (mocha)
-- coverage          # 6. Coverage reports (c8)
-- complexity        # 7. Complexity analysis
-- doc               # 8. Generate documentation (jsdoc)
-- package           # 9. Build distribution
-- reinstall         # 10. Clean install from package
-- test-integration  # 11. Integration tests
+- clean             # 1. Clean temp files
+- build             # 2. Compile TypeScript (tsc)
+- typecheck         # 3. Type-check sources and tests (tsc --noEmit)
+- style             # 4. Format code (prettier)
+- lint              # 5. Static analysis (eslint, mdl)
+- test              # 6. Unit tests (mocha)
+- coverage          # 7. Coverage reports (c8)
+- complexity        # 8. Complexity report (eslint complexity rule)
+- doc               # 9. Generate documentation (typedoc)
+- package           # 10. Build npm package archive (npm pack)
+- reinstall         # 11. Clean install from package
+- test-integration  # 12. Integration tests (mocha)
+
+Dependencies are installed beforehand with `make deps`.
 
 All steps must pass before code is merged. Developers should run `make ci` locally before pushing to ensure the CI pipeline will pass.
 
@@ -766,11 +775,11 @@ Use clear, imperative commit messages:
 
 This repository defines the following workflows under `.github/workflows/`:
 
-- **CI** (`ci-workflow.yaml`): Trigger: `push`, `pull_request`, and manual `workflow_dispatch`. Purpose: Runs the full quality pipeline (`bob build`) across a Node.js version matrix (usually LTS versions), publishes coverage to Coveralls, and publishes generated docs to GitHub Pages.
+- **CI** (`ci-workflow.yaml`): Trigger: `push`, `pull_request`, and manual `workflow_dispatch`. Purpose: Runs `make deps` and `make ci` across a Node.js version matrix (usually LTS versions), publishes coverage to Coveralls, and publishes the `.bob/` reports and docs to GitHub Pages.
 
-- **CodeQL** (`codeql-analysis.yml`): Trigger: `push` to `main`, `pull_request` targeting `main`, and weekly scheduled run (`cron`). Purpose: Performs GitHub CodeQL static security analysis for JavaScript and uploads code scanning results.
+- **CodeQL** (`codeql-analysis.yml`): Trigger: `push` to `main`, `pull_request` targeting `main`, and weekly scheduled run (`cron`). Purpose: Performs GitHub CodeQL static security analysis for JavaScript and TypeScript and uploads code scanning results.
 
-- **Publish** (`publish-workflow.yaml`): Trigger: `push` of any Git tag. Purpose: Builds and installs the package, then publishes it using `bob publish` via npm's trusted publishing (no stored token required).
+- **Publish** (`publish-workflow.yaml`): Trigger: `push` of any Git tag. Purpose: Installs the package (which builds `dist/` through the `prepare` hook), then publishes it with `npm publish` via npm's trusted publishing (no stored token required).
 
 - **Release Major** (`release-major-workflow.yaml`): Trigger: Manual `workflow_dispatch`. Purpose: Creates a major release via `cliffano/release-action` (`release_type: major`).
 
@@ -778,4 +787,4 @@ This repository defines the following workflows under `.github/workflows/`:
 
 - **Release Patch** (`release-patch-workflow.yaml`): Trigger: Manual `workflow_dispatch`. Purpose: Creates a patch release via `cliffano/release-action` (`release_type: patch`).
 
-- **Upgrade Deps** (`upgrade-deps-workflow.yaml`): Trigger: Manual `workflow_dispatch`. Purpose: Upgrades dependencies using `bob updep build`, commits dependency updates, and pushes changes back to the current branch.
+- **Upgrade Deps** (`upgrade-deps-workflow.yaml`): Trigger: Manual `workflow_dispatch`. Purpose: Runs `make deps`, `make deps-upgrade` (npm-check-updates) and `make ci`, then commits the dependency updates and pushes them back to the current branch.

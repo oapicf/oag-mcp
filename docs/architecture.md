@@ -138,7 +138,8 @@ which is where credentials live. See [security](security.md).
 The repository started from the `generator-node` CLI template (JavaScript,
 Mocha, bagofcli, Suntory/Bob). Changes:
 
-- **Build tooling**: Bob is not used. The Makefile's targets run the
+- **Build tooling**: the Makefile is Olympia, a TypeScript counterpart of
+  Suntory, and Bob is not used. The Makefile's targets run the
   project's own tools directly: `tsc` (`build`, `typecheck`), Prettier
   (`style`), ESLint (`lint`, and `complexity` through its `complexity` rule),
   Mocha and c8 (`test`, `test-integration`, `coverage`), TypeDoc (`doc`) and
@@ -156,7 +157,7 @@ Mocha, bagofcli, Suntory/Bob). Changes:
 - **CLI**: still `bagofcli` with `conf/commands.json`; the sample `display`
   command, `lib/models/message.js` and `examples/oag-mcp.yaml` were removed.
 - **Tests**: Mocha + Sinon + referee are kept; tests are TypeScript run
-  through `tsx` (Mocha configuration in `package.json`, so Suntory dotfile
+  through `tsx` (Mocha configuration in `package.json`, so Olympia dotfile
   updates cannot remove it). Unit tests use local fixture files;
   integration tests (`test-integration/*.ts`) add a mock API and a local
   authorisation server. `test-integration/cli.ts` runs the CLI as a process
