@@ -49,8 +49,9 @@ project/
 │   ├── cli.ts                # CLI help and option validation, run as a process
 │   └── helpers/
 ├── dist/                     # Compiled JavaScript and declarations (generated, not committed)
-├── stage/                    # Temporary stage files
-├── .bob/                     # Build report output (coverage, complexity, docs, package)
+├── stage/                    # Temporary and generated files (removed by make clean)
+│   ├── gh-pages/             # Reports published to GitHub Pages (coverage, complexity, docs)
+│   └── package/              # npm package archive
 ├── .github/                  # GitHub workflows
 ├── .gitignore                # Git ignore rules
 ├── .rtk.json                 # RTK configuration
@@ -81,8 +82,8 @@ Every target runs the project's own tools from `node_modules/.bin` (no separate 
 ```bash
 make ci                # Run full CI pipeline
 make all               # Alias for ci
-make clean             # Remove .bob/, coverage/, dist/ and stage/
-make stage             # Create stage directory using mkdir
+make clean             # Remove coverage/, dist/ and stage/
+make stage             # Create stage/ and stage/gh-pages/ using mkdir
 make build             # Compile lib/ to dist/ using tsc (tsconfig.build.json)
 make typecheck         # Type-check sources and tests using tsc --noEmit (tsconfig.json)
 make deps              # Install dependencies using npm install (and mdl via apt)
@@ -705,9 +706,9 @@ make coverage
 #### Coverage Tooling
 
 - Coverage engine: `c8`, limited to `lib/` (`--include=lib`)
-- Unit coverage output: `.bob/coverage/c8/`
-- LCOV report: `.bob/coverage/c8/lcov.info`
-- HTML report: `.bob/coverage/c8/index.html`
+- Unit coverage output: `stage/gh-pages/coverage/c8/`
+- LCOV report: `stage/gh-pages/coverage/c8/lcov.info`
+- HTML report: `stage/gh-pages/coverage/c8/index.html`
 
 #### Coverage Guidelines
 
@@ -730,14 +731,16 @@ All tests must pass before merging.
 ## Documentation
 
 - API documentation is generated with TypeDoc via `make doc`
-- Generated outputs live under `.bob/`
+- Generated outputs live under `stage/`, which `make clean` removes
 
-Generated subdirectories under `.bob/`:
+Generated subdirectories under `stage/`:
 
-- `coverage/` for coverage reports (`coverage/c8/`)
-- `complexity/` for the complexity report (`complexity/eslint/index.html`)
-- `doc/` for generated API documentation (`doc/typedoc/`)
+- `gh-pages/coverage/c8/` for coverage reports
+- `gh-pages/complexity/eslint/index.html` for the complexity report
+- `gh-pages/doc/typedoc/` for generated API documentation
 - `package/` for the npm package archive
+
+Everything under `stage/gh-pages/` is published to GitHub Pages by the CI workflow.
 
 ## Continuous Integration Pipeline
 
@@ -775,7 +778,7 @@ Use clear, imperative commit messages:
 
 This repository defines the following workflows under `.github/workflows/`:
 
-- **CI** (`ci-workflow.yaml`): Trigger: `push`, `pull_request`, and manual `workflow_dispatch`. Purpose: Runs `make deps` and `make ci` across a Node.js version matrix (usually LTS versions), publishes coverage to Coveralls, and publishes the `.bob/` reports and docs to GitHub Pages.
+- **CI** (`ci-workflow.yaml`): Trigger: `push`, `pull_request`, and manual `workflow_dispatch`. Purpose: Runs `make deps` and `make ci` across a Node.js version matrix (usually LTS versions), publishes coverage to Coveralls, and publishes the `stage/gh-pages/` reports and docs to GitHub Pages.
 
 - **CodeQL** (`codeql-analysis.yml`): Trigger: `push` to `main`, `pull_request` targeting `main`, and weekly scheduled run (`cron`). Purpose: Performs GitHub CodeQL static security analysis for JavaScript and TypeScript and uploads code scanning results.
 
