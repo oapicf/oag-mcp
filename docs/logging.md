@@ -55,6 +55,13 @@ Files are opened in append mode with `0600` permissions. Writes are
 synchronous so failures are detected immediately and logs are flushed on
 graceful shutdown (`SIGINT`/`SIGTERM`).
 
+When stderr is a pipe whose reader falls behind (for example an MCP client
+that reads the server's stderr slowly), oag-mcp waits for it rather than
+dropping records: a full pipe is retried for about two seconds. If the reader
+still has not caught up, the write counts as a failure (see below), further
+writes fail fast instead of waiting again, and records not yet written (up to
+1 MiB) are kept and written in order once the reader catches up.
+
 ## Audit destination failures
 
 If an audit record cannot be written, oag-mcp reports

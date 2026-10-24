@@ -4,8 +4,9 @@ import os from "node:os";
 import path from "node:path";
 
 import referee from "@sinonjs/referee";
+import sinon from "sinon";
 
-import { Logs } from "../../lib/logging/logger.js";
+import { Logs, MAX_WRITE_RETRIES } from "../../lib/logging/logger.js";
 import { secrets } from "../../lib/logging/redact.js";
 
 const { assert, refute } = referee;
@@ -24,6 +25,7 @@ describe("logger - Logs", function () {
   });
 
   afterEach(function () {
+    sinon.restore();
     fs.rmSync(this.dir, { recursive: true, force: true });
   });
 
@@ -157,6 +159,82 @@ describe("logger - Logs", function () {
     logs.audit("execution.requested", "accepted");
     assert.isFalse(logs.auditHealthy);
     assert.isFalse(logs.auditBlocksExecution());
+  });
+
+  it("should retry a full non-blocking destination a bounded number of times, then fail fast, and write the backlog once it drains", function () {
+    // sonic-boom waits 100 ms between retries, so the first record takes ~2 s.
+    this.timeout(15000);
+    const file = path.join(this.dir, "audit.log");
+    const logs = new Logs({
+      file: path.join(this.dir, "op.log"),
+      auditFile: file,
+      auditFailClosed: true,
+    });
+    // Simulate a full non-blocking pipe for audit writes: every attempt fails
+    // with EAGAIN until the reader "drains" it.
+    const writeSync = fs.writeSync;
+    let busy = true;
+    let attempts = 0;
+    sinon.stub(fs, "writeSync").callsFake(((
+      fd: number,
+      data: string,
+      ...rest: never[]
+    ) => {
+      if (busy && fd !== 2 && String(data).includes("security_audit")) {
+        attempts++;
+        throw Object.assign(new Error("busy"), { code: "EAGAIN" });
+      }
+      return writeSync(fd, data, ...rest);
+    }) as typeof fs.writeSync);
+
+    // First record: the first attempt plus MAX_WRITE_RETRIES retries.
+    assert.isFalse(logs.audit("test.first", "success"));
+    assert.equals(attempts, MAX_WRITE_RETRIES + 1);
+    assert.isTrue(logs.auditBlocksExecution());
+
+    // While still busy, later records fail fast instead of waiting again.
+    attempts = 0;
+    const started = performance.now();
+    assert.isFalse(logs.audit("test.second", "success"));
+    assert.equals(attempts, 1);
+    assert.less(performance.now() - started, 90);
+
+    // Once the reader drains the pipe, the backlog is written in order.
+    busy = false;
+    assert.isTrue(logs.audit("test.third", "success"));
+    assert.equals(
+      readJsonLines(file).map((r) => r.event),
+      ["test.first", "test.second", "test.third"],
+    );
+    // Fail-closed stays in force once an audit record has failed.
+    assert.isTrue(logs.auditBlocksExecution());
+  });
+
+  it("should not hang when flushing or logging fatal records to a destination that keeps failing", function () {
+    // pino flushes the destination after every fatal record; with a
+    // persistent error (here EBADF) that must give up, not retry forever.
+    const logs = new Logs({ file: "fd:99", auditFile: "fd:98" });
+    logs.op("fatal", "test.fatal");
+    logs.audit("test.audit", "failure", {}, "error");
+    logs.flush();
+    assert.isFalse(logs.auditHealthy);
+  });
+
+  it("should count write failures in pretty format for fail-closed auditing", function () {
+    const logs = new Logs({ format: "pretty", auditFailClosed: true });
+    const writeSync = fs.writeSync;
+    sinon.stub(fs, "writeSync").callsFake(((
+      fd: number,
+      data: string,
+      ...rest: never[]
+    ) => {
+      if (fd === 2) {
+        throw Object.assign(new Error("stderr gone"), { code: "EIO" });
+      }
+      return writeSync(fd, data, ...rest);
+    }) as typeof fs.writeSync);
+    assert.isFalse(logs.audit("execution.requested", "accepted"));
+    assert.isTrue(logs.auditBlocksExecution());
   });
 
   it("should treat an unopenable audit file as a failure", function () {
