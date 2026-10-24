@@ -132,7 +132,7 @@ install: package
 	npm link .
 
 uninstall:
-	npm unlink .
+	npm unlink -g ${PACKAGE_NAME}
 
 reinstall: uninstall install
 
