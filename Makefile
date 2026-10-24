@@ -61,10 +61,6 @@ clean:
 build:
 	tsc -p tsconfig.build.json
 
-# Type-check sources and tests without emitting files
-typecheck:
-	tsc -p tsconfig.json --noEmit
-
 ################################################################
 # Dependencies targets
 
@@ -95,6 +91,10 @@ style:
 ################################################################
 # Testing targets
 
+# Type-check sources and tests without emitting files
+typecheck:
+	tsc -p tsconfig.json --noEmit
+
 lint: stage
 	eslint .
 	mdl -r ~MD013,~MD029 $(shell find . -path ./stage -prune -o -path ./node_modules -prune -o -path ./.bob -prune -o -path ./test/fixtures -prune -o -name "CHANGELOG.md" -prune -o -name "*.md" -print)
@@ -104,10 +104,11 @@ complexity: stage
 	mkdir -p .bob/complexity/eslint/
 	eslint lib --rule '{"complexity": ["warn", $(COMPLEXITY_MAX)]}' --format html --output-file .bob/complexity/eslint/index.html
 
-test:
+# Tests run through tsx, which does not type-check, so type-check first
+test: typecheck
 	mocha
 
-test-integration:
+test-integration: typecheck
 	mocha --no-package --node-option import=tsx --extension ts --recursive --timeout 180000 --ignore 'test-integration/helpers/**' 'test-integration/**/*.ts'
 
 test-examples:
@@ -117,7 +118,7 @@ test-examples:
 	  bash -x "$$f"; \
 	done
 
-coverage:
+coverage: typecheck
 	c8 --include=lib --reports-dir=.bob/coverage/c8 --reporter=text-summary --reporter=lcov --reporter=html mocha
 
 ################################################################
