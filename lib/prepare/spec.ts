@@ -9,6 +9,7 @@
  * @module prepare/spec
  */
 import SwaggerParser from "@apidevtools/swagger-parser";
+import { sample } from "openapi-sampler";
 
 import { OagMcpError } from "../errors.js";
 import type {
@@ -68,72 +69,30 @@ export function describeSchema(schema: unknown, depth = 0): string {
 }
 
 /**
- * Pick an example value for a schema: explicit example, default, first enum
- * value, or a type-based placeholder.
+ * Pick an example value for a schema, using openapi-sampler: the schema's
+ * own `example`, `examples`, `default` or first `enum` value where present,
+ * otherwise a value generated from its type and format (`oneOf`/`anyOf`,
+ * `allOf` and recursive schemas included). Only required properties are
+ * included, and `readOnly` properties are left out because the examples are
+ * for requests.
  *
- * @param {Object} schema - OpenAPI schema
- * @param {Number} [depth] - recursion depth
- * @return {*} example value
+ * @param {Object} schema - dereferenced OpenAPI schema
+ * @return {*} example value, or undefined when none can be produced
  */
-export function exampleForSchema(schema: unknown, depth = 0): unknown {
-  if (!schema || typeof schema !== "object" || depth > 3) {
+export function exampleForSchema(schema: unknown): unknown {
+  if (!schema || typeof schema !== "object") {
     return undefined;
   }
-  const s = schema as Json;
-  if (s.example !== undefined) {
-    return s.example;
+  try {
+    return sample(schema as Parameters<typeof sample>[0], {
+      skipReadOnly: true,
+      skipNonRequired: true,
+      quiet: true,
+    });
+  } catch {
+    // An example is a convenience; never fail preparation over one.
+    return undefined;
   }
-  if (Array.isArray(s.examples) && s.examples.length > 0) {
-    return s.examples[0];
-  }
-  if (s.default !== undefined) {
-    return s.default;
-  }
-  if (Array.isArray(s.enum) && s.enum.length > 0) {
-    return s.enum[0];
-  }
-  const type = Array.isArray(s.type) ? s.type[0] : s.type;
-  switch (type) {
-    case "string":
-      if (s.format === "date") {
-        return "2026-01-31";
-      }
-      if (s.format === "date-time") {
-        return "2026-01-31T09:00:00Z";
-      }
-      return "example";
-    case "integer":
-      return typeof s.minimum === "number" ? s.minimum : 1;
-    case "number":
-      return typeof s.minimum === "number" ? s.minimum : 1.5;
-    case "boolean":
-      return true;
-    case "array": {
-      const item = exampleForSchema(s.items, depth + 1);
-      return item === undefined ? [] : [item];
-    }
-    default:
-      break;
-  }
-  if (s.properties && typeof s.properties === "object") {
-    const required = new Set(
-      Array.isArray(s.required) ? (s.required as string[]) : [],
-    );
-    const out: Json = {};
-    for (const [k, v] of Object.entries(s.properties as Json)) {
-      if (required.has(k)) {
-        out[k] = exampleForSchema(v, depth + 1);
-      }
-    }
-    return out;
-  }
-  if (Array.isArray(s.allOf)) {
-    return Object.assign(
-      {},
-      ...(s.allOf as unknown[]).map((x) => exampleForSchema(x, depth + 1)),
-    );
-  }
-  return undefined;
 }
 
 /**

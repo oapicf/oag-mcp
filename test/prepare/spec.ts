@@ -136,20 +136,53 @@ describe("spec - describeSchema/exampleForSchema", function () {
       "string[]",
     );
     assert.equals(describeSchema({ enum: ["a", "b"] }), '"a" | "b"');
-    assert.equals(
-      exampleForSchema({ type: "string", format: "date" }),
-      "2026-01-31",
-    );
+  });
+
+  it("should build request examples from the schema's own values, required properties only and without readOnly properties", function () {
     assert.equals(
       exampleForSchema({
         type: "object",
-        required: ["name"],
+        required: ["id", "name", "species"],
         properties: {
+          id: { type: "integer", readOnly: true },
           name: { type: "string", example: "Rex" },
+          species: { type: "string", enum: ["dog", "cat"] },
           age: { type: "integer" },
         },
       }),
-      { name: "Rex" },
+      { name: "Rex", species: "dog" },
     );
+  });
+
+  it("should generate values that match the schema's format and alternatives", function () {
+    assert.match(
+      exampleForSchema({ type: "string", format: "date" }),
+      /^\d{4}-\d{2}-\d{2}$/,
+    );
+    assert.match(
+      exampleForSchema({ type: "string", format: "email" }),
+      /^[^@\s]+@[^@\s]+$/,
+    );
+    assert.equals(
+      exampleForSchema({
+        oneOf: [
+          {
+            type: "object",
+            required: ["meow"],
+            properties: { meow: { type: "boolean" } },
+          },
+          {
+            type: "object",
+            required: ["bark"],
+            properties: { bark: { type: "integer" } },
+          },
+        ],
+      }),
+      { meow: true },
+    );
+  });
+
+  it("should return undefined when there is no schema", function () {
+    assert.isUndefined(exampleForSchema(undefined));
   });
 });
