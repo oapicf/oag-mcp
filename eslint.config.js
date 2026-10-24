@@ -14,7 +14,6 @@ const nodeGlobals = {
 export default defineConfig([
   {
     ignores: [
-      ".bob/",
       "coverage/",
       "dist/",
       "node_modules/",
