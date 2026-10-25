@@ -22,21 +22,21 @@ oag-mcp serve --spec ./openapi.yaml --sdk ./generated-sdk --transport stdio
 ## Why oag-mcp
 
 Most OpenAPI-to-MCP bridges expose one MCP tool per endpoint, or a generic
-HTTP request tool. oag-mcp takes a different approach — **SDK-backed code
+HTTP request tool. oag-mcp takes a different approach  **SDK-backed code
 mode**:
 
-- **OpenAPI supplies the contract and documentation**: descriptions, tags,
+* **OpenAPI supplies the contract and documentation**: descriptions, tags,
   parameters, schemas, examples and security requirements.
-- **The generated typescript-fetch SDK supplies the callable interface**:
+* **The generated typescript-fetch SDK supplies the callable interface**:
   the exact classes, methods, signatures and model types.
-- **`search`** discovers relevant SDK methods with their signatures,
+* **`search`** discovers relevant SDK methods with their signatures,
   referenced types, auth requirements and a ready-to-run example.
-- **`execute`** runs agent-written TypeScript that composes real SDK calls —
+* **`execute`** runs agent-written TypeScript that composes real SDK calls —
   loops, filtering, aggregation, `Promise.all` — inside an isolated Deno
   sandbox, and returns only the compact result.
-- **The SDK stays an ordinary package** that your applications and CLIs keep
+* **The SDK stays an ordinary package** that your applications and CLIs keep
   using directly; oag-mcp only reads it.
-- **MCP sees two tools**, not one per endpoint, so large APIs don't flood the
+* **MCP sees two tools**, not one per endpoint, so large APIs don't flood the
   agent's context.
 
 ```text
@@ -169,19 +169,19 @@ for every option.
 
 ## How serving works
 
-- **Inputs are read once per process.** The method index, SDK bindings and
+* **Inputs are read once per process.** The method index, SDK bindings and
   sandbox bundle are built at start-up and stay fixed while the server runs.
   After regenerating the SDK or editing the spec, restart oag-mcp.
-- **Your SDK is only read.** oag-mcp never writes to the SDK directory, never
+* **Your SDK is only read.** oag-mcp never writes to the SDK directory, never
   installs packages and never runs package or build scripts. If the SDK
   declares runtime dependencies, install them in it yourself
   (`npm install --omit=dev --ignore-scripts`); otherwise start-up stops with
   `SDK_DEPENDENCIES_MISSING` and tells you which packages are missing.
-- **Source and compiled SDKs both work.** Sources (`src/*.ts`) are compiled
+* **Source and compiled SDKs both work.** Sources (`src/*.ts`) are compiled
   by oag-mcp; compiled packages (`dist/*.js` with `.d.ts`) are used as they
   are. See [SDK compatibility](docs/sdk-compatibility.md) for supported
   generator versions, options and layouts.
-- **Temporary files clean themselves up.** Prepared output (declarations, the
+* **Temporary files clean themselves up.** Prepared output (declarations, the
   sandbox bundle, an extracted archive) lives in a private `oag-mcp-ws-*`
   directory under the OS temporary directory (`TMPDIR`). It is removed when
   the server stops or fails to start, and anything left by a killed process
@@ -264,14 +264,14 @@ diagnostics), `api_error` (HTTP status and body), `sdk_error`,
 
 ## Documentation
 
-- [Architecture](docs/architecture.md) — start-up preparation, execution model, design choices
-- [SDK compatibility](docs/sdk-compatibility.md) — supported versions, options, package layouts, dependencies
-- [Configuration reference](docs/configuration.md)
-- [Authentication and authorization](docs/authentication.md) — `mcpAuth`, `upstreamAuth`, permissions
-- [Execution sandbox and limits](docs/security.md) — what is and is not isolated
-- [Logging](docs/logging.md) — operational records (OpenTelemetry) and security audit records (OCSF)
-- [Deployment](docs/deployment.md)
-- [Testing](docs/testing.md)
+* [Architecture](docs/architecture.md) — start-up preparation, execution model, design choices
+* [SDK compatibility](docs/sdk-compatibility.md) — supported versions, options, package layouts, dependencies
+* [Configuration reference](docs/configuration.md)
+* [Authentication and authorization](docs/authentication.md) — `mcpAuth`, `upstreamAuth`, permissions
+* [Execution sandbox and limits](docs/security.md) — what is and is not isolated
+* [Logging](docs/logging.md) — operational records (OpenTelemetry) and security audit records (OCSF)
+* [Deployment](docs/deployment.md)
+* [Testing](docs/testing.md)
 
 ## Colophon
 
