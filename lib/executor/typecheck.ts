@@ -68,17 +68,22 @@ export class AgentTypeChecker {
       getCurrentDirectory: () => sdkDir,
       getDefaultLibFileName: () => path.join(this.libDir, "lib.es2022.d.ts"),
       fileExists: (f) => f === this.agentFile || fs.existsSync(f),
-      readFile: (f) =>
-        f === this.agentFile
-          ? this.current
-          : fs.existsSync(f)
-            ? fs.readFileSync(f, "utf8")
-            : undefined,
+      readFile: (f) => this._readFile(f),
       readDirectory: ts.sys.readDirectory,
       directoryExists: ts.sys.directoryExists,
       getDirectories: ts.sys.getDirectories,
     };
     this.service = ts.createLanguageService(host, ts.createDocumentRegistry());
+  }
+
+  /**
+   * The agent code being checked, or a file from disk (undefined when
+   * missing).
+   *
+   * @private
+   */
+  private _readFile(f: string): string | undefined {
+    return f === this.agentFile ? this.current : ts.sys.readFile(f);
   }
 
   /**

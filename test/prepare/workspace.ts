@@ -121,3 +121,31 @@ describe("workspace - bindingDeclaration", function () {
     assert(decl.indexOf("AdminApi") < decl.indexOf("PetsApi"));
   });
 });
+
+describe("workspace - exit safety net", function () {
+  afterEach(function () {
+    sinon.restore();
+  });
+
+  it("should remove live workspaces at exit, tolerating a removal failure", function () {
+    const { logs } = quietLogs();
+    const kept = createWorkspace({ root: tmpDir(), logs });
+    const stuck = createWorkspace({ root: tmpDir(), logs });
+    const onExit = process
+      .listeners("exit")
+      .find((l) => l.name === "_onExit") as () => void;
+    assert.isFunction(onExit);
+    const rmSync = fs.rmSync;
+    sinon.stub(fs, "rmSync").callsFake((dir, opts) => {
+      if (dir === stuck.dir) {
+        throw Object.assign(new Error("busy"), { code: "EBUSY" });
+      }
+      rmSync(dir, opts);
+    });
+    onExit();
+    sinon.restore();
+    refute(fs.existsSync(kept.dir));
+    assert(fs.existsSync(stuck.dir), "left for the next start-up's sweep");
+    assert.isTrue(stuck.cleanup());
+  });
+});

@@ -8,6 +8,7 @@ import semver from "semver";
 import {
   DENO_VERSION_RANGE,
   SUPPORTED_OAG_VERSIONS,
+  authorName,
   dependencyVersion,
   oagMcpName,
   oagMcpVersion,
@@ -67,5 +68,19 @@ describe("version - SUPPORTED_OAG_VERSIONS", function () {
     for (const v of SUPPORTED_OAG_VERSIONS) {
       assert.equals(semver.valid(v), v);
     }
+  });
+});
+
+describe("version - authorName", function () {
+  it("should read npm's person string or object form", function () {
+    assert.equals(
+      authorName("Cliffano <c@example.test> (https://x.test)"),
+      "Cliffano",
+    );
+    assert.equals(authorName("Solo"), "Solo");
+    assert.equals(authorName({ name: "Obj", email: "o@example.test" }), "Obj");
+    assert.isUndefined(authorName(undefined));
+    assert.isUndefined(authorName({ email: "o@example.test" }));
+    assert.isUndefined(authorName(" <c@example.test>"));
   });
 });

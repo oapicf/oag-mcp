@@ -77,3 +77,23 @@ describe("config - parseConfig", function () {
     }
   });
 });
+
+describe("config - loadConfig defaults and parse errors", function () {
+  it("should use defaults relative to the working directory without a file", function () {
+    const { config, baseDir } = loadConfig();
+    assert.equals(config, parseConfig({}));
+    assert.equals(baseDir, process.cwd());
+  });
+
+  it("should reject a file that is not YAML or JSON", function () {
+    const file = path.join(tmpDir(), "bad.yaml");
+    fs.writeFileSync(file, "a: [unclosed");
+    try {
+      loadConfig(file);
+      assert(false, "expected failure");
+    } catch (e) {
+      assert.equals((e as OagMcpError).code, "CONFIG_INVALID");
+      assert.match((e as OagMcpError).message, /is not valid YAML\/JSON/);
+    }
+  });
+});

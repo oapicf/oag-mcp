@@ -3,9 +3,11 @@ import fs from "node:fs";
 import path from "node:path";
 
 import referee from "@sinonjs/referee";
+import sinon from "sinon";
 import * as tar from "tar";
 
 import {
+  ARCHIVE_LIMITS,
   extractArchive,
   missingDependencies,
   stageSdkInput,
@@ -36,6 +38,11 @@ describe("sdk-input - unsafeArchivePath", function () {
     assert.isString(unsafeArchivePath("C:\\x"));
     assert.isString(unsafeArchivePath("package/../../x"));
     assert.isUndefined(unsafeArchivePath("package/src/index.ts"));
+    assert.equals(unsafeArchivePath(""), "empty or NUL-containing path");
+    assert.equals(
+      unsafeArchivePath("package/a\0b"),
+      "empty or NUL-containing path",
+    );
   });
 });
 
@@ -158,5 +165,75 @@ describe("sdk-input - missingDependencies", function () {
       ["not-installed-anywhere-xyz"],
     );
     assert.equals(missingDependencies(sdk, undefined), []);
+  });
+});
+
+describe("sdk-input - extractArchive limits and extracted tree", function () {
+  const saved = { ...ARCHIVE_LIMITS };
+
+  async function packed(): Promise<{ work: string; file: string }> {
+    const work = tmpDir();
+    fs.mkdirSync(path.join(work, "package", "src"), { recursive: true });
+    fs.writeFileSync(path.join(work, "package", "a.txt"), "aaaa");
+    fs.writeFileSync(path.join(work, "package", "src", "b.txt"), "bbbb");
+    const file = path.join(work, "p.tgz");
+    await tar.c({ gzip: true, file, cwd: work }, ["package"]);
+    return { work, file };
+  }
+
+  afterEach(function () {
+    Object.assign(ARCHIVE_LIMITS, saved);
+    sinon.restore();
+  });
+
+  it("should reject archives over the entry and size limits", async function () {
+    const { work, file } = await packed();
+    ARCHIVE_LIMITS.maxEntries = 2;
+    ARCHIVE_LIMITS.maxTotalBytes = 4;
+    try {
+      await extractArchive(file, path.join(work, "out"));
+      assert(false, "expected failure");
+    } catch (e) {
+      const err = e as OagMcpError;
+      assert.equals(err.code, "SDK_ARCHIVE_UNSAFE");
+      assert.match(err.message, /too many entries \(4 > 2\)/);
+      assert.match(err.message, /uncompressed size too large \(8 > 4 bytes\)/);
+    }
+  });
+
+  it("should reject an extracted tree that contains a link", async function () {
+    const { work, file } = await packed();
+    const readdirSync = fs.readdirSync;
+    sinon.stub(fs, "readdirSync").callsFake(((dir: string, opts: never) => {
+      const entries = readdirSync(dir, opts) as unknown as fs.Dirent[];
+      if (path.basename(dir) !== "package") {
+        return entries;
+      }
+      const link = Object.assign(Object.create(entries[0]), {
+        name: "sneaky",
+        isSymbolicLink: () => true,
+      });
+      return [...entries, link];
+    }) as typeof fs.readdirSync);
+    await expectRejection(
+      extractArchive(file, path.join(work, "out")),
+      "SDK_ARCHIVE_UNSAFE",
+    );
+  });
+
+  it("should reject an extracted path that resolves outside the destination", async function () {
+    const { work, file } = await packed();
+    const realpathSync = fs.realpathSync;
+    sinon
+      .stub(fs, "realpathSync")
+      .callsFake(((p: string) =>
+        p.endsWith("b.txt") ? "/elsewhere/b.txt" : realpathSync(p)) as never);
+    try {
+      await extractArchive(file, path.join(work, "out"));
+      assert(false, "expected failure");
+    } catch (e) {
+      assert.equals((e as OagMcpError).code, "SDK_ARCHIVE_UNSAFE");
+      assert.match((e as OagMcpError).message, /escapes destination: .*b\.txt/);
+    }
   });
 });

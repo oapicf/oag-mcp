@@ -13,7 +13,8 @@ make ci                     # the full pipeline (needs yq and mdl)
 
 ESLint fails `make lint` for any function in `lib/` with a cyclomatic
 complexity above 10, the same limit `make complexity` reports against
-(`COMPLEXITY_MAX`).
+(`COMPLEXITY_MAX`). Unit tests cover every line of `lib/`; keep it that
+way when adding code.
 
 Mocha configuration for unit tests lives in `package.json` (`"mocha"`); the
 `test-integration` target passes its own flags.

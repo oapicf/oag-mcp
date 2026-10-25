@@ -143,3 +143,21 @@ describe("authorization - opaquePrincipalId", function () {
     assert.match(a, /^oauth:[0-9a-f]{16}$/);
   });
 });
+
+describe("authorization - AuthorizationPolicy.decide scopes", function () {
+  it("should not apply a rule to principals missing any of its scopes", function () {
+    const policy = new AuthorizationPolicy({
+      default: "deny",
+      rules: [
+        {
+          id: "admins",
+          scopes: ["pets:read", "admin"],
+          allow: ["*"],
+          deny: [],
+        },
+      ],
+    });
+    assert.isFalse(policy.decide(reader, op("AdminApi.deletePet")).allowed);
+    assert.isTrue(policy.decide(admin, op("AdminApi.deletePet")).allowed);
+  });
+});

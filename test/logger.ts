@@ -311,3 +311,89 @@ describe("logger - Logs", function () {
     });
   });
 });
+
+describe("logger - Logs on stderr", function () {
+  let stderr: string[];
+
+  beforeEach(function () {
+    stderr = [];
+    const writeSync = fs.writeSync;
+    sinon.stub(fs, "writeSync").callsFake(((
+      fd: number,
+      data: string | Buffer,
+      ...rest: never[]
+    ) => {
+      if (fd === 2) {
+        stderr.push(String(data));
+        return Buffer.byteLength(String(data));
+      }
+      return writeSync(fd, data as string, ...rest);
+    }) as typeof fs.writeSync);
+  });
+
+  afterEach(function () {
+    sinon.restore();
+  });
+
+  async function settle() {
+    for (let i = 0; i < 5; i++) {
+      await new Promise((r) => setImmediate(r));
+    }
+  }
+
+  it("should print one readable line per record in pretty format", async function () {
+    const logs = new Logs({ format: "pretty", level: "debug" });
+    logs.op("info", "tools.registered", { outcome: "success" });
+    logs.op("info", "server.ready");
+    logs.audit(
+      "authentication.failed",
+      "failure",
+      { mode: "static-bearer", reason: "missing_token" },
+      "warn",
+    );
+    logs.audit("authentication.succeeded", "success", { mode: "none" });
+    logs.flush();
+    await settle();
+    const text = stderr.join("");
+    assert.match(text, /\[operational\] tools\.registered success/);
+    assert.match(
+      text,
+      /\[operational\] server\.ready\n|\[operational\] server\.ready\s/,
+    );
+    assert.match(
+      text,
+      /\[security_audit\] authentication\.failed Authentication: \S.*\(missing_token\)/,
+    );
+    assert.match(text, /\[security_audit\] authentication\.succeeded /);
+  });
+
+  it("should report an operational file it cannot open on stderr", function () {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "oag-mcp-logs-"));
+    try {
+      new Logs({ file: path.join(dir, "missing-dir", "op.log") });
+      assert.match(stderr.join(""), /logging\.destination_open_failed/);
+      assert.match(stderr.join(""), /operational/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("logger - Logs.ctx", function () {
+  it("should expose a copy of a child's context", function () {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "oag-mcp-logs-"));
+    try {
+      const logs = new Logs({ file: path.join(dir, "all.log") });
+      const child = logs
+        .child({ requestId: "req_1" })
+        .child({ executionId: "e" });
+      assert.equals(child.ctx, { requestId: "req_1", executionId: "e" });
+      const ctx = child.ctx;
+      ctx.requestId = "changed";
+      assert.equals(child.ctx.requestId, "req_1");
+      assert.equals(logs.ctx, {});
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

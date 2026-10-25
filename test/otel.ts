@@ -75,3 +75,11 @@ describe("otel - otelRecord", function () {
     assert.equals(otelTimestamp(1234), "1234000000");
   });
 });
+
+describe("otel - toOtelAttributes transports", function () {
+  it("should keep a transport it has no convention for under oag_mcp", function () {
+    assert.equals(toOtelAttributes({ transport: "carrier-pigeon" }), {
+      "oag_mcp.transport": "carrier-pigeon",
+    });
+  });
+});

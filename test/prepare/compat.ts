@@ -205,3 +205,67 @@ describe("compat - inspectSdk", function () {
     assert.isFalse(insp.apiFiles.some((f) => f.endsWith(".ts")));
   });
 });
+
+describe("compat - inspectSdk edge cases", function () {
+  const src = (dir: string, ...p: string[]) => path.join(dir, "src", ...p);
+
+  it("should reject an SDK whose runtime module cannot be read", function () {
+    const dir = copyFixture(SDK_726);
+    fs.rmSync(src(dir, "runtime.ts"));
+    fs.mkdirSync(src(dir, "runtime.ts"));
+    const err = expectCode(() => inspectSdk(dir), "SDK_LAYOUT_UNSUPPORTED");
+    assert.match(err.message, /runtime module not found/);
+  });
+
+  it("should reject a runtime without the typescript-fetch markers", function () {
+    const dir = copyFixture(SDK_726);
+    const file = src(dir, "runtime.ts");
+    fs.writeFileSync(
+      file,
+      fs.readFileSync(file, "utf8").replaceAll("ResponseError", "Failure"),
+    );
+    const err = expectCode(() => inspectSdk(dir), "SDK_GENERATOR_UNSUPPORTED");
+    assert.match(
+      err.message,
+      /missing typescript-fetch markers: ResponseError/,
+    );
+  });
+
+  it("should reject an SDK without an apis directory", function () {
+    const dir = copyFixture(SDK_726);
+    fs.rmSync(src(dir, "apis"), { recursive: true });
+    expectCode(() => inspectSdk(dir), "SDK_LAYOUT_UNSUPPORTED");
+  });
+
+  it("should inspect an SDK without models", function () {
+    const dir = copyFixture(SDK_726);
+    fs.rmSync(src(dir, "models"), { recursive: true });
+    const insp = inspectSdk(dir);
+    assert.equals(insp.apiFiles.length, 4);
+    assert.isFalse(insp.detectedOptions.withoutRuntimeChecks as boolean);
+  });
+
+  it("should detect camelCase file naming", function () {
+    const dir = copyFixture(SDK_726);
+    for (const f of ["AdminApi", "OwnersApi", "PetsApi", "StoreApi"]) {
+      const lower = f[0].toLowerCase() + f.slice(1);
+      fs.renameSync(
+        src(dir, "apis", `${f}.ts`),
+        src(dir, "apis", `${lower}.ts`),
+      );
+    }
+    assert.equals(inspectSdk(dir).detectedOptions.fileNaming, "camelCase");
+  });
+
+  it("should reject a declared generator version that contradicts the recorded one", function () {
+    const err = expectCode(
+      () => inspectSdk(SDK_726, { declaredOagVersion: "7.0.0" }),
+      "SDK_OAG_VERSION_CONFLICT",
+    );
+    assert.match(err.message, /--sdk-oag-version 7\.0\.0 conflicts/);
+    assert.equals(
+      inspectSdk(SDK_726, { declaredOagVersion: "7.26.0" }).oagVersion,
+      "7.26.0",
+    );
+  });
+});

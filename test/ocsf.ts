@@ -235,3 +235,29 @@ describe("ocsf - toOcsfEvent", function () {
     assert.equals(refused.status_code, "MCP_AUTH_CONFIG_INVALID");
   });
 });
+
+describe("ocsf - toOcsfEvent destinations", function () {
+  it("should give a destination's explicit port, or the scheme's default", function () {
+    assert.equals(
+      event("network.destination_denied", "denied", {
+        destinationOrigin: "http://10.0.0.7:8080",
+      }).dst_endpoint,
+      { ip: "10.0.0.7", port: 8080 },
+    );
+    assert.equals(
+      event("network.destination_denied", "denied", {
+        destinationOrigin: "http://[::1]",
+      }).dst_endpoint,
+      { ip: "::1", port: 80 },
+    );
+  });
+
+  it("should name a destination that is not a URL as given, with no URL parts", function () {
+    const e = event("network.destination_denied", "denied", {
+      destinationOrigin: "not a url",
+      pathTemplate: "/pets",
+    });
+    assert.equals(e.dst_endpoint, { name: "not a url" });
+    assert.equals(e.http_request.url, { path: "/pets" });
+  });
+});

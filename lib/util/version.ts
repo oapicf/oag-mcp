@@ -49,6 +49,21 @@ export function packageRoot(): string {
 }
 
 /**
+ * The name in a package.json person field: npm's "Name <email> (url)" form,
+ * or an object with a name.
+ *
+ * @param {String|Object} [author] - the field's value
+ * @return {String} the name, or undefined when there is none
+ */
+export function authorName(author: unknown): string | undefined {
+  const name =
+    typeof author === "string"
+      ? author.replace(/\s*[<(].*$/, "").trim()
+      : (author as { name?: unknown } | undefined)?.name;
+  return typeof name === "string" && name ? name : undefined;
+}
+
+/**
  * Read (once) oag-mcp's own package.json.
  *
  * @private
@@ -58,15 +73,10 @@ function _package(): { name: string; version: string; author?: string } {
     const pkg = JSON.parse(
       fs.readFileSync(path.join(packageRoot(), "package.json"), "utf8"),
     );
-    // npm's "Name <email> (url)" form, or an object with a name.
-    const author =
-      typeof pkg.author === "string"
-        ? pkg.author.replace(/\s*[<(].*$/, "").trim()
-        : pkg.author?.name;
     cachedPackage = {
       name: pkg.name as string,
       version: pkg.version as string,
-      author: author || undefined,
+      author: authorName(pkg.author),
     };
   }
   return cachedPackage;

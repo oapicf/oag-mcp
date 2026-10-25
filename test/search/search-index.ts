@@ -20,6 +20,7 @@ import {
 } from "../../lib/search/search-index.js";
 import type { MethodRecord } from "../../lib/types.js";
 import { SDK_726, SPEC, tmpDir } from "../helpers/paths.js";
+import { BINDINGS, record } from "../helpers/prepared.js";
 
 const { assert } = referee;
 
@@ -169,5 +170,37 @@ describe("search-index - MethodSearchIndex.browse", function () {
       authLine(records.find((r) => r.id === "PetsApi.getPetById")!),
       "none",
     );
+  });
+});
+
+describe("search-index - fake records", function () {
+  const auth = (unsupportedSchemes: string[], optional: boolean) => ({
+    alternatives: [
+      {
+        schemes: [{ name: "apiKeyHeader", type: "apiKey-header", scopes: [] }],
+      },
+    ],
+    optional,
+    unsupportedSchemes,
+  });
+
+  it("should name optional auth and unsupported schemes", function () {
+    assert.equals(
+      authLine(record(BINDINGS[0], { auth: auth(["oidc", "mtls"], true) })),
+      "apiKeyHeader(apiKey-header) OR none [unsupported: oidc, mtls]",
+    );
+  });
+
+  it("should filter search hits by tag or API class", function () {
+    const idx = new MethodSearchIndex(BINDINGS.map((b) => record(b)));
+    const search = (tag?: string) =>
+      idx
+        .search("pet", { visible: () => true, limit: 10, tag })
+        .hits.map((h) => h.id)
+        .sort();
+    assert.equals(search(), ["AdminApi.deletePet", "PetsApi.listPets"]);
+    assert.equals(search("admin"), ["AdminApi.deletePet"]);
+    assert.equals(search("PetsApi"), ["PetsApi.listPets"]);
+    assert.equals(search("nothing"), []);
   });
 });
