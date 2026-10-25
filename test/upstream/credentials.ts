@@ -1,5 +1,6 @@
 "use strict";
 import referee from "@sinonjs/referee";
+import sinon from "sinon";
 
 import type { Principal } from "../../lib/types.js";
 import { SecretResolver } from "../../lib/util/secrets.js";
@@ -12,7 +13,7 @@ import {
 import { resolveSecurity } from "../../lib/upstream/security.js";
 import { SCHEMES, fakeFetch, quietLogs } from "../helpers/fakes.js";
 
-const { assert } = referee;
+const { assert, match } = referee;
 
 const principal: Principal = { id: "local:test", kind: "local", scopes: [] };
 const env = {
@@ -42,6 +43,26 @@ function provider(
     fetchImpl,
   });
   return { p, logs, records, registry };
+}
+
+function oauthProvider(
+  config: Record<string, unknown>,
+  fetchImpl: typeof fetch,
+) {
+  return provider(
+    {
+      clinicOAuth: {
+        clientId: { env: "CID" },
+        clientSecret: { env: "CSEC" },
+        ...config,
+      },
+    },
+    fetchImpl,
+  );
+}
+
+function tokenFetch(json: Record<string, unknown>) {
+  return fakeFetch(() => new Response(JSON.stringify(json), { status: 200 }));
 }
 
 const ctx = (logs: ReturnType<typeof quietLogs>["logs"]) => ({
@@ -93,6 +114,8 @@ describe("credentials - ServiceIdentityCredentialProvider", function () {
       { oidc: { token: { env: "TOKEN" } } },
       { adminBasic: { username: { env: "USER" } } },
       { bearerAuth: { token: { env: "MISSING_ENV" } } },
+      { apiKeyHeader: { apiKey: "plain-text-key" } },
+      { apiKeyHeader: { apiKey: [{ env: "KEY" }] } },
     ]) {
       try {
         provider(cfg);
@@ -206,6 +229,161 @@ describe("credentials - ServiceIdentityCredentialProvider", function () {
     assert.contains(
       records().map((r) => r.event),
       "upstream.token.issue_failed",
+    );
+  });
+
+  it("should refuse a scheme it has no credentials for", async function () {
+    const { p, logs } = provider({ bearerAuth: { token: { env: "TOKEN" } } });
+    assert.isFalse(p.has("apiKeyHeader"));
+    await assert.rejects(
+      p.apply(SCHEMES.apiKeyHeader, [], ctx(logs)),
+      match({ reason: "credential_not_configured" }),
+    );
+  });
+
+  it("should reuse a cached token until shortly before it expires", async function () {
+    const fetchImpl = tokenFetch({
+      access_token: "tok-long",
+      expires_in: 3600,
+    });
+    const { p, logs, records } = oauthProvider({}, fetchImpl);
+    await p.apply(SCHEMES.clinicOAuth, ["pets:write"], ctx(logs));
+    const again = await p.apply(SCHEMES.clinicOAuth, ["pets:write"], ctx(logs));
+    assert.equals(again.headers.Authorization, "Bearer tok-long");
+    assert.equals(fetchImpl.calls.length, 1);
+    assert.contains(
+      records().map((r) => r.event),
+      "upstream.token.cache_hit",
+    );
+  });
+
+  it("should post client credentials, configured scopes and the audience in the form", async function () {
+    const fetchImpl = tokenFetch({ access_token: "tok-post" });
+    const { p, logs, records } = oauthProvider(
+      {
+        clientAuthMethod: "client_secret_post",
+        audience: "https://api.example.test",
+        scopes: ["b", "a"],
+      },
+      fetchImpl,
+    );
+    await p.apply(SCHEMES.clinicOAuth, ["pets:write"], ctx(logs));
+    const { url, init } = fetchImpl.calls[0];
+    assert.equals(url.toString(), "http://127.0.0.1:4011/token");
+    assert.equals(init.redirect, "error");
+    assert.isUndefined((init.headers as Record<string, string>).authorization);
+    assert.equals(Object.fromEntries(new URLSearchParams(String(init.body))), {
+      grant_type: "client_credentials",
+      scope: "b a",
+      audience: "https://api.example.test",
+      client_id: env.CID,
+      client_secret: env.CSEC,
+    });
+    const issued = records().find((r) => r.event === "upstream.token.issue")!;
+    assert.equals(issued.get("expiresInSec"), 300);
+    assert.equals(issued.get("scopeCount"), 2);
+  });
+
+  it("should leave out the scope when no scopes are needed", async function () {
+    const fetchImpl = tokenFetch({ access_token: "tok-x", expires_in: -5 });
+    const { p, logs, records } = oauthProvider({ scopes: [] }, fetchImpl);
+    await p.apply(SCHEMES.clinicOAuth, ["pets:write"], ctx(logs));
+    const body = new URLSearchParams(String(fetchImpl.calls[0].init.body));
+    assert.isFalse(body.has("scope"));
+    assert.equals(
+      records()
+        .find((r) => r.event === "upstream.token.issue")!
+        .get("expiresInSec"),
+      300,
+    );
+  });
+
+  it("should fail clearly when the token endpoint is unreachable", async function () {
+    const fetchImpl = fakeFetch(() => {
+      throw new TypeError("fetch failed");
+    });
+    const { p, logs, records } = oauthProvider({}, fetchImpl);
+    await assert.rejects(
+      p.apply(SCHEMES.clinicOAuth, ["pets:write"], ctx(logs)),
+      match({ reason: "token_endpoint_unreachable" }),
+    );
+    const failed = records().find(
+      (r) => r.event === "upstream.token.issue_failed",
+    )!;
+    assert.equals(failed.get("reason"), "token_endpoint_unreachable");
+    assert.equals(failed.get("error"), "TypeError");
+  });
+
+  it("should name why a token response is unusable", async function () {
+    const cases: Array<[number, string, string, string | null]> = [
+      [200, "not json", "no_access_token", null],
+      [200, "null", "no_access_token", null],
+      [200, "[1]", "no_access_token", null],
+      [200, '{"access_token":7}', "no_access_token", null],
+      [
+        200,
+        '{"access_token":"t","token_type":"mac"}',
+        "unsupported_token_type",
+        null,
+      ],
+      [500, '{"error":42}', "token_endpoint_error", null],
+      [
+        400,
+        JSON.stringify({ error: "x".repeat(100) }),
+        "token_endpoint_error",
+        "x".repeat(64),
+      ],
+    ];
+    for (const [status, body, reason, oauthError] of cases) {
+      const fetchImpl = fakeFetch(() => new Response(body, { status }));
+      const { p, logs, records } = oauthProvider({}, fetchImpl);
+      await assert.rejects(
+        p.apply(SCHEMES.clinicOAuth, ["pets:write"], ctx(logs)),
+        match({ reason: "token_request_failed" }),
+      );
+      const failed = records().find(
+        (r) => r.event === "upstream.token.issue_failed",
+      )!;
+      assert.equals(failed.get("reason"), reason, body);
+      // The token endpoint's HTTP status is the OCSF status_code.
+      assert.equals(failed.raw.status_code, String(status), body);
+      assert.equals(failed.get("oauthError") ?? null, oauthError, body);
+    }
+  });
+
+  it("should keep scrubbing a replaced token for a minute", async function () {
+    const clock = sinon.useFakeTimers({ toFake: ["setTimeout"] });
+    try {
+      let issued = 0;
+      const fetchImpl = fakeFetch(
+        () =>
+          new Response(
+            JSON.stringify({
+              access_token: `tok-${++issued}-abcdef`,
+              expires_in: 1,
+            }),
+          ),
+      );
+      const { p, logs, registry } = oauthProvider({}, fetchImpl);
+      await p.apply(SCHEMES.clinicOAuth, ["pets:write"], ctx(logs));
+      // expires_in 1 is inside the refresh skew, so the next call refreshes.
+      await p.apply(SCHEMES.clinicOAuth, ["pets:write"], ctx(logs));
+      assert.equals(issued, 2);
+      assert.equals(registry.scrubKnown("tok-1-abcdef"), "[REDACTED]");
+      clock.tick(60000);
+      assert.equals(registry.scrubKnown("tok-1-abcdef"), "tok-1-abcdef");
+      assert.equals(registry.scrubKnown("tok-2-abcdef"), "[REDACTED]");
+    } finally {
+      clock.restore();
+    }
+  });
+
+  it("should not report an invalidation when nothing was cached", function () {
+    const { p, logs, records } = oauthProvider({}, tokenFetch({}));
+    p.invalidate("clinicOAuth", ctx(logs));
+    assert.equals(
+      records().filter((r) => r.event === "upstream.token.invalidated"),
+      [],
     );
   });
 });

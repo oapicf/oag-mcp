@@ -119,3 +119,47 @@ describe("redact - sanitizeError", function () {
     refute.contains(out.message, "leaky-secret-99");
   });
 });
+
+describe("redact - boundValue value kinds", function () {
+  it("should keep null, undefined, numbers and booleans, and stringify bigints", function () {
+    assert.equals(
+      boundValue({ a: null, b: undefined, c: 1.5, d: false, e: 12n }),
+      { a: null, b: undefined, c: 1.5, d: false, e: "12" },
+    );
+    assert.isNull(boundValue(null));
+  });
+
+  it("should name functions and symbols instead of copying them", function () {
+    assert.equals(boundValue({ f: () => 1, s: Symbol("x") }), {
+      f: "[function]",
+      s: "[symbol]",
+    });
+  });
+
+  it("should sanitise errors and write dates as ISO 8601", function () {
+    const reg = new SecretRegistry();
+    reg.add("error-secret-value");
+    const out = boundValue(
+      {
+        err: new TypeError("failed with error-secret-value"),
+        at: new Date(Date.UTC(2026, 0, 31, 12)),
+      },
+      { registry: reg },
+    ) as { err: { name: string; message: string }; at: string };
+    assert.equals(out.err.name, "TypeError");
+    refute.contains(out.err.message, "error-secret-value");
+    assert.equals(out.at, "2026-01-31T12:00:00.000Z");
+  });
+
+  it("should keep only the first keys of a large object", function () {
+    const big = Object.fromEntries(
+      Array.from({ length: 5 }, (_, i) => [`k${i}`, i]),
+    );
+    assert.equals(boundValue(big, { maxKeys: 3 }), {
+      k0: 0,
+      k1: 1,
+      k2: 2,
+      "…": "[more keys truncated]",
+    });
+  });
+});

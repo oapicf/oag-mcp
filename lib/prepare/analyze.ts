@@ -66,6 +66,84 @@ export function normaliseName(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+/** Class name -> method name -> binding. */
+type Bindings = Map<string, Map<string, ImplBinding>>;
+
+/** What a method body scan has found so far. */
+interface BindingScan {
+  httpMethod?: string;
+  pathInit?: ts.Expression;
+  variables: Map<string, ts.Expression>;
+}
+
+/** A property assignment with a plain or quoted name. */
+type NamedAssignment = ts.PropertyAssignment & {
+  name: ts.Identifier | ts.StringLiteral;
+};
+
+/** A class method with a plain name. */
+type NamedMethod = ts.MethodDeclaration & { name: ts.Identifier };
+
+/** The SDK declaration kinds that are rendered for agents. */
+type SdkDeclaration =
+  ts.InterfaceDeclaration | ts.TypeAliasDeclaration | ts.EnumDeclaration;
+
+/** A method parameter as written in the declarations. */
+interface Param {
+  name: string;
+  type: string;
+  optional: boolean;
+  node: ts.ParameterDeclaration;
+}
+
+/** How a method takes its arguments, and an example call's arguments. */
+interface RequestArgs {
+  requestStyle: AnalyzedMethod["requestStyle"];
+  inputType: TypeDeclaration | undefined;
+  requiredArguments: string[];
+  exampleArgs: string;
+}
+
+/** State shared while analysing the classes of every declaration file. */
+interface AnalyzeRun {
+  impl: Bindings;
+  hintsFor: (httpMethod: string, p: string) => ExampleHints;
+  found: Set<string>;
+  problems: string[];
+  methods: AnalyzedMethod[];
+}
+
+/** Implementation method suffixes, most authoritative first. */
+const BINDING_SOURCES: ReadonlyArray<ImplBinding["source"]> = [
+  "RequestOpts",
+  "Raw",
+];
+
+const HIDDEN_MODIFIERS =
+  ts.ModifierFlags.Private |
+  ts.ModifierFlags.Protected |
+  ts.ModifierFlags.Static;
+
+/** Example renderers for scalar types, by type flag. */
+const SCALAR_EXAMPLES: ReadonlyArray<{
+  flags: ts.TypeFlags;
+  render: (hint: unknown) => string;
+}> = [
+  {
+    flags: ts.TypeFlags.StringLike,
+    render: (hint) =>
+      JSON.stringify(typeof hint === "string" ? hint : "example"),
+  },
+  {
+    flags: ts.TypeFlags.NumberLike,
+    render: (hint) => (typeof hint === "number" ? String(hint) : "1"),
+  },
+  {
+    flags: ts.TypeFlags.BooleanLike,
+    render: (hint) => (typeof hint === "boolean" ? String(hint) : "true"),
+  },
+];
+
 /**
  * Reconstruct a string from a literal-ish expression.
  *
@@ -79,15 +157,7 @@ function _literalText(node: ts.Expression | undefined): string | undefined {
     return node.text;
   }
   if (ts.isTemplateExpression(node)) {
-    let out = node.head.text;
-    for (const span of node.templateSpans) {
-      const inner = _literalText(span.expression);
-      if (inner === undefined) {
-        return undefined;
-      }
-      out += inner + span.literal.text;
-    }
-    return out;
+    return _templateText(node);
   }
   if (
     ts.isCallExpression(node) &&
@@ -103,6 +173,101 @@ function _literalText(node: ts.Expression | undefined): string | undefined {
 }
 
 /**
+ * Reconstruct a template whose substitutions are all literal-ish.
+ *
+ * @private
+ */
+function _templateText(node: ts.TemplateExpression): string | undefined {
+  let out = node.head.text;
+  for (const span of node.templateSpans) {
+    const inner = _literalText(span.expression);
+    if (inner === undefined) {
+      return undefined;
+    }
+    out += inner + span.literal.text;
+  }
+  return out;
+}
+
+/**
+ * Whether a node is a property assignment with a plain or quoted name.
+ *
+ * @private
+ */
+function _isNamedAssignment(n: ts.Node): n is NamedAssignment {
+  return (
+    ts.isPropertyAssignment(n) &&
+    (ts.isIdentifier(n.name) || ts.isStringLiteral(n.name))
+  );
+}
+
+/**
+ * Remember the first initialiser of each local variable.
+ *
+ * @private
+ */
+function _noteVariable(n: ts.Node, scan: BindingScan): void {
+  if (
+    ts.isVariableDeclaration(n) &&
+    ts.isIdentifier(n.name) &&
+    n.initializer &&
+    !scan.variables.has(n.name.text)
+  ) {
+    scan.variables.set(n.name.text, n.initializer);
+  }
+}
+
+/**
+ * Take the first `method:` and `path:` properties.
+ *
+ * @private
+ */
+function _noteProperty(n: ts.Node, scan: BindingScan): void {
+  if (!_isNamedAssignment(n)) {
+    return;
+  }
+  if (n.name.text === "method" && scan.httpMethod === undefined) {
+    const text = _literalText(n.initializer);
+    if (text) {
+      scan.httpMethod = text.toUpperCase();
+    }
+  }
+  if (n.name.text === "path" && scan.pathInit === undefined) {
+    scan.pathInit = n.initializer;
+  }
+}
+
+/**
+ * Take a shorthand `path` property as the path.
+ *
+ * @private
+ */
+function _noteShorthand(n: ts.Node, scan: BindingScan): void {
+  if (
+    ts.isShorthandPropertyAssignment(n) &&
+    n.name.text === "path" &&
+    scan.pathInit === undefined
+  ) {
+    scan.pathInit = n.name;
+  }
+}
+
+/**
+ * The path text, following a variable the path property names.
+ *
+ * @private
+ */
+function _pathText(scan: BindingScan): string | undefined {
+  const init = scan.pathInit;
+  if (!init) {
+    return undefined;
+  }
+  return ts.isIdentifier(init)
+    ? _literalText(scan.variables.get(init.text))
+    : _literalText(init);
+}
+
+/**
  * Find the HTTP method and path built inside a method body.
  *
  * @private
@@ -111,51 +276,124 @@ function _extractBinding(body: ts.Node): {
   httpMethod?: string;
   path?: string;
 } {
-  let httpMethod: string | undefined;
-  let pathInit: ts.Expression | undefined;
-  const variables = new Map<string, ts.Expression>();
+  const scan: BindingScan = { variables: new Map() };
   const visit = (n: ts.Node) => {
-    if (
-      ts.isVariableDeclaration(n) &&
-      ts.isIdentifier(n.name) &&
-      n.initializer
-    ) {
-      if (!variables.has(n.name.text)) {
-        variables.set(n.name.text, n.initializer);
-      }
-    }
-    if (
-      ts.isPropertyAssignment(n) &&
-      (ts.isIdentifier(n.name) || ts.isStringLiteral(n.name))
-    ) {
-      const key = n.name.text;
-      if (key === "method" && httpMethod === undefined) {
-        const t = _literalText(n.initializer);
-        if (t) {
-          httpMethod = t.toUpperCase();
-        }
-      }
-      if (key === "path" && pathInit === undefined) {
-        pathInit = n.initializer;
-      }
-    }
-    if (
-      ts.isShorthandPropertyAssignment(n) &&
-      n.name.text === "path" &&
-      pathInit === undefined
-    ) {
-      pathInit = n.name;
-    }
+    _noteVariable(n, scan);
+    _noteProperty(n, scan);
+    _noteShorthand(n, scan);
     ts.forEachChild(n, visit);
   };
   visit(body);
-  let p: string | undefined;
-  if (pathInit) {
-    p = ts.isIdentifier(pathInit)
-      ? _literalText(variables.get(pathInit.text))
-      : _literalText(pathInit);
+  return { httpMethod: scan.httpMethod, path: _pathText(scan) };
+}
+
+/**
+ * The public method an implementation method builds the request for.
+ *
+ * @private
+ */
+function _bindingTarget(
+  name: string,
+): { base: string; source: ImplBinding["source"] } | undefined {
+  const source = BINDING_SOURCES.find((s) => name.endsWith(s));
+  const base = source ? name.slice(0, -source.length) : "";
+  return source && base ? { base, source } : undefined;
+}
+
+/**
+ * Record the binding an implementation method builds, if it builds one.
+ *
+ * @private
+ */
+function _recordBinding(
+  out: Bindings,
+  cls: string,
+  name: string,
+  body: ts.Node | undefined,
+): void {
+  const target = _bindingTarget(name);
+  if (!body || !target) {
+    return;
   }
-  return { httpMethod, path: p };
+  const { httpMethod, path: p } = _extractBinding(body);
+  if (!httpMethod || !p) {
+    return;
+  }
+  const methods = out.get(cls) ?? new Map<string, ImplBinding>();
+  const existing = methods.get(target.base);
+  // RequestOpts is authoritative when both are present.
+  if (!existing || existing.source === "Raw") {
+    methods.set(target.base, { httpMethod, path: p, source: target.source });
+  }
+  out.set(cls, methods);
+}
+
+/**
+ * Whether a class extends the generated runtime's BaseAPI.
+ *
+ * @private
+ */
+function _extendsBaseApi(n: ts.ClassDeclaration, sf: ts.SourceFile): boolean {
+  return (n.heritageClauses ?? []).some((h) =>
+    h.types.some((t) => /BaseAPI$/.test(t.expression.getText(sf))),
+  );
+}
+
+/**
+ * Record the bindings of an API class declaration's methods.
+ *
+ * @private
+ */
+function _scanClass(n: ts.Node, sf: ts.SourceFile, out: Bindings): void {
+  if (!ts.isClassDeclaration(n) || !n.name || !_extendsBaseApi(n, sf)) {
+    return;
+  }
+  const cls = n.name.text;
+  out.set(cls, out.get(cls) ?? new Map());
+  for (const m of n.members) {
+    if (ts.isMethodDeclaration(m) && ts.isIdentifier(m.name)) {
+      _recordBinding(out, cls, m.name.text, m.body);
+    }
+  }
+}
+
+/**
+ * The class and method an ES5 `Foo.prototype.bar` target names.
+ *
+ * @private
+ */
+function _prototypeMember(
+  left: ts.Expression,
+): { cls: string; name: string } | undefined {
+  if (
+    ts.isPropertyAccessExpression(left) &&
+    ts.isPropertyAccessExpression(left.expression) &&
+    left.expression.name.text === "prototype" &&
+    ts.isIdentifier(left.expression.expression)
+  ) {
+    return { cls: left.expression.expression.text, name: left.name.text };
+  }
+  return undefined;
+}
+
+/**
+ * Record the binding of an ES5 method assignment:
+ * `Foo.prototype.barRequestOpts = function () { ... }`.
+ *
+ * @private
+ */
+function _scanPrototypeAssignment(n: ts.Node, out: Bindings): void {
+  if (
+    !ts.isBinaryExpression(n) ||
+    n.operatorToken.kind !== ts.SyntaxKind.EqualsToken ||
+    !(ts.isFunctionExpression(n.right) || ts.isArrowFunction(n.right))
+  ) {
+    return;
+  }
+  const member = _prototypeMember(n.left);
+  if (member) {
+    _recordBinding(out, member.cls, member.name, n.right.body);
+  }
 }
 
 /**
@@ -164,10 +402,8 @@ function _extractBinding(body: ts.Node): {
  * @param {Array} files - implementation files under apis/
  * @return {Map} className -> methodName -> binding
  */
-export function scanImplementation(
-  files: string[],
-): Map<string, Map<string, ImplBinding>> {
-  const out = new Map<string, Map<string, ImplBinding>>();
+export function scanImplementation(files: string[]): Bindings {
+  const out: Bindings = new Map();
   for (const file of files) {
     const text = fs.readFileSync(file, "utf8");
     const sf = ts.createSourceFile(
@@ -177,68 +413,9 @@ export function scanImplementation(
       true,
       file.endsWith(".js") ? ts.ScriptKind.JS : ts.ScriptKind.TS,
     );
-    const record = (cls: string, name: string, body: ts.Node | undefined) => {
-      if (!body) {
-        return;
-      }
-      let base: string | undefined;
-      let source: ImplBinding["source"] | undefined;
-      if (name.endsWith("RequestOpts")) {
-        base = name.slice(0, -"RequestOpts".length);
-        source = "RequestOpts";
-      } else if (name.endsWith("Raw")) {
-        base = name.slice(0, -"Raw".length);
-        source = "Raw";
-      }
-      if (!base || !source) {
-        return;
-      }
-      const { httpMethod, path: p } = _extractBinding(body);
-      if (!httpMethod || !p) {
-        return;
-      }
-      const methods = out.get(cls) ?? new Map<string, ImplBinding>();
-      const existing = methods.get(base);
-      // RequestOpts is authoritative when both are present.
-      if (!existing || existing.source === "Raw") {
-        methods.set(base, { httpMethod, path: p, source });
-      }
-      out.set(cls, methods);
-    };
     const visit = (n: ts.Node) => {
-      if (ts.isClassDeclaration(n) && n.name) {
-        const extendsBase = (n.heritageClauses ?? []).some((h) =>
-          h.types.some((t) => /BaseAPI$/.test(t.expression.getText(sf))),
-        );
-        if (extendsBase) {
-          out.set(n.name.text, out.get(n.name.text) ?? new Map());
-          for (const m of n.members) {
-            if (
-              ts.isMethodDeclaration(m) &&
-              m.name &&
-              ts.isIdentifier(m.name)
-            ) {
-              record(n.name.text, m.name.text, m.body);
-            }
-          }
-        }
-      }
-      // ES5 output: Foo.prototype.barRequestOpts = function () { ... }
-      if (
-        ts.isBinaryExpression(n) &&
-        n.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-        ts.isPropertyAccessExpression(n.left) &&
-        ts.isPropertyAccessExpression(n.left.expression) &&
-        n.left.expression.name.text === "prototype" &&
-        ts.isIdentifier(n.left.expression.expression) &&
-        (ts.isFunctionExpression(n.right) || ts.isArrowFunction(n.right))
-      ) {
-        record(
-          n.left.expression.expression.text,
-          n.left.name.text,
-          n.right.body,
-        );
-      }
+      _scanClass(n, sf, out);
+      _scanPrototypeAssignment(n, out);
       ts.forEachChild(n, visit);
     };
     visit(sf);
@@ -253,6 +430,94 @@ export function scanImplementation(
  */
 function _compact(text: string): string {
   return text.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Whether a declaration is of a kind rendered for agents.
+ *
+ * @private
+ */
+function _isRenderable(d: ts.Declaration): d is SdkDeclaration {
+  return (
+    ts.isInterfaceDeclaration(d) ||
+    ts.isTypeAliasDeclaration(d) ||
+    ts.isEnumDeclaration(d)
+  );
+}
+
+/**
+ * Whether a class member is a public, non-implementation API method.
+ *
+ * @private
+ */
+function _isApiMethod(m: ts.ClassElement): m is NamedMethod {
+  if (!ts.isMethodDeclaration(m) || !ts.isIdentifier(m.name)) {
+    return false;
+  }
+  const name = m.name.text;
+  return (
+    !(ts.getCombinedModifierFlags(m) & HIDDEN_MODIFIERS) &&
+    !BINDING_SOURCES.some((s) => name.endsWith(s))
+  );
+}
+
+/**
+ * Describe a method parameter.
+ *
+ * @private
+ */
+function _param(p: ts.ParameterDeclaration, sf: ts.SourceFile): Param {
+  return {
+    name: p.name.getText(sf),
+    type: p.type ? _compact(p.type.getText(sf)) : "any",
+    optional: Boolean(p.questionToken || p.initializer),
+    node: p,
+  };
+}
+
+/**
+ * Example hints keyed by normalised property name.
+ *
+ * @private
+ */
+function _hintsByName(hint: unknown): Map<string, unknown> {
+  const h =
+    hint && typeof hint === "object" ? (hint as Record<string, unknown>) : {};
+  return new Map(Object.entries(h).map(([k, v]) => [normaliseName(k), v]));
+}
+
+/**
+ * The names of a type's required properties.
+ *
+ * @private
+ */
+function _requiredProperties(type: ts.Type): string[] {
+  return type
+    .getProperties()
+    .filter((s) => !(s.flags & ts.SymbolFlags.Optional))
+    .map((s) => s.name);
+}
+
+/**
+ * The type nodes whose SDK declarations a method's documentation shows.
+ *
+ * @private
+ */
+function _typeRoots(apiParams: Param[], m: ts.MethodDeclaration): ts.Node[] {
+  return [...apiParams.map((p) => p.node.type), m.type].filter(
+    (t): t is ts.TypeNode => t !== undefined,
+  );
+}
+
+/**
+ * The example body that calls a method and returns its result.
+ *
+ * @private
+ */
+function _exampleBody(call: string, returnType: string): string {
+  return /Promise<void>/.test(returnType)
+    ? `await ${call};\nreturn { done: true };`
+    : `const result = await ${call};\nreturn result;`;
 }
 
 /**
@@ -277,17 +542,23 @@ export class SdkAnalyzer {
   }
 
   /**
+   * Whether a file is one of the SDK's declaration files.
+   *
+   * @private
+   */
+  private _isSdkFile(fileName: string): boolean {
+    return path.resolve(fileName).startsWith(this.typesDir + path.sep);
+  }
+
+  /**
    * Whether a declaration belongs to the SDK (not lib, not the runtime
    * module).
    *
    * @private
    */
   private _isSdkDecl(decl: ts.Declaration): boolean {
-    const file = path.resolve(decl.getSourceFile().fileName);
-    return (
-      file.startsWith(this.typesDir + path.sep) &&
-      !/[\\/]runtime\.d\.ts$/.test(file)
-    );
+    const file = decl.getSourceFile().fileName;
+    return this._isSdkFile(file) && !/[\\/]runtime\.d\.ts$/.test(file);
   }
 
   /**
@@ -295,17 +566,46 @@ export class SdkAnalyzer {
    *
    * @private
    */
-  private _resolveRef(node: ts.TypeReferenceNode): ts.Declaration[] {
+  private _resolveRef(node: ts.TypeReferenceNode): SdkDeclaration[] {
     let sym = this.checker.getSymbolAtLocation(node.typeName);
     if (sym && sym.flags & ts.SymbolFlags.Alias) {
       sym = this.checker.getAliasedSymbol(sym);
     }
     return (sym?.declarations ?? []).filter(
-      (d) =>
-        (ts.isInterfaceDeclaration(d) ||
-          ts.isTypeAliasDeclaration(d) ||
-          ts.isEnumDeclaration(d)) &&
-        this._isSdkDecl(d),
+      (d): d is SdkDeclaration => _isRenderable(d) && this._isSdkDecl(d),
+    );
+  }
+
+  /**
+   * The documentation comment of the symbol a name refers to.
+   *
+   * @private
+   */
+  private _docOf(name: ts.Node | undefined): string {
+    const sym = name ? this.checker.getSymbolAtLocation(name) : undefined;
+    return ts.displayPartsToString(sym?.getDocumentationComment(this.checker));
+  }
+
+  /**
+   * The type of a property symbol, when it has a declaration to read it from.
+   *
+   * @private
+   */
+  private _propertyType(p: ts.Symbol): ts.Type | undefined {
+    const decl = p.valueDeclaration ?? p.declarations?.[0];
+    return decl ? this.checker.getTypeOfSymbolAtLocation(p, decl) : undefined;
+  }
+
+  /**
+   * Whether a type is an object type other than an array.
+   *
+   * @private
+   */
+  private _isPlainObject(t: ts.Type | undefined): boolean {
+    return (
+      t !== undefined &&
+      Boolean(t.flags & ts.TypeFlags.Object) &&
+      !this.checker.isArrayType(t)
     );
   }
 
@@ -314,58 +614,71 @@ export class SdkAnalyzer {
    *
    * @private
    */
-  private _render(decl: ts.Declaration): TypeDeclaration | undefined {
-    const sf = decl.getSourceFile();
+  private _render(decl: SdkDeclaration): TypeDeclaration {
     if (ts.isInterfaceDeclaration(decl)) {
-      const lines: string[] = [];
-      const heritage = decl.heritageClauses
-        ? ` ${decl.heritageClauses.map((h) => h.getText(sf)).join(" ")}`
-        : "";
-      lines.push(`interface ${decl.name.text}${heritage} {`);
-      decl.members.slice(0, MAX_MEMBERS).forEach((m) => {
-        const sym = m.name
-          ? this.checker.getSymbolAtLocation(m.name)
-          : undefined;
-        const doc = sym
-          ? _compact(
-              ts.displayPartsToString(
-                sym.getDocumentationComment(this.checker),
-              ),
-            )
-          : "";
-        const text = _compact(
-          this.printer.printNode(ts.EmitHint.Unspecified, m, sf),
-        );
-        lines.push(`  ${text}${doc ? ` // ${doc.slice(0, 160)}` : ""}`);
-      });
-      if (decl.members.length > MAX_MEMBERS) {
-        lines.push(`  // … ${decl.members.length - MAX_MEMBERS} more members`);
-      }
-      lines.push("}");
-      return { name: decl.name.text, declaration: lines.join("\n") };
+      return this._renderInterface(decl);
     }
     if (ts.isTypeAliasDeclaration(decl)) {
-      const type = this.checker.getTypeAtLocation(decl.name);
-      let body: string;
-      if (type.isUnion() && type.types.every((t) => t.isLiteral())) {
-        body = type.types.map((t) => this.checker.typeToString(t)).join(" | ");
-      } else {
-        body = _compact(decl.type.getText(sf));
-      }
-      return {
-        name: decl.name.text,
-        declaration: `type ${decl.name.text} = ${body};`,
-      };
+      return this._renderAlias(decl);
     }
-    if (ts.isEnumDeclaration(decl)) {
-      return {
-        name: decl.name.text,
-        declaration: this.printer
-          .printNode(ts.EmitHint.Unspecified, decl, sf)
-          .trim(),
-      };
-    }
-    return undefined;
+    return {
+      name: decl.name.text,
+      declaration: this.printer
+        .printNode(ts.EmitHint.Unspecified, decl, decl.getSourceFile())
+        .trim(),
+    };
+  }
+
+  /**
+   * Render an interface, one documented member per line.
+   *
+   * @private
+   */
+  private _renderInterface(decl: ts.InterfaceDeclaration): TypeDeclaration {
+    const sf = decl.getSourceFile();
+    const heritage = decl.heritageClauses
+      ? ` ${decl.heritageClauses.map((h) => h.getText(sf)).join(" ")}`
+      : "";
+    const hidden = decl.members.length - MAX_MEMBERS;
+    const lines = [
+      `interface ${decl.name.text}${heritage} {`,
+      ...decl.members
+        .slice(0, MAX_MEMBERS)
+        .map((m) => `  ${this._renderMember(m, sf)}`),
+      ...(hidden > 0 ? [`  // … ${hidden} more members`] : []),
+      "}",
+    ];
+    return { name: decl.name.text, declaration: lines.join("\n") };
+  }
+
+  /**
+   * Render an interface member with its documentation as a comment.
+   *
+   * @private
+   */
+  private _renderMember(m: ts.TypeElement, sf: ts.SourceFile): string {
+    const doc = _compact(this._docOf(m.name));
+    const text = _compact(
+      this.printer.printNode(ts.EmitHint.Unspecified, m, sf),
+    );
+    return `${text}${doc ? ` // ${doc.slice(0, 160)}` : ""}`;
+  }
+
+  /**
+   * Render a type alias, spelling out a union of literals.
+   *
+   * @private
+   */
+  private _renderAlias(decl: ts.TypeAliasDeclaration): TypeDeclaration {
+    const type = this.checker.getTypeAtLocation(decl.name);
+    const body =
+      type.isUnion() && type.types.every((t) => t.isLiteral())
+        ? type.types.map((t) => this.checker.typeToString(t)).join(" | ")
+        : _compact(decl.type.getText(decl.getSourceFile()));
+    return {
+      name: decl.name.text,
+      declaration: `type ${decl.name.text} = ${body};`,
+    };
   }
 
   /**
@@ -386,14 +699,11 @@ export class SdkAnalyzer {
       const visit = (n: ts.Node) => {
         if (ts.isTypeReferenceNode(n)) {
           for (const decl of this._resolveRef(n)) {
-            const name = (decl as ts.InterfaceDeclaration).name.text;
+            const name = decl.name.text;
             if (!seen.has(name) && out.length < MAX_REFERENCED_TYPES) {
               seen.add(name);
-              const rendered = this._render(decl);
-              if (rendered) {
-                out.push(rendered);
-                next.push(decl);
-              }
+              out.push(this._render(decl));
+              next.push(decl);
             }
           }
         }
@@ -411,65 +721,88 @@ export class SdkAnalyzer {
    * @private
    */
   private _example(type: ts.Type, hint: unknown, depth: number): string {
-    const c = this.checker;
-    const str = c.typeToString(type);
-    if (type.isUnion()) {
-      const nonNull = type.types.filter(
-        (t) => !(t.flags & (ts.TypeFlags.Undefined | ts.TypeFlags.Null)),
-      );
-      const literals = nonNull.filter((t) => t.isLiteral());
-      if (
-        hint !== undefined &&
-        literals.some((t) => (t as ts.LiteralType).value === hint)
-      ) {
-        return JSON.stringify(hint);
-      }
-      if (literals.length > 0) {
-        return c.typeToString(literals[0]);
-      }
-      if (nonNull.length > 0) {
-        return this._example(nonNull[0], hint, depth);
-      }
+    const fromUnion = type.isUnion()
+      ? this._unionExample(type, hint, depth)
+      : undefined;
+    return (
+      fromUnion ??
+      SCALAR_EXAMPLES.find((s) => type.flags & s.flags)?.render(hint) ??
+      this._structuredExample(type, hint, depth)
+    );
+  }
+
+  /**
+   * Example for a union: the hinted literal, the first literal, or an
+   * example of the first non-null member.
+   *
+   * @private
+   */
+  private _unionExample(
+    type: ts.UnionType,
+    hint: unknown,
+    depth: number,
+  ): string | undefined {
+    const nonNull = type.types.filter(
+      (t) => !(t.flags & (ts.TypeFlags.Undefined | ts.TypeFlags.Null)),
+    );
+    const literals = nonNull.filter((t) => t.isLiteral());
+    if (
+      hint !== undefined &&
+      literals.some((t) => (t as ts.LiteralType).value === hint)
+    ) {
+      return JSON.stringify(hint);
     }
-    if (type.flags & ts.TypeFlags.StringLike) {
-      return JSON.stringify(typeof hint === "string" ? hint : "example");
+    if (literals.length > 0) {
+      return this.checker.typeToString(literals[0]);
     }
-    if (type.flags & ts.TypeFlags.NumberLike) {
-      return typeof hint === "number" ? String(hint) : "1";
-    }
-    if (type.flags & ts.TypeFlags.BooleanLike) {
-      return typeof hint === "boolean" ? String(hint) : "true";
-    }
-    if (str === "Date") {
+    // Under the SDK program's non-strict checking a union has no null or
+    // undefined members; the filter guards a stricter configuration.
+    const [first] = nonNull;
+    return first && this._example(first, hint, depth);
+  }
+
+  /**
+   * Example for a date, array or object type.
+   *
+   * @private
+   */
+  private _structuredExample(
+    type: ts.Type,
+    hint: unknown,
+    depth: number,
+  ): string {
+    if (this.checker.typeToString(type) === "Date") {
       return `new Date(${JSON.stringify(typeof hint === "string" ? hint : "2026-01-31")})`;
     }
-    if (c.isArrayType(type)) {
-      const [elem] = c.getTypeArguments(type as ts.TypeReference);
+    if (this.checker.isArrayType(type)) {
+      const [elem] = this.checker.getTypeArguments(type as ts.TypeReference);
       const h = Array.isArray(hint) ? hint[0] : undefined;
       return elem ? `[${this._example(elem, h, depth + 1)}]` : "[]";
     }
     if (type.flags & ts.TypeFlags.Object && depth < 3) {
-      const props = type
-        .getProperties()
-        .filter((p) => !(p.flags & ts.SymbolFlags.Optional));
-      if (props.length === 0) {
-        return "{}";
-      }
-      const h =
-        hint && typeof hint === "object"
-          ? (hint as Record<string, unknown>)
-          : {};
-      const hintByName = new Map(
-        Object.entries(h).map(([k, v]) => [normaliseName(k), v]),
-      );
-      const parts = props.slice(0, 12).map((p) => {
-        const decl = p.valueDeclaration ?? p.declarations?.[0];
-        const pt = decl ? c.getTypeOfSymbolAtLocation(p, decl) : c.getAnyType();
-        return `${p.name}: ${this._example(pt, hintByName.get(normaliseName(p.name)), depth + 1)}`;
-      });
-      return `{ ${parts.join(", ")} }`;
+      return this._objectExample(type, hint, depth);
     }
     return "undefined";
+  }
+
+  /**
+   * Example object literal with the type's required properties.
+   *
+   * @private
+   */
+  private _objectExample(type: ts.Type, hint: unknown, depth: number): string {
+    const props = type
+      .getProperties()
+      .filter((p) => !(p.flags & ts.SymbolFlags.Optional));
+    if (props.length === 0) {
+      return "{}";
+    }
+    const hintByName = _hintsByName(hint);
+    const parts = props.slice(0, 12).map((p) => {
+      const pt = this._propertyType(p) ?? this.checker.getAnyType();
+      return `${p.name}: ${this._example(pt, hintByName.get(normaliseName(p.name)), depth + 1)}`;
+    });
+    return `{ ${parts.join(", ")} }`;
   }
 
   /**
@@ -480,88 +813,78 @@ export class SdkAnalyzer {
    * @return {Array} analysed methods
    */
   analyze(
-    impl: Map<string, Map<string, ImplBinding>>,
+    impl: Bindings,
     hintsFor: (httpMethod: string, p: string) => ExampleHints,
   ): AnalyzedMethod[] {
-    const methods: AnalyzedMethod[] = [];
-    const problems: string[] = [];
-    const found = new Set<string>();
+    const run: AnalyzeRun = {
+      impl,
+      hintsFor,
+      found: new Set(),
+      problems: [],
+      methods: [],
+    };
     for (const sf of this.program.getSourceFiles()) {
-      if (!path.resolve(sf.fileName).startsWith(this.typesDir + path.sep)) {
-        continue;
+      if (this._isSdkFile(sf.fileName)) {
+        ts.forEachChild(sf, (node) => this._analyzeClass(sf, node, run));
       }
-      ts.forEachChild(sf, (node) => {
-        if (!ts.isClassDeclaration(node) || !node.name) {
-          return;
-        }
-        const cls = node.name.text;
-        const bindings = impl.get(cls);
-        if (!bindings) {
-          return;
-        }
-        found.add(cls);
-        for (const m of node.members) {
-          if (
-            !ts.isMethodDeclaration(m) ||
-            !m.name ||
-            !ts.isIdentifier(m.name)
-          ) {
-            continue;
-          }
-          const name = m.name.text;
-          const mods = ts.getCombinedModifierFlags(m);
-          if (
-            mods &
-              (ts.ModifierFlags.Private |
-                ts.ModifierFlags.Protected |
-                ts.ModifierFlags.Static) ||
-            name.endsWith("Raw") ||
-            name.endsWith("RequestOpts")
-          ) {
-            continue;
-          }
-          const binding = bindings.get(name);
-          if (!binding) {
-            problems.push(
-              `${cls}.${name}: no HTTP method/path found in its RequestOpts/Raw implementation`,
-            );
-            continue;
-          }
-          methods.push(
-            this._method(
-              sf,
-              cls,
-              name,
-              m,
-              binding,
-              hintsFor(binding.httpMethod, binding.path),
-            ),
-          );
-        }
-      });
     }
     for (const cls of impl.keys()) {
-      if (!found.has(cls)) {
-        problems.push(
+      if (!run.found.has(cls)) {
+        run.problems.push(
           `${cls}: implementation found but no matching class in declarations`,
         );
       }
     }
-    if (problems.length > 0) {
+    if (run.problems.length > 0) {
       throw new OagMcpError(
         "SDK_BINDING_AMBIGUOUS",
-        `Could not reliably map SDK methods to HTTP operations: ${problems.slice(0, 5).join("; ")}`,
+        `Could not reliably map SDK methods to HTTP operations: ${run.problems.slice(0, 5).join("; ")}`,
         {
           hint: "The SDK may have been modified after generation, or generated by an unsupported version. Regenerate it with a supported OpenAPI Generator version.",
-          details: { problems },
+          details: { problems: run.problems },
         },
       );
     }
-    return methods.sort((a, b) =>
+    return run.methods.sort((a, b) =>
       `${a.className}.${a.methodName}`.localeCompare(
         `${b.className}.${b.methodName}`,
       ),
     );
+  }
+
+  /**
+   * Analyse the public methods of a declared class that has bindings.
+   *
+   * @private
+   */
+  private _analyzeClass(sf: ts.SourceFile, node: ts.Node, run: AnalyzeRun) {
+    if (!ts.isClassDeclaration(node) || !node.name) {
+      return;
+    }
+    const cls = node.name.text;
+    const bindings = run.impl.get(cls);
+    if (!bindings) {
+      return;
+    }
+    run.found.add(cls);
+    for (const m of node.members.filter(_isApiMethod)) {
+      const binding = bindings.get(m.name.text);
+      if (binding) {
+        run.methods.push(
+          this._method(
+            sf,
+            cls,
+            m,
+            binding,
+            run.hintsFor(binding.httpMethod, binding.path),
+          ),
+        );
+      } else {
+        run.problems.push(
+          `${cls}.${m.name.text}: no HTTP method/path found in its RequestOpts/Raw implementation`,
+        );
+      }
+    }
   }
 
   /**
@@ -572,106 +895,114 @@ export class SdkAnalyzer {
   private _method(
     sf: ts.SourceFile,
     cls: string,
-    name: string,
-    m: ts.MethodDeclaration,
+    m: NamedMethod,
     binding: ImplBinding,
     hints: ExampleHints,
   ): AnalyzedMethod {
-    const c = this.checker;
-    const signature = _compact(
-      this.printer.printNode(ts.EmitHint.Unspecified, m, sf),
-    ).replace(/;$/, "");
-    const params = m.parameters.map((p) => ({
-      name: p.name.getText(sf),
-      type: p.type ? _compact(p.type.getText(sf)) : "any",
-      optional: Boolean(p.questionToken || p.initializer),
-      node: p,
-    }));
+    const name = m.name.text;
+    const params = m.parameters.map((p) => _param(p, sf));
     const apiParams = params.filter((p) => p.name !== "initOverrides");
-    const sym = c.getSymbolAtLocation(m.name);
-    const documentation = sym
-      ? ts.displayPartsToString(sym.getDocumentationComment(c)).trim()
-      : "";
-    const deprecated = ts
-      .getJSDocTags(m)
-      .some((t) => t.tagName.text === "deprecated");
     const returnType = m.type
       ? _compact(m.type.getText(sf))
       : "Promise<unknown>";
-    let requestStyle: AnalyzedMethod["requestStyle"] = "none";
-    let inputType: TypeDeclaration | undefined;
-    let requiredArguments: string[] = [];
-    let exampleArgs = "";
-    if (apiParams.length === 1 && apiParams[0].name === "requestParameters") {
-      requestStyle = "object";
-      const p = apiParams[0];
-      const t = c.getTypeAtLocation(p.node);
-      const nonNull = c.getNonNullableType(t);
-      requiredArguments = nonNull
-        .getProperties()
-        .filter((s) => !(s.flags & ts.SymbolFlags.Optional))
-        .map((s) => s.name);
-      if (p.node.type && ts.isTypeReferenceNode(p.node.type)) {
-        const decl = this._resolveRef(p.node.type)[0];
-        inputType = decl ? this._render(decl) : undefined;
-      }
-      exampleArgs = this._example(nonNull, this._hintObject(nonNull, hints), 0);
-      if (exampleArgs === "{}" && p.optional) {
-        exampleArgs = "{}";
-      }
-    } else if (apiParams.length > 0) {
-      requestStyle = "positional";
-      requiredArguments = apiParams
-        .filter((p) => !p.optional)
-        .map((p) => p.name);
-      exampleArgs = apiParams
-        .filter((p) => !p.optional)
-        .map((p) => {
-          const t = c.getTypeAtLocation(p.node);
-          const isObject =
-            Boolean(t.flags & ts.TypeFlags.Object) && !c.isArrayType(t);
-          const hint =
-            hints[normaliseName(p.name)] ??
-            (isObject ? hints.__body : undefined);
-          return this._example(t, hint, 0);
-        })
-        .join(", ");
-    }
-    const typeRoots: ts.Node[] = [];
-    for (const p of apiParams) {
-      if (p.node.type) {
-        typeRoots.push(p.node.type);
-      }
-    }
-    if (m.type) {
-      typeRoots.push(m.type);
-    }
-    const referencedTypes = this._collectTypes(typeRoots);
-    const call = `sdk.${cls}.${name}(${exampleArgs})`;
-    const example = /Promise<void>/.test(returnType)
-      ? `await ${call};\nreturn { done: true };`
-      : `const result = await ${call};\nreturn result;`;
+    const args = this._requestArgs(apiParams, hints);
+    const referencedTypes = this._collectTypes(_typeRoots(apiParams, m));
     return {
       className: cls,
       methodName: name,
       httpMethod: binding.httpMethod,
       path: binding.path,
-      signature,
+      signature: _compact(
+        this.printer.printNode(ts.EmitHint.Unspecified, m, sf),
+      ).replace(/;$/, ""),
       parameters: params.map(({ name: n, type, optional }) => ({
         name: n,
         type,
         optional,
       })),
-      requestStyle,
-      inputType,
+      requestStyle: args.requestStyle,
+      inputType: args.inputType,
       returnType,
-      referencedTypes: inputType
-        ? referencedTypes.filter((t) => t.name !== inputType!.name)
-        : referencedTypes,
-      requiredArguments,
-      documentation,
-      deprecated,
-      example,
+      referencedTypes: referencedTypes.filter(
+        (t) => t.name !== args.inputType?.name,
+      ),
+      requiredArguments: args.requiredArguments,
+      documentation: this._docOf(m.name).trim(),
+      deprecated: ts
+        .getJSDocTags(m)
+        .some((t) => t.tagName.text === "deprecated"),
+      example: _exampleBody(
+        `sdk.${cls}.${name}(${args.exampleArgs})`,
+        returnType,
+      ),
+    };
+  }
+
+  /**
+   * How a method takes its arguments: one request object, positional
+   * arguments, or none.
+   *
+   * @private
+   */
+  private _requestArgs(apiParams: Param[], hints: ExampleHints): RequestArgs {
+    if (apiParams.length === 1 && apiParams[0].name === "requestParameters") {
+      return this._objectArgs(apiParams[0], hints);
+    }
+    if (apiParams.length > 0) {
+      return this._positionalArgs(apiParams, hints);
+    }
+    return {
+      requestStyle: "none",
+      inputType: undefined,
+      requiredArguments: [],
+      exampleArgs: "",
+    };
+  }
+
+  /**
+   * Arguments of a method taking a single request object.
+   *
+   * @private
+   */
+  private _objectArgs(p: Param, hints: ExampleHints): RequestArgs {
+    const type = this.checker.getNonNullableType(
+      this.checker.getTypeAtLocation(p.node),
+    );
+    const ref =
+      p.node.type && ts.isTypeReferenceNode(p.node.type)
+        ? this._resolveRef(p.node.type)[0]
+        : undefined;
+    return {
+      requestStyle: "object",
+      inputType: ref ? this._render(ref) : undefined,
+      requiredArguments: _requiredProperties(type),
+      exampleArgs: this._example(type, this._hintObject(type, hints), 0),
+    };
+  }
+
+  /**
+   * Arguments of a method taking positional parameters.
+   *
+   * @private
+   */
+  private _positionalArgs(
+    apiParams: Param[],
+    hints: ExampleHints,
+  ): RequestArgs {
+    const required = apiParams.filter((p) => !p.optional);
+    return {
+      requestStyle: "positional",
+      inputType: undefined,
+      requiredArguments: required.map((p) => p.name),
+      exampleArgs: required
+        .map((p) => {
+          const t = this.checker.getTypeAtLocation(p.node);
+          const hint =
+            hints[normaliseName(p.name)] ??
+            (this._isPlainObject(t) ? hints.__body : undefined);
+          return this._example(t, hint, 0);
+        })
+        .join(", "),
     };
   }
 
@@ -689,19 +1020,12 @@ export class SdkAnalyzer {
       const h = hints[normaliseName(p.name)];
       if (h !== undefined) {
         out[p.name] = h;
-      } else if (hints.__body !== undefined) {
+      } else if (
+        hints.__body !== undefined &&
         // The body parameter is usually the only object-typed property.
-        const decl = p.valueDeclaration ?? p.declarations?.[0];
-        const pt = decl
-          ? this.checker.getTypeOfSymbolAtLocation(p, decl)
-          : undefined;
-        if (
-          pt &&
-          pt.flags & ts.TypeFlags.Object &&
-          !this.checker.isArrayType(pt)
-        ) {
-          out[p.name] = hints.__body;
-        }
+        this._isPlainObject(this._propertyType(p))
+      ) {
+        out[p.name] = hints.__body;
       }
     }
     return out;

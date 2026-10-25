@@ -68,6 +68,35 @@ export function mapDiagnostic(d: ts.Diagnostic): Diagnostic | undefined {
   };
 }
 
+/** Module-loading constructs agent code may not use, and how to name them. */
+const MODULE_LOADERS: ReadonlyArray<[(n: ts.Node) => boolean, string]> = [
+  [
+    (n) =>
+      ts.isCallExpression(n) &&
+      n.expression.kind === ts.SyntaxKind.ImportKeyword,
+    "dynamic import()",
+  ],
+  [
+    (n) =>
+      ts.isMetaProperty(n) && n.keywordToken === ts.SyntaxKind.ImportKeyword,
+    "import.meta",
+  ],
+  [
+    (n) =>
+      ts.isCallExpression(n) &&
+      ts.isIdentifier(n.expression) &&
+      n.expression.text === "require",
+    "require()",
+  ],
+  [
+    (n) =>
+      ts.isImportDeclaration(n) ||
+      ts.isImportEqualsDeclaration(n) ||
+      (ts.isExportDeclaration(n) && Boolean(n.moduleSpecifier)),
+    "module import",
+  ],
+];
+
 /**
  * Find module-loading constructs in agent code.
  *
@@ -87,33 +116,14 @@ export function findViolations(
     language === "typescript" ? ts.ScriptKind.TS : ts.ScriptKind.JS,
   );
   const out: string[] = [];
-  const where = (n: ts.Node) =>
-    sf.getLineAndCharacterOfPosition(n.getStart(sf)).line +
-    1 -
-    WRAPPER_HEADER_LINES;
   const visit = (n: ts.Node) => {
-    if (
-      ts.isCallExpression(n) &&
-      n.expression.kind === ts.SyntaxKind.ImportKeyword
-    ) {
-      out.push(`dynamic import() at line ${where(n)}`);
-    } else if (
-      ts.isMetaProperty(n) &&
-      n.keywordToken === ts.SyntaxKind.ImportKeyword
-    ) {
-      out.push(`import.meta at line ${where(n)}`);
-    } else if (
-      ts.isCallExpression(n) &&
-      ts.isIdentifier(n.expression) &&
-      n.expression.text === "require"
-    ) {
-      out.push(`require() at line ${where(n)}`);
-    } else if (
-      ts.isImportDeclaration(n) ||
-      ts.isImportEqualsDeclaration(n) ||
-      (ts.isExportDeclaration(n) && n.moduleSpecifier)
-    ) {
-      out.push(`module import at line ${where(n)}`);
+    const loader = MODULE_LOADERS.find(([matches]) => matches(n));
+    if (loader) {
+      const line =
+        sf.getLineAndCharacterOfPosition(n.getStart(sf)).line +
+        1 -
+        WRAPPER_HEADER_LINES;
+      out.push(`${loader[1]} at line ${line}`);
     }
     ts.forEachChild(n, visit);
   };

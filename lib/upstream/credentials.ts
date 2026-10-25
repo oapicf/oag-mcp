@@ -54,6 +54,22 @@ interface ResolvedScheme {
   tokenUrl?: string;
 }
 
+/** The supported ways of presenting a credential. */
+type SchemeKind = "apiKey" | "basic" | "bearer" | "oauth2";
+
+/** Configuration fields that hold secret references. */
+type SecretField =
+  "apiKey" | "username" | "password" | "token" | "clientId" | "clientSecret";
+
+/** Audit events of a token request. */
+type TokenEvent = "upstream.token.issue" | "upstream.token.refresh";
+
+/** A client credentials token request. */
+interface TokenForm {
+  headers: Record<string, string>;
+  body: URLSearchParams;
+}
+
 /** Options for {@link ServiceIdentityCredentialProvider}. */
 export interface ServiceIdentityOptions {
   schemes: Record<string, UpstreamSchemeConfig>;
@@ -78,6 +94,103 @@ function _secureUrl(u: URL): boolean {
     u.protocol === "https:" ||
     ["127.0.0.1", "localhost", "[::1]", "::1"].includes(u.hostname)
   );
+}
+
+/**
+ * How a security scheme presents its credential, when it is supported.
+ *
+ * @private
+ */
+function _schemeKind(info: SecuritySchemeInfo): SchemeKind | undefined {
+  if (info.type === "apiKey" || info.type === "oauth2") {
+    return info.type;
+  }
+  if (
+    info.type === "http" &&
+    (info.scheme === "basic" || info.scheme === "bearer")
+  ) {
+    return info.scheme;
+  }
+  return undefined;
+}
+
+/**
+ * The form and headers of a client credentials token request.
+ *
+ * @private
+ */
+function _tokenForm(r: ResolvedScheme, scopes: string[]): TokenForm {
+  const body = new URLSearchParams({ grant_type: "client_credentials" });
+  if (scopes.length > 0) {
+    body.set("scope", scopes.join(" "));
+  }
+  if (r.config.audience) {
+    body.set("audience", r.config.audience);
+  }
+  const headers: Record<string, string> = {
+    "content-type": "application/x-www-form-urlencoded",
+    accept: "application/json",
+  };
+  if (
+    (r.config.clientAuthMethod ?? "client_secret_basic") ===
+    "client_secret_basic"
+  ) {
+    headers.authorization = `Basic ${Buffer.from(
+      `${encodeURIComponent(r.clientId!)}:${encodeURIComponent(r.clientSecret!)}`,
+    ).toString("base64")}`;
+  } else {
+    body.set("client_id", r.clientId!);
+    body.set("client_secret", r.clientSecret!);
+  }
+  return { headers, body };
+}
+
+/**
+ * A token response's JSON object; empty when the body is not one.
+ *
+ * @private
+ */
+async function _readTokenJson(res: Response): Promise<Record<string, unknown>> {
+  try {
+    const json: unknown = await res.json();
+    return json && typeof json === "object" && !Array.isArray(json)
+      ? (json as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Why a token response is unusable, if it is.
+ *
+ * @private
+ */
+function _tokenRejection(
+  res: Response,
+  token: string,
+  json: Record<string, unknown>,
+): string | undefined {
+  if (!res.ok) {
+    return "token_endpoint_error";
+  }
+  if (!token) {
+    return "no_access_token";
+  }
+  return String(json.token_type ?? "bearer").toLowerCase() === "bearer"
+    ? undefined
+    : "unsupported_token_type";
+}
+
+/**
+ * The token lifetime in seconds, defaulting to five minutes.
+ *
+ * @private
+ */
+function _expiresIn(json: Record<string, unknown>): number {
+  return typeof json.expires_in === "number" && json.expires_in > 0
+    ? json.expires_in
+    : 300;
 }
 
 /**
@@ -147,42 +260,70 @@ export class ServiceIdentityCredentialProvider implements CredentialProvider {
     info: SecuritySchemeInfo,
     config: UpstreamSchemeConfig,
   ): ResolvedScheme {
-    const r = this.opts.resolver;
-    const reg = this.opts.registry;
-    const need = (field: keyof UpstreamSchemeConfig) => {
-      const ref = config[field];
-      if (!ref || typeof ref !== "object" || Array.isArray(ref)) {
-        throw new Error(`missing "${String(field)}" for ${info.type} scheme`);
-      }
-      const v = r.resolve(ref as never, `${name}.${String(field)}`);
-      reg.add(v);
-      return v;
-    };
+    const need = (field: SecretField) =>
+      this._secret(name, info, config, field);
     const out: ResolvedScheme = { info, config };
-    if (info.type === "apiKey") {
-      out.apiKey = need("apiKey");
-    } else if (info.type === "http" && info.scheme === "basic") {
-      out.username = need("username");
-      out.password = need("password");
-      reg.add(`${out.username}:${out.password}`);
-    } else if (info.type === "http" && info.scheme === "bearer") {
-      out.token = need("token");
-    } else if (info.type === "oauth2") {
-      out.clientId = need("clientId");
-      out.clientSecret = need("clientSecret");
-      reg.add(`${out.clientId}:${out.clientSecret}`);
-      const tokenUrl = new URL(
-        config.tokenUrl ?? info.tokenUrl ?? "",
-        this.opts.baseUrl,
-      );
-      if (!_secureUrl(tokenUrl) && !this.opts.allowInsecureTokenUrl) {
-        throw new Error(
-          `token URL ${tokenUrl.origin} is not HTTPS (set upstreamAuth.allowInsecureTokenUrl only for local testing)`,
-        );
-      }
-      out.tokenUrl = tokenUrl.toString();
+    switch (_schemeKind(info)) {
+      case "apiKey":
+        out.apiKey = need("apiKey");
+        break;
+      case "basic":
+        out.username = need("username");
+        out.password = need("password");
+        this.opts.registry.add(`${out.username}:${out.password}`);
+        break;
+      case "bearer":
+        out.token = need("token");
+        break;
+      case "oauth2":
+        out.clientId = need("clientId");
+        out.clientSecret = need("clientSecret");
+        this.opts.registry.add(`${out.clientId}:${out.clientSecret}`);
+        out.tokenUrl = this._tokenUrl(info, config);
+        break;
     }
     return out;
+  }
+
+  /**
+   * Resolve one configured secret and register it for scrubbing.
+   *
+   * @private
+   */
+  private _secret(
+    name: string,
+    info: SecuritySchemeInfo,
+    config: UpstreamSchemeConfig,
+    field: SecretField,
+  ): string {
+    const ref = config[field];
+    if (!ref || typeof ref !== "object" || Array.isArray(ref)) {
+      throw new Error(`missing "${field}" for ${info.type} scheme`);
+    }
+    const v = this.opts.resolver.resolve(ref, `${name}.${field}`);
+    this.opts.registry.add(v);
+    return v;
+  }
+
+  /**
+   * The token endpoint, which must be HTTPS or loopback unless allowed.
+   *
+   * @private
+   */
+  private _tokenUrl(
+    info: SecuritySchemeInfo,
+    config: UpstreamSchemeConfig,
+  ): string {
+    const tokenUrl = new URL(
+      config.tokenUrl ?? info.tokenUrl ?? "",
+      this.opts.baseUrl,
+    );
+    if (!_secureUrl(tokenUrl) && !this.opts.allowInsecureTokenUrl) {
+      throw new Error(
+        `token URL ${tokenUrl.origin} is not HTTPS (set upstreamAuth.allowInsecureTokenUrl only for local testing)`,
+      );
+    }
+    return tokenUrl.toString();
   }
 
   /** @inheritdoc */
@@ -204,19 +345,20 @@ export class ServiceIdentityCredentialProvider implements CredentialProvider {
       );
     }
     const out: AppliedCredential = { headers: {}, query: {} };
-    if (scheme.type === "apiKey") {
-      if (scheme.in === "header") {
-        out.headers[scheme.paramName!] = r.apiKey!;
-      } else {
-        out.query[scheme.paramName!] = r.apiKey!;
-      }
-    } else if (scheme.type === "http" && scheme.scheme === "basic") {
-      out.headers.Authorization = `Basic ${Buffer.from(`${r.username}:${r.password}`).toString("base64")}`;
-    } else if (scheme.type === "http" && scheme.scheme === "bearer") {
-      out.headers.Authorization = `Bearer ${r.token}`;
-    } else if (scheme.type === "oauth2") {
-      const token = await this._clientCredentialsToken(r, scopes, ctx);
-      out.headers.Authorization = `Bearer ${token}`;
+    switch (_schemeKind(scheme)) {
+      case "apiKey":
+        (scheme.in === "header" ? out.headers : out.query)[scheme.paramName!] =
+          r.apiKey!;
+        break;
+      case "basic":
+        out.headers.Authorization = `Basic ${Buffer.from(`${r.username}:${r.password}`).toString("base64")}`;
+        break;
+      case "bearer":
+        out.headers.Authorization = `Bearer ${r.token}`;
+        break;
+      case "oauth2":
+        out.headers.Authorization = `Bearer ${await this._clientCredentialsToken(r, scopes, ctx)}`;
+        break;
     }
     return out;
   }
@@ -274,97 +416,28 @@ export class ServiceIdentityCredentialProvider implements CredentialProvider {
     isRefresh: boolean,
   ): Promise<CachedToken> {
     const started = Date.now();
-    const body = new URLSearchParams({ grant_type: "client_credentials" });
-    if (scopes.length > 0) {
-      body.set("scope", scopes.join(" "));
-    }
-    if (r.config.audience) {
-      body.set("audience", r.config.audience);
-    }
-    const headers: Record<string, string> = {
-      "content-type": "application/x-www-form-urlencoded",
-      accept: "application/json",
-    };
-    if (
-      (r.config.clientAuthMethod ?? "client_secret_basic") ===
-      "client_secret_basic"
-    ) {
-      headers.authorization = `Basic ${Buffer.from(
-        `${encodeURIComponent(r.clientId!)}:${encodeURIComponent(r.clientSecret!)}`,
-      ).toString("base64")}`;
-    } else {
-      body.set("client_id", r.clientId!);
-      body.set("client_secret", r.clientSecret!);
-    }
-    const event = isRefresh ? "upstream.token.refresh" : "upstream.token.issue";
-    let res: Response;
-    try {
-      res = await this.fetchImpl(r.tokenUrl!, {
-        method: "POST",
-        headers,
-        body,
-        redirect: "error",
-        signal: ctx.signal,
-      });
-    } catch (err) {
-      ctx.logs.audit(
-        `${event}_failed`,
-        "failure",
-        {
-          scheme: r.info.name,
-          provider: this.id,
-          reason: "token_endpoint_unreachable",
-          error: sanitizeError(err).name,
-        },
-        "warn",
-      );
-      throw new UpstreamAuthError(
-        "token_endpoint_unreachable",
-        `Could not reach the OAuth2 token endpoint for "${r.info.name}"`,
-      );
-    }
-    let json: Record<string, unknown> = {};
-    try {
-      json = (await res.json()) as Record<string, unknown>;
-    } catch {
-      // handled below
-    }
+    const event: TokenEvent = isRefresh
+      ? "upstream.token.refresh"
+      : "upstream.token.issue";
+    const res = await this._postToken(r, scopes, ctx, event);
+    const json = await _readTokenJson(res);
     const token =
       typeof json.access_token === "string" ? json.access_token : "";
-    const tokenType = String(json.token_type ?? "bearer").toLowerCase();
-    if (!res.ok || !token || tokenType !== "bearer") {
-      ctx.logs.audit(
-        `${event}_failed`,
-        "failure",
-        {
-          scheme: r.info.name,
-          provider: this.id,
-          status: res.status,
-          reason: !res.ok
-            ? "token_endpoint_error"
-            : !token
-              ? "no_access_token"
-              : "unsupported_token_type",
-          oauthError:
-            typeof json.error === "string"
-              ? json.error.slice(0, 64)
-              : undefined,
-        },
-        "warn",
-      );
+    const reason = _tokenRejection(res, token, json);
+    if (reason) {
+      this._auditTokenFailure(r, ctx, event, {
+        status: res.status,
+        reason,
+        oauthError:
+          typeof json.error === "string" ? json.error.slice(0, 64) : undefined,
+      });
       throw new UpstreamAuthError(
         "token_request_failed",
         `The OAuth2 token endpoint rejected the client credentials request for "${r.info.name}" (HTTP ${res.status})`,
       );
     }
-    this.opts.registry.add(token);
-    const expiresIn =
-      typeof json.expires_in === "number" && json.expires_in > 0
-        ? json.expires_in
-        : 300;
-    const entry = { token, expiresAt: Date.now() / 1000 + expiresIn };
-    const previous = this.cache.get(this._key(r.info.name, scopes));
-    this.cache.set(this._key(r.info.name, scopes), entry);
+    const expiresIn = _expiresIn(json);
+    const entry = this._storeToken(r, scopes, token, expiresIn);
     ctx.logs.audit(event, "success", {
       scheme: r.info.name,
       provider: this.id,
@@ -372,6 +445,74 @@ export class ServiceIdentityCredentialProvider implements CredentialProvider {
       scopeCount: scopes.length,
       durationMs: Date.now() - started,
     });
+    return entry;
+  }
+
+  /**
+   * POST the token request, failing clearly when the endpoint is unreachable.
+   *
+   * @private
+   */
+  private async _postToken(
+    r: ResolvedScheme,
+    scopes: string[],
+    ctx: CredentialContext,
+    event: TokenEvent,
+  ): Promise<Response> {
+    try {
+      return await this.fetchImpl(r.tokenUrl!, {
+        method: "POST",
+        ..._tokenForm(r, scopes),
+        redirect: "error",
+        signal: ctx.signal,
+      });
+    } catch (err) {
+      this._auditTokenFailure(r, ctx, event, {
+        reason: "token_endpoint_unreachable",
+        error: sanitizeError(err).name,
+      });
+      throw new UpstreamAuthError(
+        "token_endpoint_unreachable",
+        `Could not reach the OAuth2 token endpoint for "${r.info.name}"`,
+      );
+    }
+  }
+
+  /**
+   * Audit a failed token request.
+   *
+   * @private
+   */
+  private _auditTokenFailure(
+    r: ResolvedScheme,
+    ctx: CredentialContext,
+    event: TokenEvent,
+    fields: Record<string, unknown>,
+  ): void {
+    ctx.logs.audit(
+      `${event}_failed`,
+      "failure",
+      { scheme: r.info.name, provider: this.id, ...fields },
+      "warn",
+    );
+  }
+
+  /**
+   * Cache a fresh token, registering it for scrubbing.
+   *
+   * @private
+   */
+  private _storeToken(
+    r: ResolvedScheme,
+    scopes: string[],
+    token: string,
+    expiresIn: number,
+  ): CachedToken {
+    this.opts.registry.add(token);
+    const entry = { token, expiresAt: Date.now() / 1000 + expiresIn };
+    const key = this._key(r.info.name, scopes);
+    const previous = this.cache.get(key);
+    this.cache.set(key, entry);
     if (previous) {
       // Keep scrubbing the previous token briefly; in-flight errors may echo it.
       setTimeout(

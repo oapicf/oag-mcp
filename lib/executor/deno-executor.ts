@@ -68,6 +68,65 @@ export function denoPlatformPackage(
     : `@deno/${platform}-${arch}`;
 }
 
+/** A place a Deno binary may be found. */
+interface DenoCandidate {
+  path: string;
+  source: DenoRuntime["source"];
+}
+
+/**
+ * The Deno binary of an installed npm package, if the package is installed.
+ *
+ * @private
+ */
+function _packageBinary(pkg: string, exe: string): DenoCandidate[] {
+  try {
+    const dir = path.dirname(require.resolve(`${pkg}/package.json`));
+    return [{ path: path.join(dir, exe), source: "npm-package" }];
+  } catch {
+    // The optional npm package is not installed.
+    return [];
+  }
+}
+
+/**
+ * Where to look for Deno, in order of preference.
+ *
+ * @private
+ */
+function _denoCandidates(configured: string | undefined): DenoCandidate[] {
+  const exe = process.platform === "win32" ? "deno.exe" : "deno";
+  const fromEnv = process.env.OAG_MCP_DENO_PATH;
+  return [
+    ...(configured
+      ? [{ path: configured, source: "configured" as const }]
+      : []),
+    ...(fromEnv ? [{ path: fromEnv, source: "env" as const }] : []),
+    ..._packageBinary(denoPlatformPackage(), exe),
+    ..._packageBinary("deno", exe),
+    { path: "deno", source: "path" },
+  ];
+}
+
+/**
+ * The version a candidate reports, if it exists and runs as Deno.
+ *
+ * @private
+ */
+function _denoVersion(c: DenoCandidate): string | undefined {
+  if (c.source !== "path" && !fs.existsSync(c.path)) {
+    return undefined;
+  }
+  const res = spawnSync(c.path, ["--version"], {
+    encoding: "utf8",
+    env: { NO_COLOR: "1", DENO_NO_UPDATE_CHECK: "1" },
+  });
+  if (res.status !== 0 || res.error) {
+    return undefined;
+  }
+  return /deno (\d+\.\d+\.\d+)/.exec(res.stdout)?.[1];
+}
+
 /**
  * Locate a Deno binary: configured path, OAG_MCP_DENO_PATH, the `deno` npm
  * package installed with oag-mcp, or `deno` on PATH.
@@ -83,39 +142,11 @@ export function denoPlatformPackage(
  * @return {Object} runtime
  */
 export function resolveDeno(configured?: string): DenoRuntime {
-  const candidates: Array<{ path: string; source: DenoRuntime["source"] }> = [];
-  if (configured) {
-    candidates.push({ path: configured, source: "configured" });
-  }
-  if (process.env.OAG_MCP_DENO_PATH) {
-    candidates.push({ path: process.env.OAG_MCP_DENO_PATH, source: "env" });
-  }
-  const exe = process.platform === "win32" ? "deno.exe" : "deno";
-  for (const pkg of [denoPlatformPackage(), "deno"]) {
-    try {
-      const dir = path.dirname(require.resolve(`${pkg}/package.json`));
-      candidates.push({ path: path.join(dir, exe), source: "npm-package" });
-    } catch {
-      // The optional npm package is not installed.
-    }
-  }
-  candidates.push({ path: "deno", source: "path" });
-  for (const c of candidates) {
-    if (c.source !== "path" && !fs.existsSync(c.path)) {
+  for (const c of _denoCandidates(configured)) {
+    const version = _denoVersion(c);
+    if (!version) {
       continue;
     }
-    const res = spawnSync(c.path, ["--version"], {
-      encoding: "utf8",
-      env: { NO_COLOR: "1", DENO_NO_UPDATE_CHECK: "1" },
-    });
-    if (res.status !== 0 || res.error) {
-      continue;
-    }
-    const m = /deno (\d+\.\d+\.\d+)/.exec(res.stdout);
-    if (!m) {
-      continue;
-    }
-    const version = m[1];
     if (!semver.satisfies(version, DENO_VERSION_RANGE)) {
       throw new OagMcpError(
         "DENO_VERSION_UNSUPPORTED",
@@ -134,6 +165,32 @@ export function resolveDeno(configured?: string): DenoRuntime {
       hint: "Reinstall oag-mcp so its `deno` dependency is installed, install Deno 2.x (https://deno.com) on PATH, or set OAG_MCP_DENO_PATH.",
     },
   );
+}
+
+/**
+ * The environment of a sandbox process: only Deno bookkeeping variables
+ * pointing at its private temporary directory, plus what Windows needs to
+ * start a process.
+ *
+ * @param {String} tmp - the execution's private temporary directory
+ * @return {Object} environment variables
+ */
+export function sandboxEnv(tmp: string): Record<string, string> {
+  const env: Record<string, string> = {
+    DENO_DIR: path.join(tmp, "deno-dir"),
+    DENO_NO_UPDATE_CHECK: "1",
+    DENO_NO_PROMPT: "1",
+    NO_COLOR: "1",
+    TMPDIR: tmp,
+    HOME: tmp,
+    // Deterministic date handling: typescript-fetch maps `format: date` to
+    // local midnight, so pin the sandbox clock zone to UTC.
+    TZ: "UTC",
+  };
+  if (process.platform === "win32" && process.env.SystemRoot) {
+    env.SystemRoot = process.env.SystemRoot;
+  }
+  return env;
 }
 
 /** Options for {@link DenoExecutor}. */
@@ -200,10 +257,8 @@ export class DenoExecutor implements Executor {
           maxLogEntries: 10,
           maxStdoutBytes: 1024 * 1024,
         },
-        bridge: async () => ({
-          ok: false,
-          error: { type: "permission_denied", message: "verification" },
-        }),
+        // maxSdkCalls 0: the executor refuses every SDK call itself.
+        bridge: () => Promise.reject(new Error("no SDK calls in verification")),
       },
       true,
     );
@@ -240,20 +295,7 @@ export class DenoExecutor implements Executor {
     const started = Date.now();
     const logs = this.opts.logs.child({ executionId: req.executionId });
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "oag-mcp-exec-"));
-    const env: Record<string, string> = {
-      DENO_DIR: path.join(tmp, "deno-dir"),
-      DENO_NO_UPDATE_CHECK: "1",
-      DENO_NO_PROMPT: "1",
-      NO_COLOR: "1",
-      TMPDIR: tmp,
-      HOME: tmp,
-      // Deterministic date handling: typescript-fetch maps `format: date` to
-      // local midnight, so pin the sandbox clock zone to UTC.
-      TZ: "UTC",
-    };
-    if (process.platform === "win32" && process.env.SystemRoot) {
-      env.SystemRoot = process.env.SystemRoot;
-    }
+    const env = sandboxEnv(tmp);
     let child: ChildProcess;
     try {
       child = spawn(this.opts.deno.path, this.args(req.limits.memoryMb), {
@@ -298,13 +340,9 @@ export class DenoExecutor implements Executor {
       // The sandbox may exit (or be killed) while a broker reply is pending.
     });
     const write = (msg: unknown) => {
-      if (settled || !child.stdin || !child.stdin.writable) {
-        return;
-      }
-      try {
+      // A failed write is reported on stdin's "error" event, handled above.
+      if (!settled && child.stdin?.writable) {
         child.stdin.write(`${JSON.stringify(msg)}\n`);
-      } catch {
-        // ignore: the process is gone
       }
     };
 
@@ -493,11 +531,7 @@ export class DenoExecutor implements Executor {
         },
       });
     });
-    try {
-      child.stdin?.end();
-    } catch {
-      // ignore
-    }
+    child.stdin?.end();
     fs.rmSync(tmp, { recursive: true, force: true });
     return outcome;
   }

@@ -259,3 +259,112 @@ describe("spec - describeSchema/exampleForSchema", function () {
     assert.isUndefined(exampleForSchema(undefined));
   });
 });
+
+describe("spec - describeSchema composites and depth", function () {
+  it("should describe oneOf and anyOf as alternatives and allOf as an intersection", function () {
+    assert.equals(
+      describeSchema({ oneOf: [{ type: "string" }, { type: "integer" }] }),
+      "string | integer",
+    );
+    assert.equals(
+      describeSchema({ anyOf: [{ type: "boolean" }, { type: "null" }] }),
+      "boolean | null",
+    );
+    assert.equals(
+      describeSchema({ allOf: [{ properties: {} }, { type: "object" }] }),
+      "object & object",
+    );
+  });
+
+  it("should describe a schema with only properties as an object, and an empty one as any", function () {
+    assert.equals(describeSchema({ properties: { a: {} } }), "object");
+    assert.equals(describeSchema({}), "any");
+    assert.equals(describeSchema(null), "any");
+  });
+
+  it("should stop describing nested schemas after a few levels", function () {
+    const nested = {
+      type: "array",
+      items: {
+        type: "array",
+        items: { type: "array", items: { type: "array", items: {} } },
+      },
+    };
+    assert.equals(describeSchema(nested), "array[][][]");
+    assert.equals(
+      describeSchema({ oneOf: [{ oneOf: [{ oneOf: [{ oneOf: [{}] }] }] }] }),
+      "object",
+    );
+  });
+
+  it("should give up on an example the sampler cannot produce", function () {
+    assert.isUndefined(
+      exampleForSchema({ $ref: "#/components/schemas/Missing" }),
+    );
+  });
+});
+
+describe("spec - describeSecurityScheme types", function () {
+  it("should support header and query API keys, basic and bearer HTTP, and client credentials", function () {
+    assert.isTrue(
+      describeSecurityScheme("k", { type: "apiKey", in: "query", name: "k" })
+        .supported,
+    );
+    const bearer = describeSecurityScheme("b", {
+      type: "http",
+      scheme: "Bearer",
+      bearerFormat: "JWT",
+      description: "token",
+    });
+    assert.isTrue(bearer.supported);
+    assert.equals(bearer.scheme, "bearer");
+    assert.equals(bearer.bearerFormat, "JWT");
+    assert.equals(bearer.description, "token");
+    const cc = describeSecurityScheme("o", {
+      type: "oauth2",
+      flows: {
+        clientCredentials: {
+          tokenUrl: "https://auth.example.test/token",
+          scopes: { read: "r" },
+        },
+      },
+    });
+    assert.isTrue(cc.supported);
+    assert.equals(cc.scopes, ["read"]);
+  });
+
+  it("should explain mutualTLS and unknown scheme types", function () {
+    const mtls = describeSecurityScheme("m", { type: "mutualTLS" });
+    assert.isFalse(mtls.supported);
+    assert.match(mtls.unsupportedReason!, /mutualTLS/);
+    for (const type of ["custom", "constructor", undefined]) {
+      const other = describeSecurityScheme("x", { type });
+      assert.isFalse(other.supported);
+      assert.match(other.unsupportedReason!, /Unknown security scheme type/);
+    }
+  });
+});
+
+describe("spec - loadSpec servers", function () {
+  it("should fill server variables with their defaults and drop trailing slashes", async function () {
+    const file = path.join(tmpDir(), "servers.yaml");
+    fs.writeFileSync(
+      file,
+      `openapi: 3.0.3
+info: { title: T, version: "1" }
+servers:
+  - url: https://{region}.example.test/{base}/
+    variables:
+      region: { default: eu }
+      base: { default: v2 }
+  - url: http://localhost:8080
+paths: {}
+`,
+    );
+    const spec = await loadSpec(file);
+    assert.equals(spec.servers, [
+      "https://eu.example.test/v2",
+      "http://localhost:8080",
+    ]);
+  });
+});

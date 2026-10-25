@@ -33,6 +33,13 @@ export const HTTP_METHODS = [
 
 type Json = Record<string, unknown>;
 
+/** Composite schema keywords and how their parts are joined. */
+const COMPOSITES: ReadonlyArray<[string, string]> = [
+  ["oneOf", " | "],
+  ["anyOf", " | "],
+  ["allOf", " & "],
+];
+
 /**
  * Convert a schema to a compact human description, e.g. "integer(int64)".
  *
@@ -51,18 +58,37 @@ export function describeSchema(schema: unknown, depth = 0): string {
   if (Array.isArray(s.enum)) {
     return s.enum.map((v) => JSON.stringify(v)).join(" | ");
   }
+  return _describeTyped(s, depth) ?? _describeComposite(s, depth);
+}
+
+/**
+ * Describe a schema by its `type` (and `format`), or undefined if it has none.
+ *
+ * @private
+ */
+function _describeTyped(s: Json, depth: number): string | undefined {
   const type = Array.isArray(s.type) ? s.type.join("|") : s.type;
   if (type === "array") {
     return `${describeSchema(s.items, depth + 1)}[]`;
   }
-  if (type) {
-    return s.format ? `${type}(${s.format})` : String(type);
+  if (!type) {
+    return undefined;
   }
-  for (const k of ["oneOf", "anyOf", "allOf"]) {
-    if (Array.isArray(s[k])) {
-      return (s[k] as unknown[])
+  return s.format ? `${type}(${s.format})` : String(type);
+}
+
+/**
+ * Describe a schema without a `type`: its `oneOf`, `anyOf` or `allOf`
+ * parts, or "object" when it has properties.
+ *
+ * @private
+ */
+function _describeComposite(s: Json, depth: number): string {
+  for (const [keyword, joiner] of COMPOSITES) {
+    if (Array.isArray(s[keyword])) {
+      return (s[keyword] as unknown[])
         .map((x) => describeSchema(x, depth + 1))
-        .join(k === "allOf" ? " & " : " | ");
+        .join(joiner);
     }
   }
   return s.properties ? "object" : "any";
@@ -95,6 +121,51 @@ export function exampleForSchema(schema: unknown): unknown {
   }
 }
 
+/** Describes the parts of one security scheme type and whether it is supported. */
+type SchemeDescriber = (info: SecuritySchemeInfo, scheme: Json) => void;
+
+/** Security scheme types oag-mcp cannot satisfy, and why. */
+const UNSUPPORTED_SCHEME_TYPES: Readonly<Record<string, string>> = {
+  openIdConnect:
+    "openIdConnect is not supported for upstream calls (interactive login is out of scope)",
+  mutualTLS: "mutualTLS is not supported for upstream calls",
+};
+
+/** The describer of each supported security scheme type. */
+const SCHEME_DESCRIBERS: Readonly<Record<string, SchemeDescriber>> = {
+  apiKey: (info, scheme) => {
+    info.in = scheme.in as SecuritySchemeInfo["in"];
+    info.paramName = String(scheme.name ?? "");
+    if (info.in === "header" || info.in === "query") {
+      info.supported = true;
+    } else {
+      info.unsupportedReason = `apiKey in "${String(scheme.in)}" is not supported (header and query are)`;
+    }
+  },
+  http: (info, scheme) => {
+    info.scheme = String(scheme.scheme ?? "").toLowerCase();
+    info.bearerFormat =
+      typeof scheme.bearerFormat === "string" ? scheme.bearerFormat : undefined;
+    if (info.scheme === "basic" || info.scheme === "bearer") {
+      info.supported = true;
+    } else {
+      info.unsupportedReason = `HTTP "${info.scheme}" authentication is not supported (basic and bearer are)`;
+    }
+  },
+  oauth2: (info, scheme) => {
+    const flows = (scheme.flows ?? {}) as Json;
+    const cc = flows.clientCredentials as Json | undefined;
+    info.flows = Object.keys(flows);
+    if (cc && typeof cc.tokenUrl === "string") {
+      info.supported = true;
+      info.tokenUrl = cc.tokenUrl;
+      info.scopes = Object.keys((cc.scopes ?? {}) as Json);
+    } else {
+      info.unsupportedReason = `OAuth2 flows [${info.flows.join(", ")}] are not supported; only clientCredentials is (interactive login is out of scope)`;
+    }
+  },
+};
+
 /**
  * Describe a security scheme and whether oag-mcp supports it for upstream
  * calls.
@@ -115,41 +186,15 @@ export function describeSecurityScheme(
     description:
       typeof scheme.description === "string" ? scheme.description : undefined,
   };
-  if (type === "apiKey") {
-    info.in = scheme.in as SecuritySchemeInfo["in"];
-    info.paramName = String(scheme.name ?? "");
-    if (info.in === "header" || info.in === "query") {
-      info.supported = true;
-    } else {
-      info.unsupportedReason = `apiKey in "${String(scheme.in)}" is not supported (header and query are)`;
-    }
-  } else if (type === "http") {
-    info.scheme = String(scheme.scheme ?? "").toLowerCase();
-    info.bearerFormat =
-      typeof scheme.bearerFormat === "string" ? scheme.bearerFormat : undefined;
-    if (info.scheme === "basic" || info.scheme === "bearer") {
-      info.supported = true;
-    } else {
-      info.unsupportedReason = `HTTP "${info.scheme}" authentication is not supported (basic and bearer are)`;
-    }
-  } else if (type === "oauth2") {
-    const flows = (scheme.flows ?? {}) as Json;
-    const cc = flows.clientCredentials as Json | undefined;
-    info.flows = Object.keys(flows);
-    if (cc && typeof cc.tokenUrl === "string") {
-      info.supported = true;
-      info.tokenUrl = cc.tokenUrl;
-      info.scopes = Object.keys((cc.scopes ?? {}) as Json);
-    } else {
-      info.unsupportedReason = `OAuth2 flows [${info.flows.join(", ")}] are not supported; only clientCredentials is (interactive login is out of scope)`;
-    }
-  } else if (type === "openIdConnect") {
-    info.unsupportedReason =
-      "openIdConnect is not supported for upstream calls (interactive login is out of scope)";
-  } else if (type === "mutualTLS") {
-    info.unsupportedReason = "mutualTLS is not supported for upstream calls";
+  const describe = Object.hasOwn(SCHEME_DESCRIBERS, type)
+    ? SCHEME_DESCRIBERS[type]
+    : undefined;
+  if (describe) {
+    describe(info, scheme);
   } else {
-    info.unsupportedReason = `Unknown security scheme type "${type}"`;
+    info.unsupportedReason = Object.hasOwn(UNSUPPORTED_SCHEME_TYPES, type)
+      ? UNSUPPORTED_SCHEME_TYPES[type]
+      : `Unknown security scheme type "${type}"`;
   }
   return info;
 }

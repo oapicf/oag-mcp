@@ -82,40 +82,42 @@ export function scopesFromClaims(claims: Record<string, unknown>): string[] {
   return [];
 }
 
+/** Reasons for jose errors, by error class; the first match wins. */
+const JOSE_REASONS: ReadonlyArray<
+  [abstract new (...args: never[]) => Error, string]
+> = [
+  [jose.errors.JWTExpired, "expired"],
+  [jose.errors.JWSSignatureVerificationFailed, "invalid_signature"],
+  [jose.errors.JWKSNoMatchingKey, "unknown_signing_key"],
+  [jose.errors.JOSEAlgNotAllowed, "algorithm_not_allowed"],
+  [jose.errors.JWSInvalid, "malformed_token"],
+  [jose.errors.JWTInvalid, "malformed_token"],
+];
+
+/** Reasons for failed JWT claim checks, by claim. */
+const CLAIM_REASONS: Readonly<Record<string, string>> = {
+  aud: "audience_mismatch",
+  iss: "issuer_mismatch",
+  nbf: "not_yet_valid",
+};
+
 /**
  * Map jose errors to stable reasons.
  *
  * @private
  */
 function _joseReason(err: unknown): string {
-  if (err instanceof jose.errors.JWTExpired) {
-    return "expired";
-  }
-  if (err instanceof jose.errors.JWTClaimValidationFailed) {
-    return err.claim === "aud"
-      ? "audience_mismatch"
-      : err.claim === "iss"
-        ? "issuer_mismatch"
-        : err.claim === "nbf"
-          ? "not_yet_valid"
-          : `claim_${err.claim}_invalid`;
-  }
-  if (err instanceof jose.errors.JWSSignatureVerificationFailed) {
-    return "invalid_signature";
-  }
-  if (err instanceof jose.errors.JWKSNoMatchingKey) {
-    return "unknown_signing_key";
-  }
-  if (err instanceof jose.errors.JOSEAlgNotAllowed) {
-    return "algorithm_not_allowed";
-  }
   if (
-    err instanceof jose.errors.JWSInvalid ||
-    err instanceof jose.errors.JWTInvalid
+    err instanceof jose.errors.JWTClaimValidationFailed &&
+    !(err instanceof jose.errors.JWTExpired)
   ) {
-    return "malformed_token";
+    return Object.hasOwn(CLAIM_REASONS, err.claim)
+      ? CLAIM_REASONS[err.claim]
+      : `claim_${err.claim}_invalid`;
   }
-  return "invalid_token";
+  return (
+    JOSE_REASONS.find(([cls]) => err instanceof cls)?.[1] ?? "invalid_token"
+  );
 }
 
 /**
@@ -223,6 +225,21 @@ class JwtVerifier implements OAuthTokenVerifier {
   }
 }
 
+/** An introspection response that passed the checks. */
+type ActiveToken = Record<string, unknown> & { exp: number };
+
+/**
+ * The audiences of an introspection response's `aud`.
+ *
+ * @private
+ */
+function _audiences(aud: unknown): string[] {
+  if (Array.isArray(aud)) {
+    return aud.map(String);
+  }
+  return aud ? [String(aud)] : [];
+}
+
 /**
  * RFC 7662 token introspection verifier for opaque tokens.
  */
@@ -239,6 +256,24 @@ class IntrospectionVerifier implements OAuthTokenVerifier {
   ) {}
 
   async verifyAccessToken(token: string): Promise<AuthInfo> {
+    const data = await this._introspect(token);
+    this._check(data);
+    return {
+      token,
+      clientId: String(data.client_id ?? data.sub ?? "unknown"),
+      scopes: scopesFromClaims(data),
+      expiresAt: data.exp,
+      resource: this.o.resource,
+      extra: { sub: data.sub, iss: data.iss ?? this.o.issuer },
+    };
+  }
+
+  /**
+   * Ask the introspection endpoint about a token.
+   *
+   * @private
+   */
+  private async _introspect(token: string): Promise<Record<string, unknown>> {
     let res: Response;
     try {
       res = await fetch(this.o.endpoint, {
@@ -264,7 +299,15 @@ class IntrospectionVerifier implements OAuthTokenVerifier {
         "Token introspection failed",
       );
     }
-    const data = (await res.json()) as Record<string, unknown>;
+    return (await res.json()) as Record<string, unknown>;
+  }
+
+  /**
+   * Check that a token is active, ours and unexpired.
+   *
+   * @private
+   */
+  private _check(data: Record<string, unknown>): asserts data is ActiveToken {
     if (data.active !== true) {
       throw new TokenRejected("inactive", "The access token is not active");
     }
@@ -274,12 +317,7 @@ class IntrospectionVerifier implements OAuthTokenVerifier {
         "The access token was issued by another issuer",
       );
     }
-    const aud = Array.isArray(data.aud)
-      ? data.aud.map(String)
-      : data.aud
-        ? [String(data.aud)]
-        : [];
-    if (!aud.some((a) => this.o.audiences.includes(a))) {
+    if (!_audiences(data.aud).some((a) => this.o.audiences.includes(a))) {
       throw new TokenRejected(
         "audience_mismatch",
         "The access token is not intended for this server",
@@ -288,14 +326,6 @@ class IntrospectionVerifier implements OAuthTokenVerifier {
     if (typeof data.exp !== "number" || data.exp * 1000 < Date.now()) {
       throw new TokenRejected("expired", "The access token has expired");
     }
-    return {
-      token,
-      clientId: String(data.client_id ?? data.sub ?? "unknown"),
-      scopes: scopesFromClaims(data),
-      expiresAt: data.exp,
-      resource: this.o.resource,
-      extra: { sub: data.sub, iss: data.iss ?? this.o.issuer },
-    };
   }
 }
 
@@ -361,6 +391,24 @@ export interface AuthenticatorOptions {
   resourceName: string;
 }
 
+/** A configured static bearer token with its resolved value. */
+type StaticEntry = NonNullable<
+  Config["mcpAuth"]["staticBearer"]
+>["tokens"][number] & { value: string };
+
+/** OAuth resource server settings. */
+type OAuthConfig = NonNullable<Config["mcpAuth"]["oauth"]>;
+
+/** What an OAuth authenticator checks tokens against. */
+interface OAuthContext {
+  o: OAuthConfig;
+  verifier: OAuthTokenVerifier;
+  validation: "jwt" | "introspection";
+  resource: URL;
+  resourceMetadataUrl: string;
+  registry: SecretRegistry;
+}
+
 /**
  * Create the HTTP authenticator for the configured mode.
  *
@@ -370,137 +418,203 @@ export interface AuthenticatorOptions {
 export async function createHttpAuthenticator(
   opts: AuthenticatorOptions,
 ): Promise<HttpAuthenticator> {
-  const { config, logs } = opts;
-  const mode = config.mcpAuth.mode;
+  const mode = opts.config.mcpAuth.mode;
   if (mode === "none") {
-    logs.audit(
-      "authentication.mode_configured",
-      "success",
-      {
-        mode,
-        warning: "unauthenticated; loopback only",
-      },
-      "warn",
-    );
-    return {
-      mode,
-      metadata: () => undefined,
-      authenticate: async (_req, l) => {
-        const principal: Principal = {
-          id: "anonymous",
-          kind: "anonymous",
-          scopes: [],
-        };
-        l.audit("authentication.succeeded", "success", {
-          mode,
-          principalId: principal.id,
-        });
-        return {
-          ok: true,
-          principal,
-          authInfo: {
-            token: "",
-            clientId: "anonymous",
-            scopes: [],
-            extra: { principal },
-          },
-        };
-      },
-    };
+    return _noneAuthenticator(opts.logs);
   }
   if (mode === "static-bearer") {
-    const tokens = config.mcpAuth.staticBearer?.tokens;
-    if (!tokens || tokens.length === 0) {
+    return _staticBearerAuthenticator(opts);
+  }
+  return _oauthAuthenticator(opts);
+}
+
+/**
+ * Local development: every caller is anonymous.
+ *
+ * @private
+ */
+function _noneAuthenticator(logs: Logs): HttpAuthenticator {
+  const mode = "none";
+  logs.audit(
+    "authentication.mode_configured",
+    "success",
+    {
+      mode,
+      warning: "unauthenticated; loopback only",
+    },
+    "warn",
+  );
+  return {
+    mode,
+    metadata: () => undefined,
+    authenticate: async (_req, l) => {
+      const principal: Principal = {
+        id: "anonymous",
+        kind: "anonymous",
+        scopes: [],
+      };
+      l.audit("authentication.succeeded", "success", {
+        mode,
+        principalId: principal.id,
+      });
+      return {
+        ok: true,
+        principal,
+        authInfo: {
+          token: "",
+          clientId: "anonymous",
+          scopes: [],
+          extra: { principal },
+        },
+      };
+    },
+  };
+}
+
+/**
+ * Pre-shared bearer tokens mapped to named principals.
+ *
+ * @private
+ */
+function _staticBearerAuthenticator(
+  opts: AuthenticatorOptions,
+): HttpAuthenticator {
+  const mode = "static-bearer";
+  const entries = _staticEntries(opts);
+  opts.logs.audit("authentication.mode_configured", "success", {
+    mode,
+    principals: entries.map((e) => e.principal),
+    note: "static bearer does not implement MCP OAuth discovery",
+  });
+  return {
+    mode,
+    metadata: () => undefined,
+    authenticate: async (req, l) => _authenticateStatic(req, l, entries),
+  };
+}
+
+/**
+ * Resolve the configured static bearer tokens, refusing weak ones.
+ *
+ * @private
+ */
+function _staticEntries(opts: AuthenticatorOptions): StaticEntry[] {
+  const tokens = opts.config.mcpAuth.staticBearer?.tokens;
+  if (!tokens || tokens.length === 0) {
+    throw new OagMcpError(
+      "MCP_AUTH_CONFIG_INVALID",
+      "mcpAuth.mode is static-bearer but mcpAuth.staticBearer.tokens is empty",
+    );
+  }
+  return tokens.map((t) => {
+    const value = opts.resolver.resolve(
+      t.token,
+      `mcpAuth token for ${t.principal}`,
+    );
+    if (value.length < 16) {
       throw new OagMcpError(
-        "MCP_AUTH_CONFIG_INVALID",
-        "mcpAuth.mode is static-bearer but mcpAuth.staticBearer.tokens is empty",
+        "MCP_AUTH_TOKEN_WEAK",
+        `Static bearer token for ${t.principal} is shorter than 16 characters`,
+        { hint: "Generate one with: openssl rand -hex 32" },
       );
     }
-    const entries = tokens.map((t) => {
-      const value = opts.resolver.resolve(
-        t.token,
-        `mcpAuth token for ${t.principal}`,
-      );
-      if (value.length < 16) {
-        throw new OagMcpError(
-          "MCP_AUTH_TOKEN_WEAK",
-          `Static bearer token for ${t.principal} is shorter than 16 characters`,
-          { hint: "Generate one with: openssl rand -hex 32" },
-        );
-      }
-      opts.registry.add(value);
-      return { ...t, value };
-    });
-    logs.audit("authentication.mode_configured", "success", {
-      mode,
-      principals: entries.map((e) => e.principal),
-      note: "static bearer does not implement MCP OAuth discovery",
-    });
-    return {
-      mode,
-      metadata: () => undefined,
-      authenticate: async (req, l) => {
-        const token = _bearer(req);
-        if (!token) {
-          l.audit(
-            "authentication.failed",
-            "failure",
-            { mode, reason: "missing_token" },
-            "warn",
-          );
-          return {
-            ok: false,
-            response: _challenge(401, undefined, "Bearer token required"),
-          };
-        }
-        // Compare against every entry to keep timing independent of position.
-        let match: (typeof entries)[number] | undefined;
-        for (const e of entries) {
-          if (_safeEqual(token, e.value) && !match) {
-            match = e;
-          }
-        }
-        if (!match) {
-          l.audit(
-            "authentication.failed",
-            "failure",
-            { mode, reason: "invalid_token" },
-            "warn",
-          );
-          return {
-            ok: false,
-            response: _challenge(
-              401,
-              "invalid_token",
-              "The bearer token is invalid",
-            ),
-          };
-        }
-        const principal: Principal = {
-          id: `static:${match.principal}`,
-          kind: "static",
-          name: match.principal,
-          scopes: match.scopes,
-        };
-        l.audit("authentication.succeeded", "success", {
-          mode,
-          principalId: principal.id,
-        });
-        return {
-          ok: true,
-          principal,
-          authInfo: {
-            token: "[static-bearer]",
-            clientId: match.principal,
-            scopes: match.scopes,
-            extra: { principal },
-          },
-        };
-      },
-    };
-  }
+    opts.registry.add(value);
+    return { ...t, value };
+  });
+}
 
-  // OAuth resource server.
+/**
+ * The entry a token belongs to, comparing against every entry to keep
+ * timing independent of position.
+ *
+ * @private
+ */
+function _matchStatic(
+  token: string,
+  entries: StaticEntry[],
+): StaticEntry | undefined {
+  let match: StaticEntry | undefined;
+  for (const e of entries) {
+    if (_safeEqual(token, e.value) && !match) {
+      match = e;
+    }
+  }
+  return match;
+}
+
+/**
+ * Audit a refused static bearer request and challenge the caller.
+ *
+ * @private
+ */
+function _refuseStatic(
+  l: Logs,
+  reason: string,
+  response: Response,
+): AuthResult {
+  l.audit(
+    "authentication.failed",
+    "failure",
+    { mode: "static-bearer", reason },
+    "warn",
+  );
+  return { ok: false, response };
+}
+
+/**
+ * Authenticate a request with a static bearer token.
+ *
+ * @private
+ */
+function _authenticateStatic(
+  req: Request,
+  l: Logs,
+  entries: StaticEntry[],
+): AuthResult {
+  const token = _bearer(req);
+  if (!token) {
+    return _refuseStatic(
+      l,
+      "missing_token",
+      _challenge(401, undefined, "Bearer token required"),
+    );
+  }
+  const match = _matchStatic(token, entries);
+  if (!match) {
+    return _refuseStatic(
+      l,
+      "invalid_token",
+      _challenge(401, "invalid_token", "The bearer token is invalid"),
+    );
+  }
+  const principal: Principal = {
+    id: `static:${match.principal}`,
+    kind: "static",
+    name: match.principal,
+    scopes: match.scopes,
+  };
+  l.audit("authentication.succeeded", "success", {
+    mode: "static-bearer",
+    principalId: principal.id,
+  });
+  return {
+    ok: true,
+    principal,
+    authInfo: {
+      token: "[static-bearer]",
+      clientId: match.principal,
+      scopes: match.scopes,
+      extra: { principal },
+    },
+  };
+}
+
+/**
+ * The OAuth settings, refusing a missing section or an insecure issuer.
+ *
+ * @private
+ */
+function _oauthConfig(config: Config): OAuthConfig {
   const o = config.mcpAuth.oauth;
   if (!o) {
     throw new OagMcpError(
@@ -522,12 +636,21 @@ export async function createHttpAuthenticator(
       },
     );
   }
-  const resource = new URL(o.resource ?? opts.resourceUrl.toString());
-  const audiences =
-    o.audience && o.audience.length > 0 ? o.audience : [resource.toString()];
-  const resourceMetadataUrl = getOAuthProtectedResourceMetadataUrl(resource);
-  let verifier: OAuthTokenVerifier;
-  let validation: "jwt" | "introspection";
+  return o;
+}
+
+/**
+ * The token verifier: introspection when configured, otherwise JWTs signed
+ * by the issuer's JWKS.
+ *
+ * @private
+ */
+async function _oauthVerifier(
+  o: OAuthConfig,
+  opts: AuthenticatorOptions,
+  audiences: string[],
+  resource: URL,
+): Promise<Pick<OAuthContext, "verifier" | "validation">> {
   if (o.introspection) {
     const clientId = opts.resolver.resolve(
       o.introspection.clientId,
@@ -538,126 +661,191 @@ export async function createHttpAuthenticator(
       "introspection client secret",
     );
     opts.registry.add(clientSecret);
-    verifier = new IntrospectionVerifier({
-      endpoint: o.introspection.endpoint,
-      clientId,
-      clientSecret,
-      issuer: o.issuer,
-      audiences,
-      resource,
-    });
-    validation = "introspection";
-  } else {
-    const jwksUri = o.jwksUri ?? (await _discoverJwks(o.issuer));
-    verifier = new JwtVerifier(jwksUri, {
+    return {
+      verifier: new IntrospectionVerifier({
+        endpoint: o.introspection.endpoint,
+        clientId,
+        clientSecret,
+        issuer: o.issuer,
+        audiences,
+        resource,
+      }),
+      validation: "introspection",
+    };
+  }
+  const jwksUri = o.jwksUri ?? (await _discoverJwks(o.issuer));
+  return {
+    verifier: new JwtVerifier(jwksUri, {
       issuer: o.issuer,
       audiences,
       algorithms: o.algorithms,
       clockToleranceSec: o.clockToleranceSec,
       resource,
-    });
-    validation = "jwt";
-  }
-  const prm = {
-    resource: resource.toString(),
-    authorization_servers: [o.issuer],
-    scopes_supported: o.scopesSupported ?? o.requiredScopes,
-    bearer_methods_supported: ["header"],
-    resource_name: opts.resourceName,
+    }),
+    validation: "jwt",
   };
-  const prmPaths = new Set([
-    "/.well-known/oauth-protected-resource",
-    new URL(resourceMetadataUrl).pathname,
-  ]);
-  logs.audit("authentication.mode_configured", "success", {
+}
+
+/**
+ * Serve RFC 9728 protected resource metadata at its well-known paths.
+ *
+ * @private
+ */
+function _metadataHandler(
+  prm: Record<string, unknown>,
+  paths: Set<string>,
+): HttpAuthenticator["metadata"] {
+  return (req) => {
+    if (!paths.has(new URL(req.url).pathname)) {
+      return undefined;
+    }
+    if (req.method !== "GET" && req.method !== "HEAD") {
+      return new Response(null, {
+        status: 405,
+        headers: { allow: "GET, HEAD" },
+      });
+    }
+    return new Response(JSON.stringify(prm), {
+      status: 200,
+      headers: {
+        "content-type": "application/json",
+        "cache-control": "max-age=300",
+      },
+    });
+  };
+}
+
+/**
+ * OAuth 2.0 resource server.
+ *
+ * @private
+ */
+async function _oauthAuthenticator(
+  opts: AuthenticatorOptions,
+): Promise<HttpAuthenticator> {
+  const mode = "oauth";
+  const o = _oauthConfig(opts.config);
+  const resource = new URL(o.resource ?? opts.resourceUrl.toString());
+  const audiences =
+    o.audience && o.audience.length > 0 ? o.audience : [resource.toString()];
+  const resourceMetadataUrl = getOAuthProtectedResourceMetadataUrl(resource);
+  const { verifier, validation } = await _oauthVerifier(
+    o,
+    opts,
+    audiences,
+    resource,
+  );
+  const metadata = _metadataHandler(
+    {
+      resource: resource.toString(),
+      authorization_servers: [o.issuer],
+      scopes_supported: o.scopesSupported ?? o.requiredScopes,
+      bearer_methods_supported: ["header"],
+      resource_name: opts.resourceName,
+    },
+    new Set([
+      "/.well-known/oauth-protected-resource",
+      new URL(resourceMetadataUrl).pathname,
+    ]),
+  );
+  opts.logs.audit("authentication.mode_configured", "success", {
     mode,
     validation,
     issuer: o.issuer,
     requiredScopes: o.requiredScopes,
   });
+  const ctx: OAuthContext = {
+    o,
+    verifier,
+    validation,
+    resource,
+    resourceMetadataUrl,
+    registry: opts.registry,
+  };
   return {
     mode,
-    metadata: (req) => {
-      const url = new URL(req.url);
-      if (!prmPaths.has(url.pathname)) {
-        return undefined;
-      }
-      if (req.method !== "GET" && req.method !== "HEAD") {
-        return new Response(null, {
-          status: 405,
-          headers: { allow: "GET, HEAD" },
-        });
-      }
-      return new Response(JSON.stringify(prm), {
-        status: 200,
-        headers: {
-          "content-type": "application/json",
-          "cache-control": "max-age=300",
-        },
-      });
-    },
-    authenticate: async (req, l) => {
-      try {
-        const authInfo = await verifyBearerToken(
-          req.headers.get("authorization"),
-          {
-            verifier,
-            requiredScopes: o.requiredScopes,
-            resourceMetadataUrl,
-            expectedResource: resource,
-          },
-        );
-        const extra = (authInfo.extra ?? {}) as { sub?: string; iss?: string };
-        const principal: Principal = {
-          id: opaquePrincipalId("oauth", [
-            String(extra.iss ?? o.issuer),
-            String(extra.sub ?? authInfo.clientId),
-          ]),
-          kind: "oauth",
-          clientId: authInfo.clientId,
-          scopes: authInfo.scopes,
-          expiresAt: authInfo.expiresAt,
-        };
-        opts.registry.add(authInfo.token);
-        l.audit("authentication.succeeded", "success", {
-          mode,
-          validation,
-          principalId: principal.id,
-          scopeCount: principal.scopes.length,
-        });
-        return {
-          ok: true,
-          principal,
-          authInfo: { ...authInfo, extra: { ...authInfo.extra, principal } },
-        };
-      } catch (err) {
-        const code = err instanceof OAuthError ? err.code : "server_error";
-        const reason =
-          err instanceof TokenRejected
-            ? err.reason
-            : !req.headers.get("authorization")
-              ? "missing_token"
-              : code === OAuthErrorCode.InsufficientScope
-                ? "insufficient_scope"
-                : /expired/i.test(String((err as Error).message))
-                  ? "expired"
-                  : /resource/i.test(String((err as Error).message))
-                    ? "resource_mismatch"
-                    : String(code);
-        l.audit(
-          "authentication.failed",
-          "failure",
-          { mode, validation, reason },
-          "warn",
-        );
-        return {
-          ok: false,
-          response: bearerAuthChallengeResponse(err, {
-            requiredScopes: o.requiredScopes,
-            resourceMetadataUrl,
-          }),
-        };
-      }
-    },
+    metadata,
+    authenticate: (req, l) => _authenticateOAuth(req, l, ctx),
   };
+}
+
+/**
+ * Authenticate a request with an OAuth access token.
+ *
+ * @private
+ */
+async function _authenticateOAuth(
+  req: Request,
+  l: Logs,
+  ctx: OAuthContext,
+): Promise<AuthResult> {
+  const { o, validation, resourceMetadataUrl } = ctx;
+  try {
+    const authInfo = await verifyBearerToken(req.headers.get("authorization"), {
+      verifier: ctx.verifier,
+      requiredScopes: o.requiredScopes,
+      resourceMetadataUrl,
+      expectedResource: ctx.resource,
+    });
+    const extra = (authInfo.extra ?? {}) as { sub?: string; iss?: string };
+    const principal: Principal = {
+      id: opaquePrincipalId("oauth", [
+        String(extra.iss ?? o.issuer),
+        String(extra.sub ?? authInfo.clientId),
+      ]),
+      kind: "oauth",
+      clientId: authInfo.clientId,
+      scopes: authInfo.scopes,
+      expiresAt: authInfo.expiresAt,
+    };
+    ctx.registry.add(authInfo.token);
+    l.audit("authentication.succeeded", "success", {
+      mode: "oauth",
+      validation,
+      principalId: principal.id,
+      scopeCount: principal.scopes.length,
+    });
+    return {
+      ok: true,
+      principal,
+      authInfo: { ...authInfo, extra: { ...authInfo.extra, principal } },
+    };
+  } catch (err) {
+    l.audit(
+      "authentication.failed",
+      "failure",
+      { mode: "oauth", validation, reason: _oauthFailureReason(err, req) },
+      "warn",
+    );
+    return {
+      ok: false,
+      response: bearerAuthChallengeResponse(err, {
+        requiredScopes: o.requiredScopes,
+        resourceMetadataUrl,
+      }),
+    };
+  }
+}
+
+/**
+ * A stable reason for a refused OAuth request.
+ *
+ * @private
+ */
+function _oauthFailureReason(err: unknown, req: Request): string {
+  if (err instanceof TokenRejected) {
+    return err.reason;
+  }
+  if (!req.headers.get("authorization")) {
+    return "missing_token";
+  }
+  const code = err instanceof OAuthError ? err.code : "server_error";
+  if (code === OAuthErrorCode.InsufficientScope) {
+    return "insufficient_scope";
+  }
+  const message = String((err as Error).message);
+  if (/expired/i.test(message)) {
+    return "expired";
+  }
+  return /resource/i.test(message) ? "resource_mismatch" : String(code);
 }

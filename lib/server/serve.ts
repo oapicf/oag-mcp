@@ -22,6 +22,7 @@
 import crypto from "node:crypto";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
+import type { Readable, Writable } from "node:stream";
 
 import {
   hostHeaderValidation,
@@ -31,10 +32,18 @@ import {
   toNodeHandler,
 } from "@modelcontextprotocol/node";
 import { createMcpHandler } from "@modelcontextprotocol/server";
-import { serveStdio } from "@modelcontextprotocol/server/stdio";
+import {
+  StdioServerTransport,
+  serveStdio,
+} from "@modelcontextprotocol/server/stdio";
 
-import { createHttpAuthenticator, isLoopbackHost } from "./authentication.js";
+import {
+  type HttpAuthenticator,
+  createHttpAuthenticator,
+  isLoopbackHost,
+} from "./authentication.js";
 import type { Config } from "../config.js";
+import type { Executor } from "../executor/types.js";
 import { SecretResolver } from "../util/secrets.js";
 import { OagMcpError } from "../errors.js";
 import type { Logs } from "../logger.js";
@@ -64,6 +73,37 @@ export interface ServeOptions extends Omit<PrepareOptions, "logs"> {
   configBaseDir: string;
   logs: Logs;
   fetchImpl?: typeof fetch;
+  /** Executor for agent code; default: a verified Deno subprocess executor. */
+  executor?: Executor;
+  /** Streams for the stdio transport; default: this process's. */
+  stdio?: { stdin: Readable; stdout: Writable };
+}
+
+/** Node.js request handling for Streamable HTTP. */
+type NodeHandler = ReturnType<typeof toNodeHandler>;
+
+/** Validates one request, writing the refusal itself; false when refused. */
+type RequestValidator = (
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+) => boolean;
+
+/** Everything a Streamable HTTP request is routed with. */
+interface HttpContext {
+  h: Config["http"];
+  logs: Logs;
+  authenticator: HttpAuthenticator;
+  nodeHandler: NodeHandler;
+  validateHost: RequestValidator | undefined;
+  validateOrigin: RequestValidator;
+  resourceUrl: URL;
+}
+
+/** What identifies one HTTP request in records and in the MCP server. */
+interface HttpRequestScope {
+  requestId: string;
+  client: ClientEndpoint;
+  reqLogs: Logs;
 }
 
 /**
@@ -73,13 +113,28 @@ export interface ServeOptions extends Omit<PrepareOptions, "logs"> {
  * @return {Promise} running server
  */
 export async function serve(opts: ServeOptions): Promise<RunningServer> {
-  const { config, logs } = opts;
   const started = Date.now();
-  const prepared: PreparedSdk = await prepareSdk({ ...opts, logs });
+  return servePrepared(await prepareSdk(opts), opts, started);
+}
+
+/**
+ * Serve an already prepared SDK. The prepared workspace is removed when
+ * start-up fails or the server is closed.
+ *
+ * @param {Object} prepared - prepared SDK
+ * @param {Object} opts - serve options
+ * @param {Number} [started] - start-up start time, default: now
+ * @return {Promise} running server
+ */
+export async function servePrepared(
+  prepared: PreparedSdk,
+  opts: ServeOptions,
+  started: number = Date.now(),
+): Promise<RunningServer> {
+  const { config, logs } = opts;
   let running: RunningServer;
-  let service: OagMcpService;
   try {
-    service = await runStage(
+    const service = await runStage(
       logs,
       "executor",
       () =>
@@ -88,6 +143,7 @@ export async function serve(opts: ServeOptions): Promise<RunningServer> {
           config,
           configBaseDir: opts.configBaseDir,
           logs,
+          executor: opts.executor,
           fetchImpl: opts.fetchImpl,
         }),
       opts.signal,
@@ -106,7 +162,7 @@ export async function serve(opts: ServeOptions): Promise<RunningServer> {
     service.warmUp();
     running =
       opts.transport === "stdio"
-        ? await _serveStdio(service, opts)
+        ? _serveStdio(service, opts)
         : await _serveHttp(service, opts);
   } catch (err) {
     prepared.cleanup();
@@ -142,10 +198,10 @@ export async function serve(opts: ServeOptions): Promise<RunningServer> {
  *
  * @private
  */
-async function _serveStdio(
+function _serveStdio(
   service: OagMcpService,
   opts: ServeOptions,
-): Promise<RunningServer> {
+): RunningServer {
   const { logs, config } = opts;
   const principal: Principal = {
     id: `local:${config.mcpAuth.stdio.principal}`,
@@ -161,6 +217,10 @@ async function _serveStdio(
   const handle = serveStdio(
     () => createMcpServer(service, principal, "stdio"),
     {
+      transport: new StdioServerTransport(
+        opts.stdio?.stdin,
+        opts.stdio?.stdout,
+      ),
       onerror: (err) =>
         logs.op("error", "transport.error", {
           transport: "stdio",
@@ -181,27 +241,22 @@ async function _serveStdio(
 }
 
 /**
- * Serve over Streamable HTTP.
+ * Refuse unauthenticated non-loopback binds; warn about remote exposure.
  *
  * @private
  */
-async function _serveHttp(
-  service: OagMcpService,
-  opts: ServeOptions,
-): Promise<RunningServer> {
-  const { logs, config } = opts;
-  const h = config.http;
-  const loopback = isLoopbackHost(h.host);
+function _checkExposure(config: Config, logs: Logs, loopback: boolean): void {
+  const host = config.http.host;
   if (config.mcpAuth.mode === "none" && !loopback) {
     logs.audit(
       "security.unauthenticated_nonloopback_refused",
       "denied",
-      { host: h.host, mode: "none" },
+      { host, mode: "none" },
       "error",
     );
     throw new OagMcpError(
       "MCP_AUTH_REQUIRED",
-      `Refusing to serve unauthenticated MCP on non-loopback address ${h.host}`,
+      `Refusing to serve unauthenticated MCP on non-loopback address ${host}`,
       {
         hint: "Bind to 127.0.0.1, or configure mcpAuth.mode static-bearer or oauth. Terminate TLS in front of the server for remote access.",
       },
@@ -209,39 +264,61 @@ async function _serveHttp(
   }
   if (!loopback) {
     logs.op("warn", "transport.remote_exposure", {
-      host: h.host,
+      host,
       note: "terminate HTTPS in a reverse proxy; oag-mcp serves plain HTTP",
     });
   }
-  const resolver = new SecretResolver({
-    secretsFile: config.upstreamAuth.secretsFile,
-    baseDir: opts.configBaseDir,
-  });
+}
 
-  let server: http.Server | undefined;
-  const listen = await new Promise<AddressInfo>((resolve, reject) => {
-    server = http.createServer();
+/**
+ * Start listening.
+ *
+ * @private
+ */
+function _listen(h: Config["http"]): Promise<http.Server> {
+  return new Promise((resolve, reject) => {
+    const server = http.createServer();
     server.once("error", reject);
-    server.listen(h.port, h.host, () =>
-      resolve(server!.address() as AddressInfo),
-    );
+    server.listen(h.port, h.host, () => resolve(server));
   });
-  const hostForUrl =
+}
+
+/**
+ * The URL a listening server serves the MCP endpoint at.
+ *
+ * @private
+ */
+function _localUrl(server: http.Server, h: Config["http"]): string {
+  const listen = server.address() as AddressInfo;
+  const host =
     listen.family === "IPv6" ? `[${listen.address}]` : listen.address;
-  const localUrl = `http://${hostForUrl}:${listen.port}${h.path}`;
-  const resourceUrl = new URL(h.publicUrl ?? localUrl);
-  let authenticator;
+  return `http://${host}:${listen.port}${h.path}`;
+}
+
+/**
+ * Create the authenticator, auditing an invalid configuration.
+ *
+ * @private
+ */
+async function _authenticator(
+  service: OagMcpService,
+  opts: ServeOptions,
+  resourceUrl: URL,
+): Promise<HttpAuthenticator> {
+  const { config, logs } = opts;
   try {
-    authenticator = await createHttpAuthenticator({
+    return await createHttpAuthenticator({
       config,
-      resolver,
+      resolver: new SecretResolver({
+        secretsFile: config.upstreamAuth.secretsFile,
+        baseDir: opts.configBaseDir,
+      }),
       registry: secrets,
       logs,
       resourceUrl,
       resourceName: `${service.info.api.title} (oag-mcp)`,
     });
   } catch (err) {
-    server!.close();
     logs.audit(
       "security.config_invalid",
       "failure",
@@ -253,8 +330,22 @@ async function _serveHttp(
     );
     throw err;
   }
+}
 
-  const handler = createMcpHandler(
+/**
+ * The Streamable HTTP MCP request handler: creates an MCP server for each
+ * authenticated request's principal, and refuses a request that arrives
+ * without one (routing authenticates first; this is a second line).
+ *
+ * @param {Object} service - the service the tools call
+ * @param {Object} logs - logs
+ * @return {Object} MCP handler
+ */
+export function mcpRequestHandler(
+  service: OagMcpService,
+  logs: Logs,
+): ReturnType<typeof createMcpHandler> {
+  return createMcpHandler(
     ({ authInfo }) => {
       const extra = (authInfo?.extra ?? {}) as {
         principal?: Principal;
@@ -280,146 +371,94 @@ async function _serveHttp(
         }),
     },
   );
-  const nodeHandler = toNodeHandler(handler, {
-    maxRequestBodySize: h.maxBodyBytes,
-    onerror: (err) =>
-      logs.op("error", "transport.error", {
-        transport: "streamable-http",
-        error: err.name,
-      }),
-  });
-  const validateHost = loopback
-    ? localhostHostValidation()
-    : h.allowedHosts.length > 0
-      ? hostHeaderValidation(h.allowedHosts)
-      : undefined;
-  const validateOrigin =
-    h.allowedOrigins.length > 0
-      ? originValidation(h.allowedOrigins)
-      : loopback
-        ? localhostOriginValidation()
-        : originValidation([]);
+}
 
-  server!.on("request", async (req, res) => {
-    const requestId = `req_${crypto.randomUUID()}`;
-    const client = {
-      clientAddress: req.socket.remoteAddress,
-      clientPort: req.socket.remotePort,
-    };
-    const reqLogs = logs.child({
-      requestId,
-      transport: "streamable-http",
-      ...client,
-    });
-    try {
-      if (validateHost && !validateHost(req, res)) {
-        reqLogs.audit(
-          "transport.host_rejected",
-          "denied",
-          { httpMethod: req.method, reason: "host_not_allowed" },
-          "warn",
-        );
-        return;
-      }
-      if (!validateOrigin(req, res)) {
-        reqLogs.audit(
-          "transport.origin_rejected",
-          "denied",
-          { httpMethod: req.method, reason: "origin_not_allowed" },
-          "warn",
-        );
-        return;
-      }
-      const url = new URL(req.url ?? "/", "http://localhost");
-      if (
-        url.searchParams.has("access_token") ||
-        url.searchParams.has("token")
-      ) {
-        reqLogs.audit(
-          "authentication.token_in_url_rejected",
-          "denied",
-          {},
-          "warn",
-        );
-        res.writeHead(400, { "content-type": "application/json" });
-        res.end(
-          JSON.stringify({
-            error: "invalid_request",
-            error_description:
-              "Access tokens must be sent in the Authorization header",
-          }),
-        );
-        return;
-      }
-      if (url.pathname === "/healthz") {
-        res.writeHead(200, { "content-type": "application/json" });
-        res.end('{"status":"ok"}');
-        return;
-      }
-      const webReq = new Request(
-        new URL(url.pathname + url.search, resourceUrl.origin),
-        {
-          method: req.method,
-          headers: Object.entries(req.headers).flatMap(([k, v]) =>
-            v === undefined
-              ? []
-              : Array.isArray(v)
-                ? v.map((x) => [k, x] as [string, string])
-                : [[k, v] as [string, string]],
-          ),
-        },
-      );
-      const meta = authenticator.metadata(webReq);
-      if (meta) {
-        res.writeHead(meta.status, Object.fromEntries(meta.headers));
-        res.end(Buffer.from(await meta.arrayBuffer()));
-        return;
-      }
-      if (url.pathname !== h.path) {
-        res.writeHead(404, { "content-type": "application/json" });
-        res.end('{"error":"not_found"}');
-        return;
-      }
-      const auth = await authenticator.authenticate(webReq, reqLogs.child({}));
-      if (!auth.ok) {
-        res.writeHead(
-          auth.response.status,
-          Object.fromEntries(auth.response.headers),
-        );
-        res.end(Buffer.from(await auth.response.arrayBuffer()));
-        return;
-      }
-      (req as http.IncomingMessage & { auth?: unknown }).auth = {
-        ...auth.authInfo,
-        extra: {
-          ...(auth.authInfo.extra ?? {}),
-          principal: auth.principal,
-          requestId,
-          client,
-        },
-      };
-      await nodeHandler(req as never, res as never);
-    } catch (err) {
-      reqLogs.op("error", "transport.request_failed", {
-        error: (err as Error).name,
-      });
-      if (!res.headersSent) {
-        res.writeHead(500, { "content-type": "application/json" });
-        res.end('{"error":"server_error"}');
-      }
-    }
-  });
-  server!.on("clientError", (err, socket) => {
+/**
+ * Host header validation: loopback names on loopback binds, otherwise the
+ * configured hosts, if any.
+ *
+ * @private
+ */
+function _hostValidator(
+  h: Config["http"],
+  loopback: boolean,
+): RequestValidator | undefined {
+  if (loopback) {
+    return localhostHostValidation();
+  }
+  return h.allowedHosts.length > 0
+    ? hostHeaderValidation(h.allowedHosts)
+    : undefined;
+}
+
+/**
+ * Origin validation: the configured origins, otherwise loopback origins on
+ * loopback binds and none elsewhere.
+ *
+ * @private
+ */
+function _originValidator(
+  h: Config["http"],
+  loopback: boolean,
+): RequestValidator {
+  if (h.allowedOrigins.length > 0) {
+    return originValidation(h.allowedOrigins);
+  }
+  return loopback ? localhostOriginValidation() : originValidation([]);
+}
+
+/**
+ * Serve over Streamable HTTP.
+ *
+ * @private
+ */
+async function _serveHttp(
+  service: OagMcpService,
+  opts: ServeOptions,
+): Promise<RunningServer> {
+  const { logs, config } = opts;
+  const h = config.http;
+  const loopback = isLoopbackHost(h.host);
+  _checkExposure(config, logs, loopback);
+  const server = await _listen(h);
+  const localUrl = _localUrl(server, h);
+  const resourceUrl = new URL(h.publicUrl ?? localUrl);
+  let authenticator: HttpAuthenticator;
+  try {
+    authenticator = await _authenticator(service, opts, resourceUrl);
+  } catch (err) {
+    server.close();
+    throw err;
+  }
+  const handler = mcpRequestHandler(service, logs);
+  const ctx: HttpContext = {
+    h,
+    logs,
+    authenticator,
+    nodeHandler: toNodeHandler(handler, {
+      maxRequestBodySize: h.maxBodyBytes,
+      onerror: (err) =>
+        logs.op("error", "transport.error", {
+          transport: "streamable-http",
+          error: err.name,
+        }),
+    }),
+    validateHost: _hostValidator(h, loopback),
+    validateOrigin: _originValidator(h, loopback),
+    resourceUrl,
+  };
+  server.on("request", (req, res) => _handleRequest(ctx, req, res));
+  server.on("clientError", (err, socket) => {
     logs.op("warn", "transport.connection_failed", {
       transport: "streamable-http",
-      error: (err as Error).name,
+      error: err.name,
     });
     socket.destroy();
   });
   logs.op("info", "transport.initialized", {
     transport: "streamable-http",
     host: h.host,
-    port: listen.port,
+    port: (server.address() as AddressInfo).port,
     path: h.path,
     mcpAuthMode: authenticator.mode,
     outcome: "success",
@@ -430,10 +469,196 @@ async function _serveHttp(
     close: async () => {
       await handler.close();
       const closed = new Promise<void>((resolve) =>
-        server!.close(() => resolve()),
+        server.close(() => resolve()),
       );
-      server!.closeAllConnections?.();
+      server.closeAllConnections();
       await closed;
     },
   };
+}
+
+/**
+ * Handle one HTTP request, answering a server error when routing fails.
+ *
+ * @private
+ */
+async function _handleRequest(
+  ctx: HttpContext,
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+): Promise<void> {
+  const requestId = `req_${crypto.randomUUID()}`;
+  const client = {
+    clientAddress: req.socket.remoteAddress,
+    clientPort: req.socket.remotePort,
+  };
+  const reqLogs = ctx.logs.child({
+    requestId,
+    transport: "streamable-http",
+    ...client,
+  });
+  try {
+    await _route(ctx, req, res, { requestId, client, reqLogs });
+  } catch (err) {
+    reqLogs.op("error", "transport.request_failed", {
+      error: (err as Error).name,
+    });
+    if (!res.headersSent) {
+      _respond(res, 500, '{"error":"server_error"}');
+    }
+  }
+}
+
+/**
+ * Route one HTTP request: transport checks, health, discovery metadata,
+ * authentication, then the MCP handler.
+ *
+ * @private
+ */
+async function _route(
+  ctx: HttpContext,
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  scope: HttpRequestScope,
+): Promise<void> {
+  if (!_admitted(ctx, req, res, scope.reqLogs)) {
+    return;
+  }
+  const url = new URL(req.url ?? "/", "http://localhost");
+  if (url.searchParams.has("access_token") || url.searchParams.has("token")) {
+    scope.reqLogs.audit(
+      "authentication.token_in_url_rejected",
+      "denied",
+      {},
+      "warn",
+    );
+    _respond(
+      res,
+      400,
+      JSON.stringify({
+        error: "invalid_request",
+        error_description:
+          "Access tokens must be sent in the Authorization header",
+      }),
+    );
+    return;
+  }
+  if (url.pathname === "/healthz") {
+    _respond(res, 200, '{"status":"ok"}');
+    return;
+  }
+  const webReq = new Request(
+    new URL(url.pathname + url.search, ctx.resourceUrl.origin),
+    { method: req.method, headers: _headerPairs(req.headers) },
+  );
+  const meta = ctx.authenticator.metadata(webReq);
+  if (meta) {
+    await _relay(res, meta);
+    return;
+  }
+  if (url.pathname !== ctx.h.path) {
+    _respond(res, 404, '{"error":"not_found"}');
+    return;
+  }
+  await _authenticateAndHandle(ctx, req, res, scope, webReq);
+}
+
+/**
+ * Apply the Host and Origin checks, auditing a refusal.
+ *
+ * @private
+ */
+function _admitted(
+  ctx: HttpContext,
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  reqLogs: Logs,
+): boolean {
+  if (ctx.validateHost && !ctx.validateHost(req, res)) {
+    reqLogs.audit(
+      "transport.host_rejected",
+      "denied",
+      { httpMethod: req.method, reason: "host_not_allowed" },
+      "warn",
+    );
+    return false;
+  }
+  if (!ctx.validateOrigin(req, res)) {
+    reqLogs.audit(
+      "transport.origin_rejected",
+      "denied",
+      { httpMethod: req.method, reason: "origin_not_allowed" },
+      "warn",
+    );
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Authenticate a request to the MCP endpoint and hand it to the MCP
+ * handler with its principal.
+ *
+ * @private
+ */
+async function _authenticateAndHandle(
+  ctx: HttpContext,
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  scope: HttpRequestScope,
+  webReq: Request,
+): Promise<void> {
+  const auth = await ctx.authenticator.authenticate(
+    webReq,
+    scope.reqLogs.child({}),
+  );
+  if (!auth.ok) {
+    await _relay(res, auth.response);
+    return;
+  }
+  (req as http.IncomingMessage & { auth?: unknown }).auth = {
+    ...auth.authInfo,
+    extra: {
+      ...(auth.authInfo.extra ?? {}),
+      principal: auth.principal,
+      requestId: scope.requestId,
+      client: scope.client,
+    },
+  };
+  await ctx.nodeHandler(req as never, res as never);
+}
+
+/**
+ * Request headers as name/value pairs, one per value.
+ *
+ * @private
+ */
+function _headerPairs(
+  headers: http.IncomingHttpHeaders,
+): Array<[string, string]> {
+  return Object.entries(headers).flatMap(([k, v]) =>
+    (Array.isArray(v) ? v : [v])
+      .filter((x): x is string => x !== undefined)
+      .map((x): [string, string] => [k, x]),
+  );
+}
+
+/**
+ * Answer with a JSON body.
+ *
+ * @private
+ */
+function _respond(res: http.ServerResponse, status: number, body: string) {
+  res.writeHead(status, { "content-type": "application/json" });
+  res.end(body);
+}
+
+/**
+ * Answer with a web Response.
+ *
+ * @private
+ */
+async function _relay(res: http.ServerResponse, response: Response) {
+  res.writeHead(response.status, Object.fromEntries(response.headers));
+  res.end(Buffer.from(await response.arrayBuffer()));
 }

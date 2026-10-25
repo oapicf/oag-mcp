@@ -1,10 +1,14 @@
 "use strict";
 import referee from "@sinonjs/referee";
 
+import ts from "typescript";
+
 import {
   findViolations,
+  mapDiagnostic,
   prepareCode,
   wrapForExecution,
+  wrapForTypecheck,
 } from "../../lib/executor/code-policy.js";
 
 const { assert } = referee;
@@ -81,5 +85,57 @@ describe("code-policy - prepareCode", function () {
 
   it("should keep the one-line wrapper header the diagnostics mapping assumes", function () {
     assert.equals(wrapForExecution("X").split("\n")[1], "X");
+  });
+});
+
+describe("code-policy - findViolations module syntax", function () {
+  it("should find import and export-from declarations and import-equals", function () {
+    assert.equals(
+      findViolations(
+        'import fs from "node:fs";\nexport * from "./x";\nimport cp = require("child_process");',
+        "typescript",
+      ),
+      [
+        "module import at line 1",
+        "module import at line 2",
+        "module import at line 3",
+      ],
+    );
+  });
+
+  it("should allow local exports without a module", function () {
+    assert.equals(
+      findViolations("const a = 1;\nexport { a };", "typescript"),
+      [],
+    );
+  });
+});
+
+describe("code-policy - wrapForTypecheck", function () {
+  it("should wrap agent code as the body of an async function in a module", function () {
+    const src = wrapForTypecheck("return 1;");
+    assert.equals(src.split("\n")[1], "return 1;");
+    assert.match(src, /^export \{\}; async function/);
+  });
+});
+
+describe("code-policy - mapDiagnostic", function () {
+  it("should report a diagnostic without a source position at line 0", function () {
+    assert.equals(
+      mapDiagnostic({
+        category: ts.DiagnosticCategory.Error,
+        code: 1234,
+        file: undefined,
+        start: undefined,
+        length: undefined,
+        messageText: {
+          messageText: "outer",
+          category: 1,
+          code: 1,
+          next: [{ messageText: "inner", category: 1, code: 2 }],
+        },
+      } as ts.Diagnostic),
+      { line: 0, column: 0, code: 1234, message: "outer\n  inner" },
+    );
   });
 });

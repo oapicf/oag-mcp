@@ -57,6 +57,27 @@ export function hintsForOperation(op: SpecOperation | undefined): ExampleHints {
 }
 
 /**
+ * How a scheme is shown to agents, e.g. "http-bearer" or "apiKey-header".
+ *
+ * @private
+ */
+function _schemeType(s: SecuritySchemeInfo | undefined): string {
+  if (!s) {
+    return "undefined-scheme";
+  }
+  switch (s.type) {
+    case "http":
+      return `http-${s.scheme}`;
+    case "apiKey":
+      return `apiKey-${s.in}`;
+    case "oauth2":
+      return "oauth2-client-credentials";
+    default:
+      return s.type;
+  }
+}
+
+/**
  * Summarise authentication requirements for agents.
  *
  * @param {Array} security - effective requirement alternatives
@@ -76,15 +97,7 @@ export function summariseAuth(
         if (!s || !s.supported) {
           unsupported.add(name);
         }
-        const type = s
-          ? s.type === "http"
-            ? `http-${s.scheme}`
-            : s.type === "apiKey"
-              ? `apiKey-${s.in}`
-              : s.type === "oauth2"
-                ? "oauth2-client-credentials"
-                : s.type
-          : "undefined-scheme";
+        const type = _schemeType(s);
         return { name, type, scopes };
       }),
     }));
@@ -94,6 +107,98 @@ export function summariseAuth(
       security.length === 0 ||
       security.some((r) => Object.keys(r).length === 0),
     unsupportedSchemes: [...unsupported].sort(),
+  };
+}
+
+/** Spec operations by key, and by method and normalised path. */
+interface OperationIndex {
+  byKey: Map<string, SpecOperation>;
+  byNormalised: Map<string, SpecOperation[]>;
+}
+
+/**
+ * Index the spec's operations for matching.
+ *
+ * @private
+ */
+function _operationIndex(spec: SpecSummary): OperationIndex {
+  const byKey = new Map<string, SpecOperation>();
+  const byNormalised = new Map<string, SpecOperation[]>();
+  for (const op of spec.operations) {
+    byKey.set(op.key, op);
+    const nk = `${op.method} ${normalisePathTemplate(op.path)}`;
+    byNormalised.set(nk, [...(byNormalised.get(nk) ?? []), op]);
+  }
+  return { byKey, byNormalised };
+}
+
+/**
+ * The operation an SDK method calls: the one with its exact method and
+ * path, or the only one matching once path parameter names are ignored.
+ * Otherwise the problem is recorded and undefined returned.
+ *
+ * @private
+ */
+function _matchOperation(
+  m: AnalyzedMethod,
+  index: OperationIndex,
+  problems: string[],
+): SpecOperation | undefined {
+  const exact = index.byKey.get(`${m.httpMethod} ${m.path}`);
+  if (exact) {
+    return exact;
+  }
+  const candidates =
+    index.byNormalised.get(
+      `${m.httpMethod} ${normalisePathTemplate(m.path)}`,
+    ) ?? [];
+  if (candidates.length === 1) {
+    return candidates[0];
+  }
+  const method = `${m.className}.${m.methodName} (${m.httpMethod} ${m.path})`;
+  problems.push(
+    candidates.length > 1
+      ? `${method} matches several operations: ${candidates.map((c) => c.key).join(", ")}`
+      : `${method} has no matching operation in the spec`,
+  );
+  return undefined;
+}
+
+/**
+ * The method record of an SDK method bound to its operation.
+ *
+ * @private
+ */
+function _record(
+  m: AnalyzedMethod,
+  op: SpecOperation,
+  spec: SpecSummary,
+): MethodRecord {
+  const id = `${m.className}.${m.methodName}`;
+  return {
+    id,
+    className: m.className,
+    methodName: m.methodName,
+    sdkPath: `sdk.${id}`,
+    operationId: op.operationId,
+    httpMethod: op.method,
+    path: op.path,
+    tags: op.tags,
+    summary: op.summary,
+    description: op.description ?? (m.documentation || undefined),
+    deprecated: op.deprecated || m.deprecated,
+    signature: m.signature,
+    parameters: m.parameters,
+    inputType: m.inputType,
+    returnType: m.returnType,
+    referencedTypes: m.referencedTypes,
+    requiredArguments: m.requiredArguments,
+    apiParameters: op.parameters,
+    requestBody: op.requestBody,
+    responses: op.responses,
+    auth: summariseAuth(op.security, spec.securitySchemes),
+    security: op.security,
+    example: m.example,
   };
 }
 
@@ -112,63 +217,16 @@ export function buildRecords(
   bindings: OperationBinding[];
   unmapped: Array<{ key: string; operationId?: string }>;
 } {
-  const byKey = new Map<string, SpecOperation>();
-  const byNormalised = new Map<string, SpecOperation[]>();
-  for (const op of spec.operations) {
-    byKey.set(op.key, op);
-    const nk = `${op.method} ${normalisePathTemplate(op.path)}`;
-    byNormalised.set(nk, [...(byNormalised.get(nk) ?? []), op]);
-  }
+  const index = _operationIndex(spec);
   const problems: string[] = [];
   const records: MethodRecord[] = [];
   const bound = new Set<string>();
   for (const m of methods) {
-    let op = byKey.get(`${m.httpMethod} ${m.path}`);
-    if (!op) {
-      const candidates =
-        byNormalised.get(`${m.httpMethod} ${normalisePathTemplate(m.path)}`) ??
-        [];
-      if (candidates.length === 1) {
-        op = candidates[0];
-      } else if (candidates.length > 1) {
-        problems.push(
-          `${m.className}.${m.methodName} (${m.httpMethod} ${m.path}) matches several operations: ${candidates.map((c) => c.key).join(", ")}`,
-        );
-        continue;
-      } else {
-        problems.push(
-          `${m.className}.${m.methodName} (${m.httpMethod} ${m.path}) has no matching operation in the spec`,
-        );
-        continue;
-      }
+    const op = _matchOperation(m, index, problems);
+    if (op) {
+      bound.add(op.key);
+      records.push(_record(m, op, spec));
     }
-    bound.add(op.key);
-    const id = `${m.className}.${m.methodName}`;
-    records.push({
-      id,
-      className: m.className,
-      methodName: m.methodName,
-      sdkPath: `sdk.${id}`,
-      operationId: op.operationId,
-      httpMethod: op.method,
-      path: op.path,
-      tags: op.tags,
-      summary: op.summary,
-      description: op.description ?? (m.documentation || undefined),
-      deprecated: op.deprecated || m.deprecated,
-      signature: m.signature,
-      parameters: m.parameters,
-      inputType: m.inputType,
-      returnType: m.returnType,
-      referencedTypes: m.referencedTypes,
-      requiredArguments: m.requiredArguments,
-      apiParameters: op.parameters,
-      requestBody: op.requestBody,
-      responses: op.responses,
-      auth: summariseAuth(op.security, spec.securitySchemes),
-      security: op.security,
-      example: m.example,
-    });
   }
   if (problems.length > 0) {
     throw new OagMcpError(

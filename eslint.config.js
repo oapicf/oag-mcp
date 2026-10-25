@@ -30,6 +30,11 @@ export default defineConfig([
     },
   },
   {
+    // The limit `make complexity` reports against (COMPLEXITY_MAX).
+    files: ["lib/**/*.ts"],
+    rules: { complexity: ["error", 10] },
+  },
+  {
     files: ["bin/**/*.js", "eslint.config.js"],
     languageOptions: { globals: nodeGlobals },
   },

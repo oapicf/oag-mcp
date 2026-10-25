@@ -9,6 +9,7 @@ import {
   normaliseName,
   scanImplementation,
 } from "../../lib/prepare/analyze.js";
+import type { AnalyzedMethod } from "../../lib/prepare/analyze.js";
 import { emitDeclarations } from "../../lib/prepare/bundle.js";
 import { inspectSdk } from "../../lib/prepare/compat.js";
 import {
@@ -42,6 +43,88 @@ async function analyse(sdkDir: string, spec: SpecSummary) {
   );
   return { impl, methods };
 }
+
+function writeImpl(name: string, text: string): string {
+  const file = path.join(tmpDir(), name);
+  fs.writeFileSync(file, text);
+  return file;
+}
+
+const SYNTHETIC_DTS = `export declare class BaseAPI {}
+/** The base. */
+export interface Base { id: number; }
+export interface Big extends Base {
+  [key: string]: unknown;
+${Array.from({ length: 41 }, (_, i) => `  /** Member ${i}. */\n  m${i}: string;`).join("\n")}
+}
+export declare enum Color { Red = "red", Blue = "blue" }
+export type Shape = { kind: string } | null;
+export type Size = "s" | "m";
+export type Nothing = null | undefined;
+export interface Deep { x: number; }
+export interface Inner { deep: Deep; }
+export interface Nested { inner: Inner; }
+export interface ThingRequest {
+  color: Color; size: Size; when: Date; tags: Array<string>; flag: boolean;
+  nested: Nested; shape: Shape; record: Record<"a", number>; nothing: Nothing;
+  opts: { a?: string }; count: number; label: string; later?: string;
+}
+export declare class ThingsApi extends BaseAPI {
+  constructor();
+  basePath: string;
+  private hidden(): Promise<void>;
+  protected prot(): Promise<void>;
+  static make(): ThingsApi;
+  getThingRaw(): Promise<void>;
+  getThingRequestOpts(): Promise<void>;
+  /**
+   * Get a thing.
+   * @deprecated
+   */
+  getThing(requestParameters: ThingRequest, initOverrides?: unknown): Promise<Big>;
+  getRecord(requestParameters: Record<"a", Nested>): Promise<void>;
+  untyped();
+  listThings(a: number, body: Nested, mode: "x" | "y", b?: string): Promise<void>;
+  inline(requestParameters: { id: number }): Promise<void>;
+  noArgs(): Promise<Shape>;
+}
+export declare class OtherApi extends BaseAPI {
+  orphan(): Promise<void>;
+}
+`;
+
+function syntheticAnalyzer(): SdkAnalyzer {
+  const dir = tmpDir();
+  fs.writeFileSync(path.join(dir, "index.d.ts"), SYNTHETIC_DTS);
+  return new SdkAnalyzer(path.join(dir, "index.d.ts"));
+}
+
+function binding(p: string) {
+  return { httpMethod: "GET", path: p, source: "RequestOpts" as const };
+}
+
+const THINGS_BINDINGS = new Map([
+  ["getThing", binding("/t")],
+  ["getRecord", binding("/r")],
+  ["untyped", binding("/u")],
+  ["listThings", binding("/l")],
+  ["noArgs", binding("/n")],
+  ["inline", binding("/i")],
+]);
+
+const THINGS_HINTS: Record<string, Record<string, unknown>> = {
+  "/t": {
+    color: "blue",
+    size: "m",
+    when: "2026-02-02",
+    tags: ["x"],
+    flag: false,
+    count: 3,
+    __body: { inner: { deep: { x: 9 } } },
+  },
+  "/r": { __body: { inner: {} } },
+  "/l": { a: 5, __body: { inner: { deep: { x: 2 } } } },
+};
 
 describe("analyze - scanImplementation", function () {
   it("should read HTTP method and path templates from RequestOpts implementations", function () {
@@ -84,6 +167,125 @@ export class LegacyApi extends runtime.BaseAPI {
       path: "/things/{thingId}",
       source: "Raw",
     });
+  });
+
+  it("should reconstruct template, parenthesised and variable paths", function () {
+    const file = writeImpl(
+      "ThingsApi.ts",
+      `export class ThingsApi extends runtime.BaseAPI {
+  async templateRequestOpts() {
+    return { path: \`/a/${"$"}{"b"}/c\`, method: "get" };
+  }
+  async parenRequestOpts() {
+    return { "path": ("/paren"), "method": ("POST") };
+  }
+  async shorthandRequestOpts() {
+    const path = "/short";
+    const path2 = "/ignored";
+    return { path, method: "PUT" };
+  }
+  async variableRequestOpts() {
+    let urlPath = "/first";
+    let urlPath = "/second";
+    return { path: urlPath, method: "DELETE" };
+  }
+}`,
+    );
+    assert.equals(
+      Object.fromEntries(scanImplementation([file]).get("ThingsApi")!),
+      {
+        template: { httpMethod: "GET", path: "/a/b/c", source: "RequestOpts" },
+        paren: { httpMethod: "POST", path: "/paren", source: "RequestOpts" },
+        shorthand: { httpMethod: "PUT", path: "/short", source: "RequestOpts" },
+        variable: {
+          httpMethod: "DELETE",
+          path: "/first",
+          source: "RequestOpts",
+        },
+      },
+    );
+  });
+
+  it("should skip methods whose method or path is not a literal", function () {
+    const file = writeImpl(
+      "ThingsApi.ts",
+      `export class ThingsApi extends runtime.BaseAPI {
+  async dynamicRequestOpts() {
+    return { path: \`/a/${"$"}{id}\`, method: "GET" };
+  }
+  async unknownVariableRequestOpts() {
+    return { path: urlPath, method: "GET" };
+  }
+  async emptyMethodRequestOpts() {
+    return { path: "/x", method: "" };
+  }
+  async noPathRequestOpts() {
+    return { method: "GET" };
+  }
+  async declaredRequestOpts(): Promise<void>;
+  async RequestOpts() {
+    return { path: "/x", method: "GET" };
+  }
+  async helper() {
+    return { path: "/x", method: "GET" };
+  }
+}
+export class Unrelated {
+  async otherRequestOpts() {
+    return { path: "/x", method: "GET" };
+  }
+}`,
+    );
+    const impl = scanImplementation([file]);
+    assert.equals([...impl.keys()], ["ThingsApi"]);
+    assert.equals(impl.get("ThingsApi")!.size, 0);
+  });
+
+  it("should prefer RequestOpts over Raw in either order", function () {
+    const file = writeImpl(
+      "ThingsApi.ts",
+      `export class ThingsApi extends runtime.BaseAPI {
+  async aRaw() { return this.request({ path: "/raw", method: "GET" }); }
+  async aRequestOpts() { return { path: "/opts", method: "GET" }; }
+  async bRequestOpts() { return { path: "/opts", method: "GET" }; }
+  async bRaw() { return this.request({ path: "/raw", method: "GET" }); }
+  async cRaw() { return this.request({ path: "/raw1", method: "GET" }); }
+  async cRaw() { return this.request({ path: "/raw2", method: "GET" }); }
+}`,
+    );
+    const methods = scanImplementation([file]).get("ThingsApi")!;
+    assert.equals(methods.get("a")!.path, "/opts");
+    assert.equals(methods.get("b")!.path, "/opts");
+    assert.equals(methods.get("c")!.path, "/raw2");
+  });
+
+  it("should read ES5 prototype assignments in compiled JavaScript", function () {
+    const file = writeImpl(
+      "ThingsApi.js",
+      `var ThingsApi = (function (_super) {
+  function ThingsApi() {}
+  ThingsApi.prototype.getThingRequestOpts = function () {
+    return { path: "/things", method: "GET" };
+  };
+  ThingsApi.prototype.putThingRaw = () => ({ path: "/things", method: "PUT" });
+  ThingsApi.prototype.helper = function () {
+    return { path: "/x", method: "GET" };
+  };
+  ThingsApi.prototype.listRequestOpts = "not a function";
+  ThingsApi.other.listRequestOpts = function () {
+    return { path: "/x", method: "GET" };
+  };
+  ThingsApi.prototype.oldRequestOpts += function () {};
+  return ThingsApi;
+})(BaseAPI);`,
+    );
+    assert.equals(
+      Object.fromEntries(scanImplementation([file]).get("ThingsApi")!),
+      {
+        getThing: { httpMethod: "GET", path: "/things", source: "RequestOpts" },
+        putThing: { httpMethod: "PUT", path: "/things", source: "Raw" },
+      },
+    );
   });
 });
 
@@ -164,6 +366,127 @@ describe("analyze - SdkAnalyzer.analyze", function () {
     } catch (e) {
       assert.equals((e as OagMcpError).code, "SDK_BINDING_AMBIGUOUS");
       assert.match((e as OagMcpError).message, /StoreApi\.getStoreInventory/);
+    }
+  });
+});
+
+describe("analyze - SdkAnalyzer.analyze declarations", function () {
+  before(function () {
+    this.methods = syntheticAnalyzer().analyze(
+      new Map([["ThingsApi", THINGS_BINDINGS]]),
+      (_m, p) => THINGS_HINTS[p] ?? {},
+    );
+    this.byName = (name: string) =>
+      (this.methods as AnalyzedMethod[]).find((m) => m.methodName === name)!;
+  });
+
+  it("should analyse public API methods only, sorted by name", function () {
+    assert.equals(
+      (this.methods as AnalyzedMethod[]).map((m) => m.methodName),
+      ["getRecord", "getThing", "inline", "listThings", "noArgs", "untyped"],
+    );
+  });
+
+  it("should build an object example from hints, literals and the body hint", function () {
+    const get = this.byName("getThing") as AnalyzedMethod;
+    assert.equals(get.requestStyle, "object");
+    assert.equals(get.documentation, "Get a thing.");
+    assert.isTrue(get.deprecated);
+    assert.equals(get.inputType!.name, "ThingRequest");
+    assert.equals(
+      get.example,
+      'const result = await sdk.ThingsApi.getThing({ color: "blue", size: "m", when: new Date("2026-02-02"), tags: ["x"], flag: false, nested: { inner: { deep: undefined } }, shape: { kind: "example" }, record: { a: undefined }, nothing: undefined, opts: {}, count: 3, label: "example" });\nreturn result;',
+    );
+    assert.equals(get.requiredArguments.length, 12);
+    assert.equals(get.parameters[1], {
+      name: "initOverrides",
+      type: "unknown",
+      optional: true,
+    });
+  });
+
+  it("should render referenced interfaces, enums and aliases without the input type", function () {
+    const get = this.byName("getThing") as AnalyzedMethod;
+    const decl = new Map(
+      get.referencedTypes.map((t) => [t.name, t.declaration]),
+    );
+    assert.equals(
+      [...decl.keys()],
+      ["Big", "Color", "Size", "Nested", "Shape", "Nothing", "Inner"],
+    );
+    const big = decl.get("Big")!.split("\n");
+    assert.equals(big[0], "interface Big extends Base {");
+    assert.equals(big[1], "  [key: string]: unknown;");
+    assert.equals(big[2], "  m0: string; // Member 0.");
+    assert.equals(big.at(-2), "  // … 2 more members");
+    assert.equals(big.length, 43);
+    assert.match(decl.get("Color")!, /^export declare enum Color \{/);
+    assert.equals(decl.get("Size"), 'type Size = "s" | "m";');
+    assert.equals(decl.get("Shape"), "type Shape = { kind: string } | null;");
+  });
+
+  it("should give properties without declarations an undefined example", function () {
+    const rec = this.byName("getRecord") as AnalyzedMethod;
+    assert.isUndefined(rec.inputType, "Record is not an SDK declaration");
+    assert.equals(rec.requiredArguments, ["a"]);
+    assert.equals(
+      rec.example,
+      "await sdk.ThingsApi.getRecord({ a: undefined });\nreturn { done: true };",
+    );
+  });
+
+  it("should give the body hint to object-typed positional parameters", function () {
+    const list = this.byName("listThings") as AnalyzedMethod;
+    assert.equals(list.requestStyle, "positional");
+    assert.equals(list.requiredArguments, ["a", "body", "mode"]);
+    assert.match(
+      list.example,
+      /listThings\(5, \{ inner: \{ deep: \{ x: 2 \} \} \}, "x"\)/,
+    );
+    assert.equals(
+      list.referencedTypes.map((t) => t.name),
+      ["Nested", "Inner", "Deep"],
+    );
+  });
+
+  it("should leave out the input type of an inline request type", function () {
+    const inline = this.byName("inline") as AnalyzedMethod;
+    assert.equals(inline.requestStyle, "object");
+    assert.isUndefined(inline.inputType);
+    assert.match(inline.example, /inline\(\{ id: 1 \}\)/);
+  });
+
+  it("should describe methods without arguments or a declared return type", function () {
+    const none = this.byName("noArgs") as AnalyzedMethod;
+    assert.equals(none.requestStyle, "none");
+    assert.equals(none.requiredArguments, []);
+    assert.equals(
+      none.example,
+      "const result = await sdk.ThingsApi.noArgs();\nreturn result;",
+    );
+    const untyped = this.byName("untyped") as AnalyzedMethod;
+    assert.equals(untyped.signature, "untyped()");
+    assert.equals(untyped.returnType, "Promise<unknown>");
+    assert.equals(untyped.referencedTypes, []);
+  });
+
+  it("should report methods without bindings and bindings without classes", function () {
+    try {
+      syntheticAnalyzer().analyze(
+        new Map([
+          ["OtherApi", new Map()],
+          ["GhostApi", new Map([["get", binding("/g")]])],
+        ]),
+        () => ({}),
+      );
+      assert(false, "expected failure");
+    } catch (e) {
+      const err = e as OagMcpError;
+      assert.equals(err.code, "SDK_BINDING_AMBIGUOUS");
+      assert.equals(err.details!.problems, [
+        "OtherApi.orphan: no HTTP method/path found in its RequestOpts/Raw implementation",
+        "GhostApi: implementation found but no matching class in declarations",
+      ]);
     }
   });
 });

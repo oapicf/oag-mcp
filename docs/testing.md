@@ -6,10 +6,14 @@ make build typecheck        # compile to dist/, type-check sources and tests
 make style lint             # format with Prettier, then ESLint, mdl and OCSF conformance
 make test                   # unit tests (test/**/*.ts)
 make test-integration       # integration tests (test-integration/**/*.ts)
-make coverage               # unit test coverage in .bob/coverage/c8/
-make complexity doc         # complexity report and TypeDoc in .bob/
+make coverage               # unit test coverage in stage/gh-pages/coverage/c8/
+make complexity doc         # complexity report and TypeDoc in stage/gh-pages/
 make ci                     # the full pipeline (needs yq and mdl)
 ```
+
+ESLint fails `make lint` for any function in `lib/` with a cyclomatic
+complexity above 10, the same limit `make complexity` reports against
+(`COMPLEXITY_MAX`).
 
 Mocha configuration for unit tests lives in `package.json` (`"mocha"`); the
 `test-integration` target passes its own flags.

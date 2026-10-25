@@ -49,3 +49,78 @@ describe("secrets - SecretResolver", function () {
     }
   });
 });
+
+describe("secrets - SecretResolver secrets file", function () {
+  const write = (body: string) => {
+    const dir = tmpDir();
+    fs.writeFileSync(path.join(dir, "secrets.yaml"), body, { mode: 0o600 });
+    return new SecretResolver({ secretsFile: "secrets.yaml", baseDir: dir });
+  };
+  const code = (fn: () => unknown) => {
+    try {
+      fn();
+    } catch (e) {
+      return (e as OagMcpError).code;
+    }
+    return undefined;
+  };
+
+  it("should read the file once and keep using its values", function () {
+    const dir = tmpDir();
+    const file = path.join(dir, "secrets.yaml");
+    fs.writeFileSync(file, "a: one\nb: two\n", { mode: 0o600 });
+    const r = new SecretResolver({ secretsFile: file, baseDir: "/elsewhere" });
+    assert.equals(r.resolve({ secret: "a" }, "x"), "one");
+    fs.rmSync(file);
+    assert.equals(r.resolve({ secret: "b" }, "x"), "two");
+  });
+
+  it("should require a configured secrets file for secret references", function () {
+    const r = new SecretResolver({ baseDir: process.cwd() });
+    assert.equals(
+      code(() => r.resolve({ secret: "a" }, "x")),
+      "SECRETS_FILE_MISSING",
+    );
+  });
+
+  it("should report a secrets file that cannot be read", function () {
+    const r = new SecretResolver({
+      secretsFile: "missing.yaml",
+      baseDir: tmpDir(),
+    });
+    assert.equals(
+      code(() => r.resolve({ secret: "a" }, "x")),
+      "SECRETS_FILE_MISSING",
+    );
+  });
+
+  it("should require a mapping of keys to string values", function () {
+    assert.equals(
+      code(() => write("- a\n- b\n").resolve({ secret: "a" }, "x")),
+      "SECRETS_FILE_INVALID",
+    );
+    assert.equals(
+      code(() => write("42\n").resolve({ secret: "a" }, "x")),
+      "SECRETS_FILE_INVALID",
+    );
+    const r = write("number: 42\nempty: ''\nok: yes-string\n");
+    assert.equals(r.resolve({ secret: "ok" }, "x"), "yes-string");
+    assert.equals(
+      code(() => r.resolve({ secret: "number" }, "x")),
+      "SECRET_NOT_FOUND",
+    );
+    assert.equals(
+      code(() => r.resolve({ secret: "empty" }, "x")),
+      "SECRET_NOT_FOUND",
+    );
+    assert.equals(
+      code(() => r.resolve({ secret: "absent" }, "x")),
+      "SECRET_NOT_FOUND",
+    );
+    assert.equals(
+      code(() => write("").resolve({ secret: "a" }, "x")),
+      "SECRET_NOT_FOUND",
+      "an empty file has no secrets",
+    );
+  });
+});

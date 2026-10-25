@@ -129,6 +129,19 @@ export interface BoundOptions {
   registry?: SecretRegistry;
 }
 
+/** Limits and state of one {@link boundValue} walk. */
+interface Walk {
+  maxString: number;
+  maxDepth: number;
+  maxKeys: number;
+  maxArray: number;
+  registry: SecretRegistry;
+  seen: WeakSet<object>;
+}
+
+/** Marks a value that is not a scalar, so it is walked as an object. */
+const NOT_SCALAR = Symbol("not scalar");
+
 /**
  * Produce a bounded, scrubbed, JSON-safe copy of a value for logging.
  * Sensitive keys are censored, long strings truncated, deep structures cut.
@@ -138,64 +151,116 @@ export interface BoundOptions {
  * @return {*} bounded copy
  */
 export function boundValue(value: unknown, opts: BoundOptions = {}): unknown {
-  const maxString = opts.maxString ?? 512;
-  const maxDepth = opts.maxDepth ?? 6;
-  const maxKeys = opts.maxKeys ?? 50;
-  const maxArray = opts.maxArray ?? 50;
-  const registry = opts.registry ?? secrets;
-  const seen = new WeakSet<object>();
+  return _walk(value, 0, {
+    maxString: opts.maxString ?? 512,
+    maxDepth: opts.maxDepth ?? 6,
+    maxKeys: opts.maxKeys ?? 50,
+    maxArray: opts.maxArray ?? 50,
+    registry: opts.registry ?? secrets,
+    seen: new WeakSet<object>(),
+  });
+}
 
-  const walk = (v: unknown, depth: number): unknown => {
-    if (v === null || v === undefined) {
-      return v;
-    }
-    if (typeof v === "string") {
-      const s = registry.scrub(v);
-      return s.length > maxString
-        ? `${s.slice(0, maxString)}…[truncated ${s.length - maxString}]`
+/**
+ * Bound one value at a depth.
+ *
+ * @private
+ */
+function _walk(v: unknown, depth: number, w: Walk): unknown {
+  const scalar = _scalar(v, w);
+  if (scalar !== NOT_SCALAR) {
+    return scalar;
+  }
+  const obj = v as object;
+  if (w.seen.has(obj)) {
+    return "[circular]";
+  }
+  if (depth >= w.maxDepth) {
+    return "[max-depth]";
+  }
+  w.seen.add(obj);
+  return Array.isArray(obj)
+    ? _walkArray(obj, depth, w)
+    : _walkObject(obj as Record<string, unknown>, depth, w);
+}
+
+/**
+ * Bound a value that is not walked into: strings (scrubbed and truncated),
+ * other primitives, errors and dates.
+ *
+ * @private
+ */
+function _scalar(v: unknown, w: Walk): unknown {
+  if (v === null || v === undefined) {
+    return v;
+  }
+  switch (typeof v) {
+    case "string": {
+      const s = w.registry.scrub(v);
+      return s.length > w.maxString
+        ? `${s.slice(0, w.maxString)}…[truncated ${s.length - w.maxString}]`
         : s;
     }
-    if (typeof v === "number" || typeof v === "boolean") {
+    case "number":
+    case "boolean":
       return v;
-    }
-    if (typeof v === "bigint") {
+    case "bigint":
       return v.toString();
-    }
-    if (typeof v !== "object") {
+    case "object":
+      return _scalarObject(v, w);
+    default:
       return `[${typeof v}]`;
+  }
+}
+
+/**
+ * Bound errors (sanitised) and dates (ISO 8601); other objects are walked.
+ *
+ * @private
+ */
+function _scalarObject(v: object, w: Walk): unknown {
+  if (v instanceof Error) {
+    return sanitizeError(v, w.registry);
+  }
+  if (v instanceof Date) {
+    return v.toISOString();
+  }
+  return NOT_SCALAR;
+}
+
+/**
+ * Bound an array: its first items, then a count of the rest.
+ *
+ * @private
+ */
+function _walkArray(v: unknown[], depth: number, w: Walk): unknown[] {
+  const arr = v.slice(0, w.maxArray).map((x) => _walk(x, depth + 1, w));
+  if (v.length > w.maxArray) {
+    arr.push(`[+${v.length - w.maxArray} more]`);
+  }
+  return arr;
+}
+
+/**
+ * Bound an object: its first keys, with sensitive keys censored.
+ *
+ * @private
+ */
+function _walkObject(
+  v: Record<string, unknown>,
+  depth: number,
+  w: Walk,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  let count = 0;
+  for (const [k, val] of Object.entries(v)) {
+    if (count++ >= w.maxKeys) {
+      out["…"] = "[more keys truncated]";
+      break;
     }
-    if (v instanceof Error) {
-      return sanitizeError(v, registry);
-    }
-    if (v instanceof Date) {
-      return v.toISOString();
-    }
-    if (seen.has(v as object)) {
-      return "[circular]";
-    }
-    if (depth >= maxDepth) {
-      return "[max-depth]";
-    }
-    seen.add(v as object);
-    if (Array.isArray(v)) {
-      const arr = v.slice(0, maxArray).map((x) => walk(x, depth + 1));
-      if (v.length > maxArray) {
-        arr.push(`[+${v.length - maxArray} more]`);
-      }
-      return arr;
-    }
-    const out: Record<string, unknown> = {};
-    let count = 0;
-    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
-      if (count++ >= maxKeys) {
-        out["…"] = "[more keys truncated]";
-        break;
-      }
-      out[k] = isSensitiveKey(k) ? REDACTED : walk(val, depth + 1);
-    }
-    return out;
-  };
-  return walk(value, 0);
+    out[k] = isSensitiveKey(k) ? REDACTED : _walk(val, depth + 1, w);
+  }
+  return out;
 }
 
 /**

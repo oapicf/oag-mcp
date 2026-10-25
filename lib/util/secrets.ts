@@ -36,53 +36,23 @@ export class SecretResolver {
   ) {}
 
   /**
-   * Load the secrets file, enforcing owner-only permissions on POSIX.
+   * Load the secrets file once.
    *
    * @private
    */
   private _load(): Record<string, string> {
-    if (this.fileSecrets) {
-      return this.fileSecrets;
-    }
-    if (!this.opts.secretsFile) {
-      throw new OagMcpError(
-        "SECRETS_FILE_MISSING",
-        "A { secret: ... } reference was used but upstreamAuth.secretsFile is not configured",
-      );
-    }
-    const file = path.resolve(this.opts.baseDir, this.opts.secretsFile);
-    let stat: fs.Stats;
-    try {
-      stat = fs.statSync(file);
-    } catch (err) {
-      throw new OagMcpError(
-        "SECRETS_FILE_MISSING",
-        `Secrets file ${file} cannot be read`,
-        { cause: err },
-      );
-    }
-    if (process.platform !== "win32" && (stat.mode & 0o077) !== 0) {
-      throw new OagMcpError(
-        "SECRETS_FILE_PERMISSIONS",
-        `Secrets file ${file} is readable by group or others (mode ${(stat.mode & 0o777).toString(8)})`,
-        { hint: `Restrict it with: chmod 600 ${file}` },
-      );
-    }
-    const parsed = YAML.parse(fs.readFileSync(file, "utf8")) ?? {};
-    if (typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new OagMcpError(
-        "SECRETS_FILE_INVALID",
-        `Secrets file ${file} must be a mapping of key to string value`,
-      );
-    }
-    const out: Record<string, string> = {};
-    for (const [k, v] of Object.entries(parsed)) {
-      if (typeof v === "string") {
-        out[k] = v;
+    if (!this.fileSecrets) {
+      if (!this.opts.secretsFile) {
+        throw new OagMcpError(
+          "SECRETS_FILE_MISSING",
+          "A { secret: ... } reference was used but upstreamAuth.secretsFile is not configured",
+        );
       }
+      this.fileSecrets = _readSecretsFile(
+        path.resolve(this.opts.baseDir, this.opts.secretsFile),
+      );
     }
-    this.fileSecrets = out;
-    return out;
+    return this.fileSecrets;
   }
 
   /**
@@ -115,4 +85,40 @@ export class SecretResolver {
     }
     return v;
   }
+}
+
+/**
+ * Read a secrets file: a YAML mapping of key to string value, readable by
+ * its owner only on POSIX. Values that are not strings are ignored.
+ *
+ * @private
+ */
+function _readSecretsFile(file: string): Record<string, string> {
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(file);
+  } catch (err) {
+    throw new OagMcpError(
+      "SECRETS_FILE_MISSING",
+      `Secrets file ${file} cannot be read`,
+      { cause: err },
+    );
+  }
+  if (process.platform !== "win32" && (stat.mode & 0o077) !== 0) {
+    throw new OagMcpError(
+      "SECRETS_FILE_PERMISSIONS",
+      `Secrets file ${file} is readable by group or others (mode ${(stat.mode & 0o777).toString(8)})`,
+      { hint: `Restrict it with: chmod 600 ${file}` },
+    );
+  }
+  const parsed = YAML.parse(fs.readFileSync(file, "utf8")) ?? {};
+  if (typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new OagMcpError(
+      "SECRETS_FILE_INVALID",
+      `Secrets file ${file} must be a mapping of key to string value`,
+    );
+  }
+  return Object.fromEntries(
+    Object.entries(parsed).filter(([, v]) => typeof v === "string"),
+  ) as Record<string, string>;
 }
