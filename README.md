@@ -6,9 +6,9 @@ To be populated by generator-node typescript-cli-partials
 To be populated by generator-node typescript-cli-partials
 <!-- END:BADGES -->
 
-# OAG MCP
+# OAG-MCP
 
-An open-source CLI that turns OpenAPI specifications and OpenAPI Generator SDKs into code-mode MCP servers, exposing searchable SDK capabilities and sandboxed SDK execution through two tools: `search` and `execute`.
+OAG-MCP turns an OpenAPI spec and its OAG-generated SDK into a code-mode MCP server at runtime. Instead of exposing hundreds of endpoints as individual tools, it exposes two: search, for discovering operations from the spec, and execute, which runs agent-written code against your SDK in a sandbox. The SDK stays on the host with your credentials, which are applied from the spec’s security schemes, so secrets never enter the sandbox. Point it at a spec and an SDK, and your whole API is agent-ready in a few hundred tokens of context.
 
 ```bash
 oag-mcp serve --spec ./openapi.yaml --sdk ./generated-sdk --transport stdio

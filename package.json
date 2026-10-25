@@ -1,7 +1,7 @@
 {
   "name": "oag-mcp",
   "type": "module",
-  "description": "An open-source CLI that turns OpenAPI specifications and OpenAPI Generator SDKs into code-mode MCP servers, exposing searchable SDK capabilities and sandboxed SDK execution through two tools: search and execute.",
+  "description": "Plug in an OpenAPI spec and its OAG-generated SDK at runtime and get a code-mode MCP server: agents discover operations with search and call your SDK in a sandbox with execute. No codegen, no build step.",
   "keywords": [
     "openapi",
     "openapi-generator",
