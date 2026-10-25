@@ -106,10 +106,10 @@ complexity: stage
 
 # Tests run through tsx, which does not type-check, so type-check first
 test: typecheck
-	mocha
+	mocha --reporter mochawesome --reporter-options reportDir=stage/gh-pages/test/mochawesome,reportFilename=index
 
 test-integration: typecheck
-	mocha --no-package --node-option import=tsx --extension ts --recursive --timeout 180000 --ignore 'test-integration/helpers/**' 'test-integration/**/*.ts'
+	mocha --no-package --node-option import=tsx --extension ts --recursive --timeout 180000 --ignore 'test-integration/helpers/**' --reporter mochawesome --reporter-options reportDir=stage/gh-pages/test-integration/mochawesome,reportFilename=index 'test-integration/**/*.ts'
 
 test-examples:
 	mkdir -p stage/test-examples/

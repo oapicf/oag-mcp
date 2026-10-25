@@ -283,9 +283,9 @@ diagnostics), `api_error` (HTTP status and body), `sdk_error`,
 Build reports:
 
 * [Code complexity report](https://oapicf.github.io/oag-mcp/complexity/eslint/index.html)
-* [Unit tests report](https://oapicf.github.io/oag-mcp/test/mocha.txt)
+* [Unit tests report](https://oapicf.github.io/oag-mcp/test/mochawesome/index.html)
 * [Test coverage report](https://oapicf.github.io/oag-mcp/coverage/c8/index.html)
-* [Integration tests report](https://oapicf.github.io/oag-mcp/test-integration/mocha.txt)
+* [Integration tests report](https://oapicf.github.io/oag-mcp/test-integration/mochawesome/index.html)
 * [API Documentation](https://oapicf.github.io/oag-mcp/doc/typedoc/index.html)
 
 <!-- END:BUILD_REPORTS -->
