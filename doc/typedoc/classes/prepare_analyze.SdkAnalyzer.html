@@ -15,7 +15,7 @@
 <div class="tsd-comment tsd-typography"><p>Analyse SDK declarations together with implementation bindings.</p>
 </div></section><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/oapicf/oag-mcp/blob/e2cbc1081279a349506d81780b6993c5e45a5761/lib/prepare/analyze.ts#L261">lib/prepare/analyze.ts:261</a></li></ul></aside>
+<li>Defined in <a href="https://github.com/oapicf/oag-mcp/blob/948d58dc1beb3a2bc7c567ce2c2f2c53e9b09bcb/lib/prepare/analyze.ts#L526">lib/prepare/analyze.ts:526</a></li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -46,7 +46,7 @@
 </div></li></ul></div>
 <h4 class="tsd-returns-title">Returns <a href="" class="tsd-signature-type tsd-kind-class">SdkAnalyzer</a></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/oapicf/oag-mcp/blob/e2cbc1081279a349506d81780b6993c5e45a5761/lib/prepare/analyze.ts#L270">lib/prepare/analyze.ts:270</a></li></ul></aside></div></li></ul></section></section></details>
+<li>Defined in <a href="https://github.com/oapicf/oag-mcp/blob/948d58dc1beb3a2bc7c567ce2c2f2c53e9b09bcb/lib/prepare/analyze.ts#L535">lib/prepare/analyze.ts:535</a></li></ul></aside></div></li></ul></section></section></details>
 <details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Methods"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
 <h2 class="tsd-anchor-link" id="methods-1">Methods<a href="#methods-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary>
 <section>
@@ -54,14 +54,14 @@
 <h3 class="tsd-anchor-link" id="analyze"><span>analyze</span><a href="#analyze" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
 <li class="">
-<div class="tsd-signature tsd-anchor-link" id="analyze-1"><span class="tsd-kind-call-signature">analyze</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">impl</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Map</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">Map</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <a href="../interfaces/prepare_analyze.ImplBinding.html" class="tsd-signature-type tsd-kind-interface">ImplBinding</a><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">hintsFor</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">httpMethod</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">p</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <a href="../types/prepare_analyze.ExampleHints.html" class="tsd-signature-type tsd-kind-type-alias">ExampleHints</a><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/prepare_analyze.AnalyzedMethod.html" class="tsd-signature-type tsd-kind-interface">AnalyzedMethod</a><span class="tsd-signature-symbol">[]</span><a href="#analyze-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-signature tsd-anchor-link" id="analyze-1"><span class="tsd-kind-call-signature">analyze</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">impl</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Bindings</span><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">hintsFor</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">httpMethod</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">p</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <a href="../types/prepare_analyze.ExampleHints.html" class="tsd-signature-type tsd-kind-type-alias">ExampleHints</a><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/prepare_analyze.AnalyzedMethod.html" class="tsd-signature-type tsd-kind-interface">AnalyzedMethod</a><span class="tsd-signature-symbol">[]</span><a href="#analyze-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
 <div class="tsd-comment tsd-typography"><p>Analyse every public method of every API class.</p>
 </div>
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
 <ul class="tsd-parameter-list">
-<li><span><span class="tsd-kind-parameter">impl</span>: <span class="tsd-signature-type">Map</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">Map</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <a href="../interfaces/prepare_analyze.ImplBinding.html" class="tsd-signature-type tsd-kind-interface">ImplBinding</a><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span></span>
+<li><span><span class="tsd-kind-parameter">impl</span>: <span class="tsd-signature-type">Bindings</span></span>
 <div class="tsd-comment tsd-typography"><p>implementation bindings from <a href="../functions/prepare_analyze.scanImplementation.html" class="tsd-kind-function">scanImplementation</a></p>
 </div></li>
 <li><span><span class="tsd-kind-parameter">hintsFor</span>: <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">httpMethod</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">p</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <a href="../types/prepare_analyze.ExampleHints.html" class="tsd-signature-type tsd-kind-type-alias">ExampleHints</a></span>
@@ -70,7 +70,7 @@
 <h4 class="tsd-returns-title">Returns <a href="../interfaces/prepare_analyze.AnalyzedMethod.html" class="tsd-signature-type tsd-kind-interface">AnalyzedMethod</a><span class="tsd-signature-symbol">[]</span></h4><p>analysed methods</p>
 <aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/oapicf/oag-mcp/blob/e2cbc1081279a349506d81780b6993c5e45a5761/lib/prepare/analyze.ts#L482">lib/prepare/analyze.ts:482</a></li></ul></aside></div></li></ul></section></section></details></div>
+<li>Defined in <a href="https://github.com/oapicf/oag-mcp/blob/948d58dc1beb3a2bc7c567ce2c2f2c53e9b09bcb/lib/prepare/analyze.ts#L815">lib/prepare/analyze.ts:815</a></li></ul></aside></div></li></ul></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

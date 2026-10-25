@@ -3,13 +3,18 @@
 ```bash
 make deps                   # npm install (also builds dist/ via prepare)
 make build typecheck        # compile to dist/, type-check sources and tests
-make style lint             # format with Prettier, then ESLint and mdl
+make style lint             # format with Prettier, then ESLint, mdl and OCSF conformance
 make test                   # unit tests (test/**/*.ts)
 make test-integration       # integration tests (test-integration/**/*.ts)
-make coverage               # unit test coverage in .bob/coverage/c8/
-make complexity doc         # complexity report and TypeDoc in .bob/
+make coverage               # unit test coverage in stage/gh-pages/coverage/c8/
+make complexity doc         # complexity report and TypeDoc in stage/gh-pages/
 make ci                     # the full pipeline (needs yq and mdl)
 ```
+
+ESLint fails `make lint` for any function in `lib/` with a cyclomatic
+complexity above 10, the same limit `make complexity` reports against
+(`COMPLEXITY_MAX`). Unit tests cover every line of `lib/`; keep it that
+way when adding code.
 
 Mocha configuration for unit tests lives in `package.json` (`"mocha"`); the
 `test-integration` target passes its own flags.
@@ -18,6 +23,27 @@ No account, paid service, Docker or external network is needed by the
 tests except `npm ping`/`npm install` for the packaging test. Tests whose
 prerequisites are missing are **skipped and print `[blocked: <reason>]`**
 rather than passing silently.
+
+## OCSF conformance
+
+```bash
+make -f Makefile-extras test-ocsf
+```
+
+checks that oag-mcp's security audit records are valid OCSF events. It
+downloads the OCSF schema at the version in `lib/ocsf.ts`, compiles it with
+[ocsf-lib](https://pypi.org/project/ocsf-lib/) in a Python virtual
+environment under `stage/ocsf/` (through
+`test-integration/helpers/compile-ocsf.py`, which lets ocsf-lib 0.10.4 run on
+Python 3.14), writes an audit record for every audit event
+plus the records of real executions against the mock API
+(`test-integration/helpers/ocsf-events.ts`), and validates each one
+(`test-integration/helpers/validate-ocsf.py`): class, activity and type ids,
+attribute names, types and enum values, required attributes, constraints and
+profiles. `make lint` (and so `make ci`) runs it through Olympia's
+`x-post-lint` hook, defined in `Makefile-extras`. It needs git, python3 (with
+venv) and network access to GitHub and PyPI. A new audit event without a case
+in `ocsf-events.ts` fails it.
 
 ## Fixtures
 

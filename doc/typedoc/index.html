@@ -14,8 +14,8 @@
 <!-- BEGIN:BADGES -->
 <p>To be populated by generator-node typescript-cli-partials</p>
 <!-- END:BADGES -->
-<h1 id="oag-mcp" class="tsd-anchor-link">OAG MCP<a href="#oag-mcp" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h1>
-<p>An open-source CLI that turns OpenAPI specifications and OpenAPI Generator SDKs into code-mode MCP servers, exposing searchable SDK capabilities and sandboxed SDK execution through two tools: <code>search</code> and <code>execute</code>.</p>
+<h1 id="oag-mcp" class="tsd-anchor-link">OAG-MCP<a href="#oag-mcp" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h1>
+<p>OAG-MCP turns an OpenAPI spec and its OAG-generated SDK into a code-mode MCP server at runtime. Instead of exposing hundreds of endpoints as individual tools, it exposes two: search, for discovering operations from the spec, and execute, which runs agent-written code against your SDK in a sandbox. The SDK stays on the host with your credentials, which are applied from the spec’s security schemes, so secrets never enter the sandbox. Point it at a spec and an SDK, and your whole API is agent-ready in a few hundred tokens of context.</p>
 <pre><code class="bash"><span class="hl-0">oag-mcp</span><span class="hl-1"> </span><span class="hl-2">serve</span><span class="hl-1"> </span><span class="hl-3">--spec</span><span class="hl-1"> </span><span class="hl-2">./openapi.yaml</span><span class="hl-1"> </span><span class="hl-3">--sdk</span><span class="hl-1"> </span><span class="hl-2">./generated-sdk</span><span class="hl-1"> </span><span class="hl-3">--transport</span><span class="hl-1"> </span><span class="hl-2">stdio</span>
 </code><button type="button">Copy</button></pre>
 
@@ -187,7 +187,7 @@ diagnostics), <code>api_error</code> (HTTP status and body), <code>sdk_error</co
 <li><a href="media/configuration.md">Configuration reference</a></li>
 <li><a href="media/authentication.md">Authentication and authorization</a> — <code>mcpAuth</code>, <code>upstreamAuth</code>, permissions</li>
 <li><a href="media/security.md">Execution sandbox and limits</a> — what is and is not isolated</li>
-<li><a href="media/logging.md">Logging</a> — operational vs security audit records</li>
+<li><a href="media/logging.md">Logging</a> — operational records (OpenTelemetry) and security audit records (OCSF)</li>
 <li><a href="media/deployment.md">Deployment</a></li>
 <li><a href="media/testing.md">Testing</a></li>
 </ul>
@@ -212,7 +212,7 @@ diagnostics), <code>api_error</code> (HTTP status and body), <code>sdk_error</co
 <div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div>
 <details open class="tsd-accordion tsd-page-navigation"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-chevronDown"></use></svg>
 <h3>On This Page</h3></summary>
-<div class="tsd-accordion-details"><a href="#oag-mcp"><span>OAG <wbr/>MCP</span></a>
+<div class="tsd-accordion-details"><a href="#oag-mcp"><span>OAG-<wbr/>MCP</span></a>
 <ul>
 <li><a href="#why-oag-mcp"><span>Why oag-<wbr/>mcp</span></a></li>
 <li><a href="#installation"><span>Installation</span></a></li>

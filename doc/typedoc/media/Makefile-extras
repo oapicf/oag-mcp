@@ -1,5 +1,10 @@
 OPENAPI_GENERATOR_VERSION = 7.26.0
 
+# OCSF schema version that security audit records follow (from lib/ocsf.ts),
+# and the ocsf-lib version used to compile it.
+OCSF_VERSION = $(shell sed -n 's/^export const OCSF_VERSION = "\(.*\)";$$/\1/p' lib/ocsf.ts)
+OCSF_LIB_VERSION = 0.10.4
+
 # npm package name and version of the generated SDK.
 SDK_NAME ?= generated-sdk
 SDK_VERSION ?= 1.0.0
@@ -34,4 +39,30 @@ gen-sdk:
 	  npm install --no-audit --no-fund && \
 	  npm pack --pack-destination ../
 
-.PHONY: x-post-deps gen-sdk
+# Check that oag-mcp's security audit records are valid OCSF events, e.g.
+#   make -f Makefile-extras test-ocsf
+# Downloads the OCSF schema repository at OCSF_VERSION, compiles it with
+# ocsf-lib (Python, installed into a virtual environment under stage/ocsf/),
+# writes an audit record for every audit event plus the records of real
+# executions against the mock API, then validates each record against the
+# schema. Needs git, python3 (with venv) and network access to GitHub and
+# PyPI.
+test-ocsf:
+	$(if $(OCSF_VERSION),,$(error OCSF_VERSION not found in lib/ocsf.ts))
+	rm -rf stage/ocsf/
+	mkdir -p stage/ocsf/
+	git -c advice.detachedHead=false clone --quiet --depth 1 --branch $(OCSF_VERSION) \
+	  https://github.com/ocsf/ocsf-schema.git stage/ocsf/ocsf-schema/
+	python3 -m venv stage/ocsf/venv/
+	stage/ocsf/venv/bin/pip install --quiet --disable-pip-version-check ocsf-lib==$(OCSF_LIB_VERSION)
+	stage/ocsf/venv/bin/python -I test-integration/helpers/compile-ocsf.py \
+	  stage/ocsf/ocsf-schema/ > stage/ocsf/schema.json
+	node_modules/.bin/tsx test-integration/helpers/ocsf-events.ts stage/ocsf/audit.jsonl
+	stage/ocsf/venv/bin/python -I test-integration/helpers/validate-ocsf.py \
+	  stage/ocsf/schema.json stage/ocsf/ocsf-schema/ stage/ocsf/audit.jsonl
+
+# Olympia hook run at the end of `make lint`, so `make ci` checks that audit
+# records stay valid OCSF events.
+x-post-lint: test-ocsf
+
+.PHONY: x-post-deps x-post-lint gen-sdk test-ocsf
