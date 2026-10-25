@@ -1,9 +1,14 @@
 <!-- BEGIN:AVATAR -->
-To be populated by generator-node typescript-cli-partials
+![Avatar](avatar.jpg)
 <!-- END:AVATAR -->
 
 <!-- BEGIN:BADGES -->
-To be populated by generator-node typescript-cli-partials
+[![Build Status](https://github.com/oapicf/oag-mcp/workflows/CI/badge.svg)](https://github.com/oapicf/oag-mcp/actions?query=workflow%3ACI)
+[![Dependencies Status](https://img.shields.io/librariesio/release/npm/oag-mcp)](https://libraries.io/npm/oag-mcp)
+[![Code Scanning Status](https://github.com/oapicf/oag-mcp/workflows/CodeQL/badge.svg)](https://github.com/oapicf/oag-mcp/actions?query=workflow%3ACodeQL)
+[![Coverage Status](https://coveralls.io/repos/github/oapicf/oag-mcp/badge.svg?branch=main)](https://coveralls.io/r/oapicf/oag-mcp?branch=main)
+[![Security Status](https://snyk.io/test/github/oapicf/oag-mcp/badge.svg)](https://snyk.io/test/github/oapicf/oag-mcp)
+[![Published Version](https://img.shields.io/npm/v/oag-mcp.svg)](https://www.npmjs.com/package/oag-mcp)
 <!-- END:BADGES -->
 
 # OAG-MCP
@@ -271,9 +276,16 @@ diagnostics), `api_error` (HTTP status and body), `sdk_error`,
 ## Colophon
 
 <!-- BEGIN:DEVELOPERS_GUIDE -->
-To be populated by generator-node typescript-cli-partials
+[Developer's Guide](https://cliffano.github.io/developers-guide-typescript.html)
 <!-- END:DEVELOPERS_GUIDE -->
 
 <!-- BEGIN:BUILD_REPORTS -->
-To be populated by generator-node typescript-cli-partials
+Build reports:
+
+* [Code complexity report](https://oapicf.github.io/oag-mcp/complexity/plato/index.html)
+* [Unit tests report](https://oapicf.github.io/oag-mcp/test/mocha.txt)
+* [Test coverage report](https://oapicf.github.io/oag-mcp/coverage/c8/index.html)
+* [Integration tests report](https://oapicf.github.io/oag-mcp/test-integration/mocha.txt)
+* [API Documentation](https://oapicf.github.io/oag-mcp/doc/jsdoc/index.html)
+
 <!-- END:BUILD_REPORTS -->
