@@ -8,7 +8,6 @@ declare module "@sinonjs/referee" {
     isFalse(value: unknown, message?: string): void;
     isNull(value: unknown, message?: string): void;
     isUndefined(value: unknown, message?: string): void;
-    defined(value: unknown, message?: string): void;
     isString(value: unknown, message?: string): void;
     isNumber(value: unknown, message?: string): void;
     isFunction(value: unknown, message?: string): void;
