@@ -198,15 +198,22 @@ function _security(security: unknown): SecurityRequirement[] | undefined {
 }
 
 /**
- * Load, validate and summarise an OpenAPI document.
+ * A value if it is a string, otherwise undefined.
  *
- * @param {String} specPath - path to the OpenAPI YAML/JSON document
- * @return {Promise} spec summary
+ * @private
  */
-export async function loadSpec(specPath: string): Promise<SpecSummary> {
-  let api: Json;
+function _str(v: unknown): string | undefined {
+  return typeof v === "string" ? v : undefined;
+}
+
+/**
+ * Parse and validate the document, resolving `$ref`s from local files only.
+ *
+ * @private
+ */
+async function _parse(specPath: string): Promise<Json> {
   try {
-    api = (await SwaggerParser.validate(specPath, {
+    return (await SwaggerParser.validate(specPath, {
       resolve: { http: false },
     })) as unknown as Json;
   } catch (err) {
@@ -219,6 +226,14 @@ export async function loadSpec(specPath: string): Promise<SpecSummary> {
       },
     );
   }
+}
+
+/**
+ * The document's OpenAPI version, which must be 3.0.x or 3.1.x.
+ *
+ * @private
+ */
+function _version(api: Json): string {
   const version = String(api.openapi ?? api.swagger ?? "");
   if (!/^3\.[01]\./.test(version)) {
     throw new OagMcpError(
@@ -229,7 +244,15 @@ export async function loadSpec(specPath: string): Promise<SpecSummary> {
       },
     );
   }
-  const info = (api.info ?? {}) as Json;
+  return version;
+}
+
+/**
+ * The document's security schemes, described.
+ *
+ * @private
+ */
+function _securitySchemes(api: Json): Record<string, SecuritySchemeInfo> {
   const components = (api.components ?? {}) as Json;
   const schemes: Record<string, SecuritySchemeInfo> = {};
   for (const [name, scheme] of Object.entries(
@@ -237,95 +260,163 @@ export async function loadSpec(specPath: string): Promise<SpecSummary> {
   )) {
     schemes[name] = describeSecurityScheme(name, scheme as Json);
   }
-  const globalSecurity = _security(api.security) ?? [];
+  return schemes;
+}
+
+/**
+ * An operation's parameters: the path item's, overridden by the
+ * operation's own with the same location and name.
+ *
+ * @private
+ */
+function _parameters(shared: Json[], op: Json): ParameterInfo[] {
+  const params = new Map<string, Json>();
+  for (const prm of [...shared, ...((op.parameters as Json[]) ?? [])]) {
+    params.set(`${prm.in}:${prm.name}`, prm);
+  }
+  return [...params.values()].map((prm) => {
+    const schema = (prm.schema ?? {}) as Json;
+    return {
+      name: String(prm.name),
+      in: String(prm.in) as ParameterInfo["in"],
+      required: Boolean(prm.required),
+      description: _str(prm.description),
+      schemaType: describeSchema(schema),
+      example:
+        prm.example !== undefined ? prm.example : exampleForSchema(schema),
+    };
+  });
+}
+
+/**
+ * An operation's request body, described by its first media type.
+ *
+ * @private
+ */
+function _requestBody(op: Json): SpecOperation["requestBody"] {
+  if (!op.requestBody || typeof op.requestBody !== "object") {
+    return undefined;
+  }
+  const rb = op.requestBody as Json;
+  const content = (rb.content ?? {}) as Json;
+  const contentTypes = Object.keys(content);
+  const firstType = contentTypes[0];
+  const media = (firstType ? content[firstType] : {}) as Json;
+  return {
+    required: Boolean(rb.required),
+    contentTypes,
+    description: _str(rb.description),
+    schemaType: describeSchema(media.schema),
+    example:
+      media.example !== undefined
+        ? media.example
+        : exampleForSchema(media.schema),
+  };
+}
+
+/**
+ * An operation's response descriptions by status code.
+ *
+ * @private
+ */
+function _responses(op: Json): Record<string, string> {
+  const responses: Record<string, string> = {};
+  for (const [code, r] of Object.entries((op.responses ?? {}) as Json)) {
+    responses[code] = _str((r as Json)?.description) ?? "";
+  }
+  return responses;
+}
+
+/**
+ * Summarise one operation.
+ *
+ * @private
+ */
+function _operation(
+  method: string,
+  path: string,
+  op: Json,
+  shared: Json[],
+  globalSecurity: SecurityRequirement[],
+): SpecOperation {
+  const explicit = _security(op.security);
+  return {
+    key: `${method.toUpperCase()} ${path}`,
+    method: method.toUpperCase(),
+    path,
+    operationId: _str(op.operationId),
+    tags: Array.isArray(op.tags) ? op.tags.map(String) : [],
+    summary: _str(op.summary),
+    description: _str(op.description),
+    deprecated: Boolean(op.deprecated),
+    parameters: _parameters(shared, op),
+    requestBody: _requestBody(op),
+    responses: _responses(op),
+    security: explicit ?? globalSecurity,
+    securityIsOverride: explicit !== undefined,
+  };
+}
+
+/**
+ * Every operation of every path, in document order.
+ *
+ * @private
+ */
+function _operations(
+  api: Json,
+  globalSecurity: SecurityRequirement[],
+): SpecOperation[] {
   const operations: SpecOperation[] = [];
-  for (const [p, item] of Object.entries((api.paths ?? {}) as Json)) {
+  for (const [path, item] of Object.entries((api.paths ?? {}) as Json)) {
     const pathItem = (item ?? {}) as Json;
     const shared = Array.isArray(pathItem.parameters)
       ? (pathItem.parameters as Json[])
       : [];
     for (const method of HTTP_METHODS) {
       const op = pathItem[method] as Json | undefined;
-      if (!op) {
-        continue;
+      if (op) {
+        operations.push(_operation(method, path, op, shared, globalSecurity));
       }
-      const params = new Map<string, Json>();
-      for (const prm of [...shared, ...((op.parameters as Json[]) ?? [])]) {
-        params.set(`${prm.in}:${prm.name}`, prm);
-      }
-      const parameters: ParameterInfo[] = [...params.values()].map((prm) => {
-        const schema = (prm.schema ?? {}) as Json;
-        return {
-          name: String(prm.name),
-          in: String(prm.in) as ParameterInfo["in"],
-          required: Boolean(prm.required),
-          description:
-            typeof prm.description === "string" ? prm.description : undefined,
-          schemaType: describeSchema(schema),
-          example:
-            prm.example !== undefined ? prm.example : exampleForSchema(schema),
-        };
-      });
-      const explicit = _security(op.security);
-      let requestBody: SpecOperation["requestBody"];
-      if (op.requestBody && typeof op.requestBody === "object") {
-        const rb = op.requestBody as Json;
-        const content = (rb.content ?? {}) as Json;
-        const firstType = Object.keys(content)[0];
-        const media = (firstType ? content[firstType] : {}) as Json;
-        requestBody = {
-          required: Boolean(rb.required),
-          contentTypes: Object.keys(content),
-          description:
-            typeof rb.description === "string" ? rb.description : undefined,
-          schemaType: describeSchema(media.schema),
-          example:
-            media.example !== undefined
-              ? media.example
-              : exampleForSchema(media.schema),
-        };
-      }
-      const responses: Record<string, string> = {};
-      for (const [code, r] of Object.entries((op.responses ?? {}) as Json)) {
-        const desc = (r as Json)?.description;
-        responses[code] = typeof desc === "string" ? desc : "";
-      }
-      operations.push({
-        key: `${method.toUpperCase()} ${p}`,
-        method: method.toUpperCase(),
-        path: p,
-        operationId:
-          typeof op.operationId === "string" ? op.operationId : undefined,
-        tags: Array.isArray(op.tags) ? op.tags.map(String) : [],
-        summary: typeof op.summary === "string" ? op.summary : undefined,
-        description:
-          typeof op.description === "string" ? op.description : undefined,
-        deprecated: Boolean(op.deprecated),
-        parameters,
-        requestBody,
-        responses,
-        security: explicit ?? globalSecurity,
-        securityIsOverride: explicit !== undefined,
-      });
     }
   }
-  const tags = Array.isArray(api.tags)
-    ? (api.tags as Json[]).map((t) => ({
-        name: String(t.name),
-        description:
-          typeof t.description === "string" ? t.description : undefined,
-      }))
-    : [];
+  return operations;
+}
+
+/**
+ * The document's tags.
+ *
+ * @private
+ */
+function _tags(api: Json): SpecSummary["tags"] {
+  if (!Array.isArray(api.tags)) {
+    return [];
+  }
+  return (api.tags as Json[]).map((t) => ({
+    name: String(t.name),
+    description: _str(t.description),
+  }));
+}
+
+/**
+ * Load, validate and summarise an OpenAPI document.
+ *
+ * @param {String} specPath - path to the OpenAPI YAML/JSON document
+ * @return {Promise} spec summary
+ */
+export async function loadSpec(specPath: string): Promise<SpecSummary> {
+  const api = await _parse(specPath);
+  const version = _version(api);
+  const info = (api.info ?? {}) as Json;
+  const globalSecurity = _security(api.security) ?? [];
   return {
     openapiVersion: version,
     title: String(info.title ?? "API"),
     apiVersion: String(info.version ?? ""),
-    description:
-      typeof info.description === "string" ? info.description : undefined,
+    description: _str(info.description),
     servers: _serverUrls(api.servers),
-    tags,
-    securitySchemes: schemes,
+    tags: _tags(api),
+    securitySchemes: _securitySchemes(api),
     globalSecurity,
-    operations,
+    operations: _operations(api, globalSecurity),
   };
 }

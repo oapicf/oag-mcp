@@ -140,4 +140,68 @@ describe("compat - inspectSdk", function () {
     }
     expectCode(() => inspectSdk(dir), "SDK_LAYOUT_UNSUPPORTED");
   });
+
+  it("should accept an SDK without package.json with a warning", function () {
+    const dir = copyFixture(SDK_726);
+    fs.rmSync(path.join(dir, "package.json"));
+    const insp = inspectSdk(dir, { allowUntestedOagVersion: true });
+    assert.isUndefined(insp.pkg);
+    assert.match(insp.warnings[0], /no package\.json/);
+  });
+
+  it("should reject a package.json that is not valid JSON", function () {
+    const dir = copyFixture(SDK_726);
+    fs.writeFileSync(path.join(dir, "package.json"), "{nope");
+    expectCode(() => inspectSdk(dir), "SDK_PACKAGE_INVALID");
+  });
+
+  it("should reject sagasAndRecords dependencies and record files", function () {
+    const deps = copyFixture(SDK_726);
+    const pkgFile = path.join(deps, "package.json");
+    const pkg = JSON.parse(fs.readFileSync(pkgFile, "utf8"));
+    pkg.dependencies = { ...pkg.dependencies, "redux-saga": "1.0.0" };
+    fs.writeFileSync(pkgFile, JSON.stringify(pkg));
+    const err = expectCode(() => inspectSdk(deps), "SDK_OPTION_UNSUPPORTED");
+    assert.match(err.message, /sagasAndRecords/);
+
+    const records = copyFixture(SDK_726);
+    fs.writeFileSync(path.join(records, "src", "ApiEntitiesRecord.ts"), "");
+    expectCode(() => inspectSdk(records), "SDK_OPTION_UNSUPPORTED");
+  });
+
+  it("should reject the Temporal date library", function () {
+    const dir = copyFixture(SDK_726);
+    fs.appendFileSync(
+      path.join(dir, "src", "runtime.ts"),
+      "\nconst now = Temporal.Now;\n",
+    );
+    const err = expectCode(() => inspectSdk(dir), "SDK_OPTION_UNSUPPORTED");
+    assert.match(err.message, /dateLibrary=temporal/);
+  });
+
+  it("should reject a requested layout the SDK does not have", async function () {
+    expectCode(
+      () => inspectSdk(SDK_726, { layout: "compiled" }),
+      "SDK_LAYOUT_UNSUPPORTED",
+    );
+    const dir = tmpDir();
+    await extractArchive(SDK_TGZ, dir);
+    const root = path.join(dir, "package");
+    fs.rmSync(path.join(root, "src"), { recursive: true, force: true });
+    const err = expectCode(
+      () => inspectSdk(root, { layout: "source" }),
+      "SDK_LAYOUT_UNSUPPORTED",
+    );
+    assert.match(err.hint, /--sdk-layout compiled/);
+  });
+
+  it("should report the compiled entry point, declarations and package of a packed SDK", async function () {
+    const dir = tmpDir();
+    await extractArchive(SDK_TGZ, dir);
+    const insp = inspectSdk(path.join(dir, "package"), { layout: "compiled" });
+    assert.match(insp.entry, /dist[/\\]esm[/\\]index\.js$/);
+    assert.match(insp.typesDir!, /dist$/);
+    assert.equals(insp.pkg?.name, "petclinic-sdk");
+    assert.isFalse(insp.apiFiles.some((f) => f.endsWith(".ts")));
+  });
 });

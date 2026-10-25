@@ -99,6 +99,79 @@ describe("spec - loadSpec", function () {
   });
 });
 
+describe("spec - loadSpec operation details", function () {
+  const write = (body: string) => {
+    const file = path.join(tmpDir(), "spec.yaml");
+    fs.writeFileSync(file, body);
+    return file;
+  };
+
+  it("should let operation parameters override path item parameters and keep explicit examples", async function () {
+    const spec = await loadSpec(
+      write(`openapi: 3.1.0
+info: { title: T, version: "1" }
+paths:
+  /a/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string }, example: shared }
+      - { name: q, in: query, schema: { type: integer } }
+    get:
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string }, example: null }
+      responses: { "200": { description: ok }, default: { description: "" } }
+`),
+    );
+    const [op] = spec.operations;
+    assert.equals(
+      op.parameters.map((p) => [p.name, p.in, p.example]),
+      [
+        ["id", "path", null],
+        ["q", "query", 0],
+      ],
+    );
+    assert.equals(op.responses, { "200": "ok", default: "" });
+    assert.isUndefined(op.requestBody);
+  });
+
+  it("should describe a request body by its first media type", async function () {
+    const spec = await loadSpec(
+      write(`openapi: 3.0.3
+info: { title: T, version: "1" }
+paths:
+  /a:
+    post:
+      requestBody: { content: {} }
+      responses: { "201": { description: made } }
+    put:
+      requestBody:
+        required: true
+        description: body
+        content:
+          application/json: { schema: { type: string }, example: null }
+          text/plain: { schema: { type: integer } }
+      responses: { "200": { description: ok } }
+`),
+    );
+    const byMethod = Object.fromEntries(
+      spec.operations.map((o) => [o.method, o.requestBody]),
+    );
+    assert.equals(byMethod.POST, {
+      required: false,
+      contentTypes: [],
+      description: undefined,
+      schemaType: "any",
+      example: undefined,
+    });
+    assert.equals(byMethod.PUT, {
+      required: true,
+      contentTypes: ["application/json", "text/plain"],
+      description: "body",
+      schemaType: "string",
+      example: null,
+    });
+  });
+});
+
 describe("spec - describeSecurityScheme", function () {
   it("should flag cookie api keys, digest, openIdConnect and interactive OAuth flows as unsupported", function () {
     assert.isFalse(
