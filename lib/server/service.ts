@@ -148,6 +148,117 @@ function _clip(s: string | undefined, n: number): string | undefined {
 }
 
 /**
+ * The upstream API's base URL: configured, or the spec's first server. It
+ * must be absolute http(s).
+ *
+ * @private
+ */
+function _upstreamBase(config: Config, info: PreparedSdkInfo): URL {
+  const baseUrl = config.upstream.baseUrl ?? info.api.servers[0];
+  try {
+    const base = new URL(baseUrl ?? "");
+    if (base.protocol === "http:" || base.protocol === "https:") {
+      return base;
+    }
+  } catch {
+    // Not a URL; reported below.
+  }
+  throw new OagMcpError(
+    "CONFIG_BASE_URL_REQUIRED",
+    `No absolute upstream base URL is available (spec servers: ${info.api.servers.join(", ") || "none"})`,
+    { hint: "Set upstream.baseUrl in the configuration file." },
+  );
+}
+
+/**
+ * Audit the authorization policy in force.
+ *
+ * @private
+ */
+function _auditPolicy(
+  logs: Logs,
+  config: Config,
+  policy: AuthorizationPolicy,
+): void {
+  logs.audit("authorization.policy_loaded", "success", {
+    policyMode: policy.implicit ? "implicit-allow-all" : "configured",
+    rules: config.authorization?.rules.length ?? 0,
+    default: config.authorization?.default ?? "allow",
+  });
+}
+
+/**
+ * Audit the network and sandbox limits in force.
+ *
+ * @private
+ */
+function _auditExecutionPolicy(logs: Logs, config: Config, base: URL): void {
+  logs.audit("execution.policy.applied", "success", {
+    upstreamOrigin: base.origin,
+    extraRedirectOrigins: config.upstream.allowedOrigins.length,
+    followRedirects: config.upstream.followRedirects,
+    timeoutMs: config.execution.timeoutMs,
+    memoryMb: config.execution.memoryMb,
+    maxConcurrent: config.execution.maxConcurrent,
+    sandbox: "deno-no-permissions",
+  });
+}
+
+/**
+ * A Deno executor, verified by loading the SDK bundle with every binding.
+ *
+ * @private
+ */
+async function _verifiedDenoExecutor(
+  workspaceDir: string,
+  info: PreparedSdkInfo,
+  broker: RequestBroker,
+  config: Config,
+  logs: Logs,
+): Promise<DenoExecutor> {
+  const deno = resolveDeno(config.execution.denoPath);
+  logs.op("info", "executor.runtime.resolved", {
+    executor: "deno-subprocess",
+    denoVersion: deno.version,
+    source: deno.source,
+  });
+  const executor = new DenoExecutor({ workspaceDir, deno, logs });
+  await executor.verify(info.operations, broker.sdkBasePath);
+  logs.op("info", "executor.verified", {
+    executor: "deno-subprocess",
+    bindings: info.operations.length,
+    outcome: "success",
+  });
+  return executor;
+}
+
+/**
+ * Keep search output within its size limit: drop detail from a large method
+ * description first, then replace anything still too large with a preview.
+ *
+ * @private
+ */
+function _boundSearchOutput(
+  out: Record<string, unknown>,
+): Record<string, unknown> {
+  let text = JSON.stringify(out);
+  if (text.length > MAX_SEARCH_OUTPUT && out.method) {
+    const m = out.method as Record<string, unknown>;
+    m.referencedTypes = (m.referencedTypes as string[]).slice(0, 3);
+    m.apiParameters = undefined;
+    text = JSON.stringify(out);
+  }
+  if (text.length <= MAX_SEARCH_OUTPUT) {
+    return out;
+  }
+  return {
+    truncated: true,
+    note: "Result too large; narrow the query.",
+    preview: text.slice(0, MAX_SEARCH_OUTPUT - 200),
+  };
+}
+
+/**
  * Prepared SDK plus runtime components, shared by every session of one
  * server process.
  */
@@ -209,30 +320,14 @@ export class OagMcpService {
     const { config, logs, prepared } = opts;
     const dir = prepared.workspaceDir;
     const info = prepared.info;
-    const index = prepared.index;
-
-    const baseUrl = config.upstream.baseUrl ?? info.api.servers[0];
-    let base: URL;
-    try {
-      base = new URL(baseUrl ?? "");
-      if (base.protocol !== "http:" && base.protocol !== "https:") {
-        throw new Error("protocol");
-      }
-    } catch {
-      throw new OagMcpError(
-        "CONFIG_BASE_URL_REQUIRED",
-        `No absolute upstream base URL is available (spec servers: ${info.api.servers.join(", ") || "none"})`,
-        { hint: "Set upstream.baseUrl in the configuration file." },
-      );
-    }
-    const resolver = new SecretResolver({
-      secretsFile: config.upstreamAuth.secretsFile,
-      baseDir: opts.configBaseDir,
-    });
+    const base = _upstreamBase(config, info);
     const provider = new ServiceIdentityCredentialProvider({
       schemes: config.upstreamAuth.schemes,
       schemeInfo: info.securitySchemes,
-      resolver,
+      resolver: new SecretResolver({
+        secretsFile: config.upstreamAuth.secretsFile,
+        baseDir: opts.configBaseDir,
+      }),
       registry: secrets,
       logs,
       allowInsecureTokenUrl: config.upstreamAuth.allowInsecureTokenUrl,
@@ -240,11 +335,7 @@ export class OagMcpService {
       fetchImpl: opts.fetchImpl,
     });
     const policy = new AuthorizationPolicy(config.authorization);
-    logs.audit("authorization.policy_loaded", "success", {
-      policyMode: policy.implicit ? "implicit-allow-all" : "configured",
-      rules: config.authorization?.rules.length ?? 0,
-      default: config.authorization?.default ?? "allow",
-    });
+    _auditPolicy(logs, config, policy);
     const broker = new RequestBroker({
       operations: info.operations,
       schemes: info.securitySchemes,
@@ -253,32 +344,10 @@ export class OagMcpService {
       network: { baseUrl: base.toString(), ...config.upstream },
       fetchImpl: opts.fetchImpl,
     });
-    logs.audit("execution.policy.applied", "success", {
-      upstreamOrigin: base.origin,
-      extraRedirectOrigins: config.upstream.allowedOrigins.length,
-      followRedirects: config.upstream.followRedirects,
-      timeoutMs: config.execution.timeoutMs,
-      memoryMb: config.execution.memoryMb,
-      maxConcurrent: config.execution.maxConcurrent,
-      sandbox: "deno-no-permissions",
-    });
-    let executor = opts.executor;
-    if (!executor) {
-      const deno = resolveDeno(config.execution.denoPath);
-      logs.op("info", "executor.runtime.resolved", {
-        executor: "deno-subprocess",
-        denoVersion: deno.version,
-        source: deno.source,
-      });
-      const denoExecutor = new DenoExecutor({ workspaceDir: dir, deno, logs });
-      await denoExecutor.verify(info.operations, broker.sdkBasePath);
-      logs.op("info", "executor.verified", {
-        executor: "deno-subprocess",
-        bindings: info.operations.length,
-        outcome: "success",
-      });
-      executor = denoExecutor;
-    }
+    _auditExecutionPolicy(logs, config, base);
+    const executor =
+      opts.executor ??
+      (await _verifiedDenoExecutor(dir, info, broker, config, logs));
     const checker = config.execution.typecheck
       ? new AgentTypeChecker(
           path.join(dir, "sdk"),
@@ -287,7 +356,7 @@ export class OagMcpService {
       : undefined;
     return new OagMcpService(dir, config, logs, {
       info,
-      index,
+      index: prepared.index,
       policy,
       broker,
       executor,
@@ -376,7 +445,8 @@ export class OagMcpService {
   }
 
   /**
-   * Run the search tool.
+   * Run the search tool: describe one method by id, search by query, or
+   * browse the APIs, showing only methods the caller may call.
    *
    * @param {Object} input - search input
    * @param {Object} ctx - call context
@@ -386,59 +456,12 @@ export class OagMcpService {
     const started = Date.now();
     const logs = this.logs.child(_callContext(ctx, "search"));
     const visible = this._visible(ctx.principal);
-    const limit = Math.min(Math.max(input.limit ?? 5, 1), 20);
-    let mode: string;
-    let out: Record<string, unknown>;
-    if (input.id) {
-      mode = "detail";
-      const r = this.index.get(input.id);
-      out =
-        r && visible(r)
-          ? { method: this._detail(r) }
-          : {
-              error: `No method with id "${input.id}" is available. Use search with a query to find ids.`,
-            };
-    } else if (input.query && input.query.trim()) {
-      mode = "query";
-      const { hits, total } = this.index.search(input.query.slice(0, 500), {
-        visible,
-        limit,
-        tag: input.tag,
-      });
-      out = {
-        results: hits,
-        total,
-        hint:
-          hits.length === 0
-            ? "No matches. Call search without a query to browse available APIs."
-            : "Call search with { id } for full types and an example, then use execute.",
-      };
-    } else {
-      mode = "browse";
-      out = {
-        api: {
-          title: this.info.api.title,
-          version: this.info.api.version,
-        },
-        apis: this.index.browse({ visible, perClass: 8, tag: input.tag }),
-        hint: "Use search with a query or { tag: <ApiClass or tag> } to list methods; { id } for details.",
-      };
-    }
-    // Bound output size: progressively drop detail.
-    let text = JSON.stringify(out);
-    if (text.length > MAX_SEARCH_OUTPUT && out.method) {
-      const m = out.method as Record<string, unknown>;
-      m.referencedTypes = (m.referencedTypes as string[]).slice(0, 3);
-      m.apiParameters = undefined;
-      text = JSON.stringify(out);
-    }
-    if (text.length > MAX_SEARCH_OUTPUT) {
-      out = {
-        truncated: true,
-        note: "Result too large; narrow the query.",
-        preview: text.slice(0, MAX_SEARCH_OUTPUT - 200),
-      };
-    }
+    const [mode, found] = input.id
+      ? ["detail", this._searchDetail(input.id, visible)]
+      : input.query?.trim()
+        ? ["query", this._searchQuery(input, visible)]
+        : ["browse", this._browse(input, visible)];
+    const out = _boundSearchOutput(found);
     logs.op("info", "search.completed", {
       mode,
       results: Array.isArray(out.results) ? out.results.length : undefined,
@@ -446,6 +469,63 @@ export class OagMcpService {
       outcome: "success",
     });
     return out;
+  }
+
+  /**
+   * One method in full, if the caller may see it.
+   *
+   * @private
+   */
+  private _searchDetail(
+    id: string,
+    visible: (r: MethodRecord) => boolean,
+  ): Record<string, unknown> {
+    const r = this.index.get(id);
+    return r && visible(r)
+      ? { method: this._detail(r) }
+      : {
+          error: `No method with id "${id}" is available. Use search with a query to find ids.`,
+        };
+  }
+
+  /**
+   * The methods matching a query.
+   *
+   * @private
+   */
+  private _searchQuery(
+    input: SearchInput,
+    visible: (r: MethodRecord) => boolean,
+  ): Record<string, unknown> {
+    const { hits, total } = this.index.search(input.query!.slice(0, 500), {
+      visible,
+      limit: Math.min(Math.max(input.limit ?? 5, 1), 20),
+      tag: input.tag,
+    });
+    return {
+      results: hits,
+      total,
+      hint:
+        hits.length === 0
+          ? "No matches. Call search without a query to browse available APIs."
+          : "Call search with { id } for full types and an example, then use execute.",
+    };
+  }
+
+  /**
+   * An overview of the APIs and their methods.
+   *
+   * @private
+   */
+  private _browse(
+    input: SearchInput,
+    visible: (r: MethodRecord) => boolean,
+  ): Record<string, unknown> {
+    return {
+      api: { title: this.info.api.title, version: this.info.api.version },
+      apis: this.index.browse({ visible, perClass: 8, tag: input.tag }),
+      hint: "Use search with a query or { tag: <ApiClass or tag> } to list methods; { id } for details.",
+    };
   }
 
   /**
