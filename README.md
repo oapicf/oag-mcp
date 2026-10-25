@@ -282,10 +282,10 @@ diagnostics), `api_error` (HTTP status and body), `sdk_error`,
 <!-- BEGIN:BUILD_REPORTS -->
 Build reports:
 
-* [Code complexity report](https://oapicf.github.io/oag-mcp/complexity/plato/index.html)
+* [Code complexity report](https://oapicf.github.io/oag-mcp/complexity/eslint/index.html)
 * [Unit tests report](https://oapicf.github.io/oag-mcp/test/mocha.txt)
 * [Test coverage report](https://oapicf.github.io/oag-mcp/coverage/c8/index.html)
 * [Integration tests report](https://oapicf.github.io/oag-mcp/test-integration/mocha.txt)
-* [API Documentation](https://oapicf.github.io/oag-mcp/doc/jsdoc/index.html)
+* [API Documentation](https://oapicf.github.io/oag-mcp/doc/typedoc/index.html)
 
 <!-- END:BUILD_REPORTS -->
