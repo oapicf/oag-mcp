@@ -17,7 +17,12 @@ import { OagMcpError } from "../errors.js";
 import { prepareCode } from "../executor/code-policy.js";
 import { DenoExecutor, resolveDeno } from "../executor/deno-executor.js";
 import { AgentTypeChecker } from "../executor/typecheck.js";
-import type { ExecutionError, Executor, LogEntry } from "../executor/types.js";
+import type {
+  ExecutionError,
+  ExecutionOutcome,
+  Executor,
+  LogEntry,
+} from "../executor/types.js";
 import type { Logs } from "../logger.js";
 import { boundValue, secrets } from "../util/redact.js";
 import type { PreparedSdk } from "../prepare/prepare.js";
@@ -99,6 +104,36 @@ export interface ExecuteOutput {
 }
 
 const MAX_SEARCH_OUTPUT = 24000;
+
+/** One execute call as it moves through its stages. */
+interface Run {
+  started: number;
+  executionId: string;
+  language: "typescript" | "javascript";
+  ctx: CallContext;
+  /** Logs carrying the call's context. */
+  logs: Logs;
+}
+
+/** A call refused before the code runs. */
+interface Refused {
+  error: ExecutionError;
+  hint?: string;
+}
+
+/** Code that passed the checks, as the module the sandbox runs. */
+interface Checked {
+  moduleBase64: string;
+}
+
+/**
+ * Whether a stage refused the call.
+ *
+ * @private
+ */
+function _refused<T extends object>(value: T | Refused): value is Refused {
+  return !("ok" in value) && !("moduleBase64" in value);
+}
 
 /**
  * Trim long text.
@@ -414,119 +449,159 @@ export class OagMcpService {
   }
 
   /**
-   * Run the execute tool.
+   * Run the execute tool: admit the call, check the code, run it in the
+   * sandbox, then audit and report the outcome.
    *
    * @param {Object} input - execute input
    * @param {Object} ctx - call context
    * @return {Promise} execute output
    */
   async execute(input: ExecuteInput, ctx: CallContext): Promise<ExecuteOutput> {
-    const started = Date.now();
     const executionId = `exec_${crypto.randomUUID()}`;
-    const logs = this.logs.child({
-      ..._callContext(ctx, "execute"),
+    const run: Run = {
+      started: Date.now(),
       executionId,
-    });
-    const cfg = this.config.execution;
-    const language = input.language ?? "typescript";
-    const fail = (error: ExecutionError, hint?: string): ExecuteOutput => {
-      logs.op("info", "execution.failed", {
-        errorType: error.type,
-        reason: error.reason,
-        durationMs: Date.now() - started,
-        outcome: "failure",
-      });
-      return {
-        ok: false,
-        executionId,
-        logs: [],
-        logsTruncated: false,
-        error: this._scrubError(error),
-        hint,
-        stats: { durationMs: Date.now() - started, sdkCalls: 0 },
-      };
+      language: input.language ?? "typescript",
+      ctx,
+      logs: this.logs.child({ ..._callContext(ctx, "execute"), executionId }),
     };
+    const checked = this._admit(input, run) ?? this._check(input, run);
+    if (_refused(checked)) {
+      return this._fail(run, checked.error, checked.hint);
+    }
+    const outcome = await this._run(input, run, checked.moduleBase64);
+    if (_refused(outcome)) {
+      return this._fail(run, outcome.error);
+    }
+    this._auditOutcome(run, outcome);
+    return this._output(run, outcome);
+  }
 
-    if (this.logs.auditBlocksExecution()) {
-      return fail({
+  /**
+   * Refuse the call while required auditing is unavailable; otherwise
+   * record the execution request.
+   *
+   * @private
+   */
+  private _admit(input: ExecuteInput, run: Run): Refused | undefined {
+    const unavailable: Refused = {
+      error: {
         type: "audit_unavailable",
         message:
           "Execution is disabled because required security auditing is unavailable",
-      });
+      },
+    };
+    if (this.logs.auditBlocksExecution()) {
+      return unavailable;
     }
-    const recorded = logs.audit("execution.requested", "accepted", {
-      language,
+    const recorded = run.logs.audit("execution.requested", "accepted", {
+      language: run.language,
       codeBytes: Buffer.byteLength(input.code ?? ""),
     });
     if (!recorded && this.logs.failClosed) {
-      return fail({
-        type: "audit_unavailable",
-        message:
-          "Execution is disabled because required security auditing is unavailable",
-      });
+      return unavailable;
     }
-    logs.op("info", "execution.started", { language });
+    run.logs.op("info", "execution.started", { language: run.language });
+    return undefined;
+  }
 
-    const prepared = prepareCode(input.code ?? "", language, cfg.maxCodeBytes);
+  /**
+   * Check the code against the code policy and, for TypeScript, the type
+   * checker.
+   *
+   * @private
+   */
+  private _check(input: ExecuteInput, run: Run): Refused | Checked {
+    const maxCodeBytes = this.config.execution.maxCodeBytes;
+    const prepared = prepareCode(input.code ?? "", run.language, maxCodeBytes);
     if (!prepared.ok) {
-      if (prepared.error.reason === "import_not_allowed") {
-        logs.audit(
-          "execution.import_denied",
-          "denied",
-          { violations: prepared.violations?.length ?? 1 },
-          "warn",
-        );
-      }
-      if (prepared.error.type === "resource_limit") {
-        logs.audit(
-          "execution.resource_limit",
-          "denied",
-          { limit: "maxCodeBytes", value: cfg.maxCodeBytes },
-          "warn",
-        );
-      }
-      return fail(prepared.error);
+      this._auditCodePolicy(run, prepared);
+      return { error: prepared.error };
     }
-    if (language === "typescript" && this.checker) {
-      const diagnostics = this.checker.check(input.code);
-      if (diagnostics.length > 0) {
-        return fail(
-          {
-            type: "type_error",
-            message: `Code has ${diagnostics.length} type error(s): ${diagnostics[0].message} (line ${diagnostics[0].line})`,
-            diagnostics,
-          },
-          "Check method names, argument shapes and return types with search { id }.",
-        );
-      }
+    const diagnostics =
+      run.language === "typescript"
+        ? (this.checker?.check(input.code) ?? [])
+        : [];
+    if (diagnostics.length > 0) {
+      return {
+        error: {
+          type: "type_error",
+          message: `Code has ${diagnostics.length} type error(s): ${diagnostics[0].message} (line ${diagnostics[0].line})`,
+          diagnostics,
+        },
+        hint: "Check method names, argument shapes and return types with search { id }.",
+      };
     }
-    const timeoutMs = Math.min(
-      Math.max(input.timeoutMs ?? cfg.timeoutMs, 100),
-      cfg.maxTimeoutMs,
-    );
+    return { moduleBase64: prepared.moduleBase64 };
+  }
+
+  /**
+   * Audit code the code policy refused: imports, or code over the size
+   * limit.
+   *
+   * @private
+   */
+  private _auditCodePolicy(
+    run: Run,
+    refused: Extract<ReturnType<typeof prepareCode>, { ok: false }>,
+  ): void {
+    if (refused.error.reason === "import_not_allowed") {
+      run.logs.audit(
+        "execution.import_denied",
+        "denied",
+        { violations: refused.violations?.length ?? 1 },
+        "warn",
+      );
+    }
+    if (refused.error.type === "resource_limit") {
+      run.logs.audit(
+        "execution.resource_limit",
+        "denied",
+        { limit: "maxCodeBytes", value: this.config.execution.maxCodeBytes },
+        "warn",
+      );
+    }
+  }
+
+  /**
+   * Run the code in the sandbox once a slot is free, with its SDK requests
+   * going through the request broker for the caller.
+   *
+   * @private
+   */
+  private async _run(
+    input: ExecuteInput,
+    run: Run,
+    moduleBase64: string,
+  ): Promise<ExecutionOutcome | Refused> {
+    const cfg = this.config.execution;
     const release = await this.semaphore.acquire();
     if (!release) {
-      logs.audit(
+      run.logs.audit(
         "execution.resource_limit",
         "denied",
         { limit: "maxConcurrent", value: cfg.maxConcurrent },
         "warn",
       );
-      return fail({
-        type: "resource_limit",
-        reason: "executor_busy",
-        message: "Too many concurrent executions; retry shortly",
-      });
+      return {
+        error: {
+          type: "resource_limit",
+          reason: "executor_busy",
+          message: "Too many concurrent executions; retry shortly",
+        },
+      };
     }
-    let outcome;
     try {
-      outcome = await this.executor.execute({
-        executionId,
-        moduleBase64: prepared.moduleBase64,
+      return await this.executor.execute({
+        executionId: run.executionId,
+        moduleBase64,
         bindings: this.info.operations,
         basePath: this.broker.sdkBasePath,
         limits: {
-          timeoutMs,
+          timeoutMs: Math.min(
+            Math.max(input.timeoutMs ?? cfg.timeoutMs, 100),
+            cfg.maxTimeoutMs,
+          ),
           memoryMb: cfg.memoryMb,
           maxSdkCalls: cfg.maxSdkCalls,
           maxResultBytes: cfg.maxResultBytes,
@@ -538,10 +613,10 @@ export class OagMcpService {
           this.broker.handle(
             req,
             {
-              principal: ctx.principal,
-              executionId,
-              requestId: ctx.requestId,
-              logs,
+              principal: run.ctx.principal,
+              executionId: run.executionId,
+              requestId: run.ctx.requestId,
+              logs: run.logs,
             },
             signal,
           ),
@@ -549,58 +624,98 @@ export class OagMcpService {
     } finally {
       release();
     }
+  }
+
+  /**
+   * Audit what the sandbox enforced: denied capabilities and result limits.
+   *
+   * @private
+   */
+  private _auditOutcome(run: Run, outcome: ExecutionOutcome): void {
+    const error = outcome.error;
     if (
-      outcome.error?.type === "permission_denied" &&
-      outcome.error.reason === "sandbox_capability_denied"
+      error?.type === "permission_denied" &&
+      error.reason === "sandbox_capability_denied"
     ) {
-      logs.audit(
+      run.logs.audit(
         "execution.capability_denied",
         "denied",
-        { capability: outcome.error.capability ?? "unknown" },
+        { capability: error.capability ?? "unknown" },
         "warn",
       );
     }
     if (
-      outcome.error?.type === "output_limit" ||
-      outcome.error?.type === "unsupported_result"
+      error?.type === "output_limit" ||
+      error?.type === "unsupported_result"
     ) {
-      logs.audit(
+      run.logs.audit(
         "execution.resource_limit",
         "denied",
-        { limit: outcome.error.type },
+        { limit: error.type },
         "warn",
       );
     }
-    // Scrub any known secret that an API response might echo back.
-    const result = outcome.ok
-      ? JSON.parse(secrets.scrubKnown(JSON.stringify(outcome.result ?? null)))
-      : undefined;
-    const outLogs = outcome.logs.map((l) => ({
-      level: l.level,
-      message: secrets.scrubKnown(l.message),
-    }));
-    logs.op("info", outcome.ok ? "execution.completed" : "execution.failed", {
-      durationMs: Date.now() - started,
-      sdkCalls: outcome.stats.sdkCalls,
-      terminated: outcome.stats.terminated,
-      errorType: outcome.error?.type,
-      outcome: outcome.ok ? "success" : "failure",
-    });
+  }
+
+  /**
+   * The tool output for an execution that ran, with any known secret that an
+   * API response might echo back scrubbed.
+   *
+   * @private
+   */
+  private _output(run: Run, outcome: ExecutionOutcome): ExecuteOutput {
+    const durationMs = () => Date.now() - run.started;
+    run.logs.op(
+      "info",
+      outcome.ok ? "execution.completed" : "execution.failed",
+      {
+        durationMs: durationMs(),
+        sdkCalls: outcome.stats.sdkCalls,
+        terminated: outcome.stats.terminated,
+        errorType: outcome.error?.type,
+        outcome: outcome.ok ? "success" : "failure",
+      },
+    );
     return {
       ok: outcome.ok,
-      executionId,
-      result,
-      logs: outLogs,
+      executionId: run.executionId,
+      result: outcome.ok
+        ? JSON.parse(secrets.scrubKnown(JSON.stringify(outcome.result ?? null)))
+        : undefined,
+      logs: outcome.logs.map((l) => ({
+        level: l.level,
+        message: secrets.scrubKnown(l.message),
+      })),
       logsTruncated: outcome.logsTruncated,
       error: outcome.error ? this._scrubError(outcome.error) : undefined,
       hint:
         outcome.ok && outcome.resultUndefined
           ? "The code returned no value; use `return` to send results back."
           : undefined,
-      stats: {
-        durationMs: Date.now() - started,
-        sdkCalls: outcome.stats.sdkCalls,
-      },
+      stats: { durationMs: durationMs(), sdkCalls: outcome.stats.sdkCalls },
+    };
+  }
+
+  /**
+   * The tool output for a call refused before or instead of running.
+   *
+   * @private
+   */
+  private _fail(run: Run, error: ExecutionError, hint?: string): ExecuteOutput {
+    run.logs.op("info", "execution.failed", {
+      errorType: error.type,
+      reason: error.reason,
+      durationMs: Date.now() - run.started,
+      outcome: "failure",
+    });
+    return {
+      ok: false,
+      executionId: run.executionId,
+      logs: [],
+      logsTruncated: false,
+      error: this._scrubError(error),
+      hint,
+      stats: { durationMs: Date.now() - run.started, sdkCalls: 0 },
     };
   }
 
