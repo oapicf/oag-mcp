@@ -12,6 +12,7 @@ import path from "node:path";
 import referee from "@sinonjs/referee";
 
 import { Logs } from "../lib/logger.js";
+import { OCSF_VERSION } from "../lib/ocsf.js";
 import type { PreparedSdk } from "../lib/prepare/prepare.js";
 import {
   BIN,
@@ -27,8 +28,9 @@ import {
 } from "./helpers/env.js";
 import { type MockApi, startMockApi } from "./helpers/mock-api.js";
 import { type AuthServer, startAuthServer } from "./helpers/auth-server.js";
+import { readLogRecords } from "../test/helpers/log-records.js";
 
-const { assert, refute } = referee;
+const { assert, refute, match } = referee;
 
 let api: MockApi;
 let auth: AuthServer;
@@ -46,14 +48,7 @@ after(async function () {
   await auth?.close();
 });
 
-const lines = (file: string) =>
-  fs.existsSync(file)
-    ? fs
-        .readFileSync(file, "utf8")
-        .split("\n")
-        .filter(Boolean)
-        .map((l) => JSON.parse(l))
-    : [];
+const lines = readLogRecords;
 
 /** Drive `oag-mcp serve --transport stdio` with raw JSON-RPC lines. */
 async function stdioSession(
@@ -196,7 +191,10 @@ describe("logging - stdio sessions", function () {
     const auditRecords = lines(audit);
     assert.greater(auditRecords.length, 3);
     for (const r of auditRecords) {
-      assert.equals(r.logCategory, "security_audit");
+      // Every audit record is an OCSF event.
+      assert.equals(r.category, "security_audit");
+      assert.equals(r.raw.metadata, match({ version: OCSF_VERSION }));
+      assert.isNumber(r.raw.class_uid);
       assert.isString(r.event);
       assert.isString(r.outcome);
     }
@@ -213,7 +211,14 @@ describe("logging - stdio sessions", function () {
       SECRET_ENV,
     );
     for (const r of lines(op2)) {
-      assert.equals(r.logCategory, "operational");
+      // Every operational record is an OpenTelemetry log record.
+      assert.equals(r.category, "operational");
+      assert.equals(
+        r.raw.InstrumentationScope,
+        match({ Name: "oag-mcp.operational" }),
+      );
+      assert.equals(r.raw.Resource, match({ "service.name": "oag-mcp" }));
+      assert.isNumber(r.raw.SeverityNumber);
     }
     assert.contains(
       lines(op2).map((r) => r.event),
@@ -271,7 +276,7 @@ describe("logging - records from executions", function () {
       assert.isTrue(r.ok);
       const mine = records.filter((x) => x.executionId === r.executionId);
       const decisions = mine.filter((x) => x.event === "authorization.allowed");
-      assert.equals(decisions.map((d) => d.operation).sort(), [
+      assert.equals(decisions.map((d) => d.get("operation")).sort(), [
         "PetsApi.getPetById",
         "PetsApi.listPetVisits",
       ]);

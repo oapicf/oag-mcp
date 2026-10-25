@@ -5,12 +5,13 @@ import path from "node:path";
 
 import { Logs } from "../../lib/logger.js";
 import type { SecuritySchemeInfo } from "../../lib/types.js";
+import { type LogRecordView, readLogRecords } from "./log-records.js";
 
 /** Logs writing to a throwaway file so tests stay quiet. */
 export function quietLogs(): {
   logs: Logs;
   file: string;
-  records: () => Array<Record<string, unknown>>;
+  records: () => LogRecordView[];
 } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "oag-mcp-quiet-"));
   const file = path.join(dir, "all.log");
@@ -18,14 +19,7 @@ export function quietLogs(): {
   return {
     logs,
     file,
-    records: () =>
-      fs.existsSync(file)
-        ? fs
-            .readFileSync(file, "utf8")
-            .split("\n")
-            .filter(Boolean)
-            .map((l) => JSON.parse(l))
-        : [],
+    records: () => readLogRecords(file),
   };
 }
 

@@ -5,7 +5,6 @@
  * every SDK operation, concurrent caller isolation and non-forwarding of MCP
  * credentials.
  */
-import fs from "node:fs";
 import path from "node:path";
 
 import {
@@ -29,8 +28,9 @@ import {
   INTROSPECTION_CLIENT_SECRET,
   startAuthServer,
 } from "./helpers/auth-server.js";
+import { readLogRecords } from "../test/helpers/log-records.js";
 
-const { assert, refute } = referee;
+const { assert, refute, match } = referee;
 
 const READER_TOKEN = "reader-token-0123456789abcdef";
 const ADMIN_TOKEN = "admin-token-0123456789abcdef";
@@ -278,11 +278,7 @@ describe("http-auth - static bearer", function () {
   });
 
   it("should audit an authorization decision for every attempted SDK operation", function () {
-    const records = fs
-      .readFileSync(staticAudit, "utf8")
-      .split("\n")
-      .filter(Boolean)
-      .map((l) => JSON.parse(l));
+    const records = readLogRecords(staticAudit);
     const decisions = records.filter(
       (r) =>
         r.event === "authorization.allowed" ||
@@ -290,18 +286,24 @@ describe("http-auth - static bearer", function () {
     );
     assert.greater(decisions.length, 5);
     for (const d of decisions) {
-      assert.isString(d.operation);
-      assert.isString(d.policyId);
+      assert.isString(d.get("operation"));
+      assert.isString(d.get("policyId"));
       assert.isString(d.principalId);
       assert.isString(d.executionId);
       assert.isString(d.requestId);
-      assert.equals(d.logCategory, "security_audit");
+      assert.equals(d.category, "security_audit");
+      // The Streamable HTTP client and the MCP tool call.
+      assert.isString((d.raw.src_endpoint as { ip?: string }).ip);
+      assert.equals(
+        d.raw.message_context,
+        match({ name: "tools/call execute", ai_role_id: 3 }),
+      );
     }
     assert.contains(
       records.map((r) => r.event),
       "authentication.failed",
     );
-    refute.contains(JSON.stringify(records), READER_TOKEN);
+    refute.contains(JSON.stringify(records.map((r) => r.raw)), READER_TOKEN);
   });
 });
 

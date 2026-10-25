@@ -188,20 +188,23 @@ export class RequestBroker {
     }
     const { op, re } = entry;
 
-    // 1. Authorisation, for every attempted SDK operation.
+    // 1. Authorisation, for every attempted SDK operation. Each attempt gets
+    // exactly one decision record: denied here, a denied destination or a
+    // credential failure below, or allowed once credentials are applied.
     const decision = this.opts.policy.decide(ctx.principal, op);
-    logs.audit(
-      decision.allowed ? "authorization.allowed" : "authorization.denied",
-      decision.allowed ? "allowed" : "denied",
-      {
-        operation: op.id,
-        operationId: op.operationId,
-        policyId: decision.policyId,
-        reason: decision.reason,
-      },
-      decision.allowed ? "info" : "warn",
-    );
+    const operation = {
+      operation: op.id,
+      operationId: op.operationId,
+      httpMethod: op.httpMethod,
+      pathTemplate: op.path,
+    };
     if (!decision.allowed) {
+      logs.audit(
+        "authorization.denied",
+        "denied",
+        { ...operation, policyId: decision.policyId, reason: decision.reason },
+        "warn",
+      );
       return this._err({
         type: "permission_denied",
         reason: "authorization_denied",
@@ -215,6 +218,12 @@ export class RequestBroker {
     try {
       url = new URL(req.url);
     } catch {
+      logs.audit(
+        "network.destination_denied",
+        "denied",
+        { ...operation, reason: "invalid_url" },
+        "warn",
+      );
       return this._err({
         type: "permission_denied",
         reason: "invalid_url",
@@ -234,6 +243,8 @@ export class RequestBroker {
         "denied",
         {
           operation: op.id,
+          httpMethod: method,
+          pathTemplate: op.path,
           reason:
             url.origin !== this.base.origin
               ? "origin_not_allowed"
@@ -272,14 +283,8 @@ export class RequestBroker {
         stripped.push(`query:${name}`);
       }
     }
-    if (stripped.length > 0) {
-      logs.audit(
-        "credential.agent_supplied_stripped",
-        "denied",
-        { operation: op.id, fields: stripped.slice(0, 10) },
-        "warn",
-      );
-    }
+    const strippedCredentials =
+      stripped.length > 0 ? { strippedCredentials: stripped.slice(0, 10) } : {};
 
     // 4. Credentials.
     let applied;
@@ -297,19 +302,18 @@ export class RequestBroker {
           signal,
         },
       );
-      logs.audit("credential.resolved", "success", {
-        operation: op.id,
-        provider: this.opts.provider.id,
-        schemes: applied.schemes,
-        unauthenticated: applied.schemes.length === 0,
-      });
     } catch (err) {
       const reason =
         err instanceof UpstreamAuthError ? err.reason : "credential_error";
       logs.audit(
         "credential.lookup_failed",
         "failure",
-        { operation: op.id, provider: this.opts.provider.id, reason },
+        {
+          ...operation,
+          ...strippedCredentials,
+          provider: this.opts.provider.id,
+          reason,
+        },
         "warn",
       );
       return this._err({
@@ -322,6 +326,20 @@ export class RequestBroker {
             : "Upstream credentials are unavailable",
       });
     }
+    logs.audit(
+      "authorization.allowed",
+      "allowed",
+      {
+        ...operation,
+        ...strippedCredentials,
+        policyId: decision.policyId,
+        reason: decision.reason,
+        provider: this.opts.provider.id,
+        schemes: applied.schemes,
+        unauthenticated: applied.schemes.length === 0,
+      },
+      stripped.length > 0 ? "warn" : "info",
+    );
     for (const [k, v] of Object.entries(applied.query)) {
       url.searchParams.set(k, v);
     }
@@ -341,7 +359,7 @@ export class RequestBroker {
           "execution.resource_limit",
           "denied",
           {
-            operation: op.id,
+            ...operation,
             limit: "maxRequestBytes",
             value: this.opts.network.maxRequestBytes,
           },
@@ -394,6 +412,8 @@ export class RequestBroker {
             "denied",
             {
               operation: op.id,
+              httpMethod: currentMethod,
+              pathTemplate: op.path,
               destinationOrigin: next.origin,
               reason: !this.opts.network.followRedirects
                 ? "redirects_disabled"
@@ -492,7 +512,7 @@ export class RequestBroker {
             "execution.resource_limit",
             "denied",
             {
-              operation: op.id,
+              ...operation,
               limit: "maxResponseBytes",
               value: this.opts.network.maxResponseBytes,
             },

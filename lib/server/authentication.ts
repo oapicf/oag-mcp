@@ -619,15 +619,11 @@ export async function createHttpAuthenticator(
           expiresAt: authInfo.expiresAt,
         };
         opts.registry.add(authInfo.token);
-        l.audit("token.validated", "success", {
+        l.audit("authentication.succeeded", "success", {
           mode,
           validation,
           principalId: principal.id,
           scopeCount: principal.scopes.length,
-        });
-        l.audit("authentication.succeeded", "success", {
-          mode,
-          principalId: principal.id,
         });
         return {
           ok: true,
@@ -649,12 +645,11 @@ export async function createHttpAuthenticator(
                     ? "resource_mismatch"
                     : String(code);
         l.audit(
-          "token.validation_failed",
+          "authentication.failed",
           "failure",
           { mode, validation, reason },
           "warn",
         );
-        l.audit("authentication.failed", "failure", { mode, reason }, "warn");
         return {
           ok: false,
           response: bearerAuthChallengeResponse(err, {

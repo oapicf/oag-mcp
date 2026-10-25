@@ -63,7 +63,7 @@ describe("workspace - createWorkspace", function () {
     const failed = records().find(
       (r) => r.event === "prepare.workspace.cleanup_failed",
     );
-    assert.equals(failed?.error, "EBUSY");
+    assert.equals(failed?.get("error"), "EBUSY");
     assert.isTrue(ws.cleanup());
   });
 });

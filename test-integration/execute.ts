@@ -484,8 +484,12 @@ return "sent";`,
     assert.equals(api.requests.length, before, "nothing reached the API");
     const denied = auditFor(res.executionId, "authorization.denied");
     assert.equals(denied.length, 1);
-    assert.equals(denied[0].operation, "AdminApi.deletePet");
+    assert.equals(denied[0].get("operation"), "AdminApi.deletePet");
     assert.equals(denied[0].outcome, "denied");
+    // OCSF API Activity: Delete, denied by the security control.
+    assert.equals(denied[0].raw.class_uid, 6003);
+    assert.equals(denied[0].raw.activity_id, 4);
+    assert.equals(denied[0].raw.action_id, 2);
   });
 
   it("should refuse a forged request that does not match its claimed operation", async function () {
@@ -513,7 +517,7 @@ return "sent";`,
     assert.isTrue(res.ok, JSON.stringify(res.error));
     assert.equals(api.requests.length, before, "nothing reached the API");
     const reasons = auditFor(res.executionId, "network.destination_denied")
-      .map((r) => r.reason)
+      .map((r) => r.get("reason"))
       .sort();
     assert.equals(reasons, [
       "method_mismatch",
@@ -534,8 +538,10 @@ return "sent";`,
       "execution.boundary_violation",
     );
     assert.equals(violations.length, 1);
-    assert.equals(violations[0].reason, "unknown_binding");
-    assert.equals(violations[0].binding, "EvilApi.steal");
+    assert.equals(violations[0].get("reason"), "unknown_binding");
+    assert.equals(violations[0].get("binding"), "EvilApi.steal");
+    // An OCSF Detection Finding.
+    assert.equals(violations[0].raw.class_uid, 2004);
   });
 
   it("should replace credentials in a forged request with the configured ones", async function () {
@@ -559,12 +565,12 @@ return "sent";`,
     );
     assert.equals(reached[0].headers["x-api-key"], process.env.PC_API_KEY);
     refute.contains(JSON.stringify(reached[0].headers), "forged");
-    const stripped = auditFor(
-      res.executionId,
-      "credential.agent_supplied_stripped",
-    );
-    assert.equals(stripped.length, 1);
-    assert.equals((stripped[0].fields as string[]).sort(), [
+    // One allowed decision, marked as modified because credentials supplied
+    // by agent code were removed.
+    const allowed = auditFor(res.executionId, "authorization.allowed");
+    assert.equals(allowed.length, 1);
+    assert.equals(allowed[0].outcome, "modified");
+    assert.equals((allowed[0].get("strippedCredentials") as string[]).sort(), [
       "authorization",
       "x-api-key",
     ]);

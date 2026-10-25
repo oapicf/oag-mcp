@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MCP access control: none (loopback only), static bearer and OAuth resource server (JWKS or introspection, RFC 9728 metadata)
 - Upstream authentication: apiKey (header/query), HTTP Basic, HTTP Bearer and OAuth2 client credentials with token caching and renewal
 - Per-operation authorization policy enforced in search and on every SDK call
-- Pino structured logging with separate operational and security_audit categories, redaction and fail-closed auditing
+- Structured logging in two open standards: operational records as OpenTelemetry log records (semantic conventions 1.44.0, including the MCP conventions) and security audit records as OCSF 1.9.0 events, with redaction and fail-closed auditing; one audit decision record per attempted SDK operation
 
 ### Changed
 - Convert the generator-node template to TypeScript (tsc, tsx, typescript-eslint) while keeping bagofcli and Mocha/Sinon/referee

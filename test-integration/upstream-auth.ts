@@ -25,13 +25,14 @@ import {
   startMockApi,
 } from "./helpers/mock-api.js";
 import { type AuthServer, startAuthServer } from "./helpers/auth-server.js";
+import type { LogRecordView } from "../test/helpers/log-records.js";
 
 const { assert, refute } = referee;
 
 let api: MockApi;
 let auth: AuthServer;
 let svc: OagMcpService;
-let logRecords: () => Array<Record<string, unknown>>;
+let logRecords: () => LogRecordView[];
 
 before(async function () {
   this.timeout(120000);
@@ -133,7 +134,7 @@ describe("upstream-auth - OAuth2 token caching and renewal", function () {
     assert.equals(auth.tokenRequests, start + 2);
     const events = l
       .records()
-      .filter((r) => r.logCategory === "security_audit")
+      .filter((r) => r.category === "security_audit")
       .map((r) => r.event);
     assert.contains(events, "upstream.token.issue");
     assert.contains(events, "upstream.token.refresh");
@@ -220,9 +221,12 @@ describe("upstream-auth - configuration and confidentiality", function () {
     );
     assert.isTrue(res.ok);
     assert.equals(last().headers.authorization, `Bearer ${BEARER_TOKEN}`);
-    assert.contains(
-      logRecords().map((r) => r.event),
-      "credential.agent_supplied_stripped",
+    // The call is allowed, and its decision record says credentials supplied
+    // by agent code were removed.
+    assert(
+      logRecords().some(
+        (r) => r.event === "authorization.allowed" && r.outcome === "modified",
+      ),
     );
   });
 });

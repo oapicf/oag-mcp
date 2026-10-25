@@ -47,7 +47,7 @@ import {
 } from "../prepare/prepare.js";
 import type { Principal } from "../types.js";
 import { TOOL_NAMES, createMcpServer } from "./tools.js";
-import { OagMcpService } from "./service.js";
+import { type ClientEndpoint, OagMcpService } from "./service.js";
 
 /** A running server. */
 export interface RunningServer {
@@ -259,6 +259,7 @@ async function _serveHttp(
       const extra = (authInfo?.extra ?? {}) as {
         principal?: Principal;
         requestId?: string;
+        client?: ClientEndpoint;
       };
       if (!extra.principal) {
         throw new Error("unauthenticated request reached the MCP handler");
@@ -268,6 +269,7 @@ async function _serveHttp(
         extra.principal,
         "streamable-http",
         extra.requestId,
+        extra.client,
       );
     },
     {
@@ -300,13 +302,21 @@ async function _serveHttp(
 
   server!.on("request", async (req, res) => {
     const requestId = `req_${crypto.randomUUID()}`;
-    const reqLogs = logs.child({ requestId, transport: "streamable-http" });
+    const client = {
+      clientAddress: req.socket.remoteAddress,
+      clientPort: req.socket.remotePort,
+    };
+    const reqLogs = logs.child({
+      requestId,
+      transport: "streamable-http",
+      ...client,
+    });
     try {
       if (validateHost && !validateHost(req, res)) {
         reqLogs.audit(
           "transport.host_rejected",
           "denied",
-          { reason: "host_not_allowed" },
+          { httpMethod: req.method, reason: "host_not_allowed" },
           "warn",
         );
         return;
@@ -315,7 +325,7 @@ async function _serveHttp(
         reqLogs.audit(
           "transport.origin_rejected",
           "denied",
-          { reason: "origin_not_allowed" },
+          { httpMethod: req.method, reason: "origin_not_allowed" },
           "warn",
         );
         return;
@@ -385,6 +395,7 @@ async function _serveHttp(
           ...(auth.authInfo.extra ?? {}),
           principal: auth.principal,
           requestId,
+          client,
         },
       };
       await nodeHandler(req as never, res as never);

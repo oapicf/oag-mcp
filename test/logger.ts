@@ -7,11 +7,15 @@ import referee from "@sinonjs/referee";
 import sinon from "sinon";
 
 import { Logs, MAX_WRITE_RETRIES } from "../lib/logger.js";
+import { OCSF_VERSION } from "../lib/ocsf.js";
 import { secrets } from "../lib/util/redact.js";
+import { oagMcpVersion } from "../lib/util/version.js";
+import { readLogRecords } from "./helpers/log-records.js";
 
-const { assert, refute } = referee;
+const { assert, refute, match } = referee;
 
-function readJsonLines(file: string): Array<Record<string, unknown>> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- parsed JSON
+function readJsonLines(file: string): Array<Record<string, any>> {
   return fs
     .readFileSync(file, "utf8")
     .split("\n")
@@ -29,45 +33,79 @@ describe("logger - Logs", function () {
     fs.rmSync(this.dir, { recursive: true, force: true });
   });
 
-  it("should route operational and audit records to separate destinations when configured", function () {
+  it("should write OpenTelemetry operational records and OCSF audit records to separate destinations when configured", function () {
     const op = path.join(this.dir, "op.log");
     const audit = path.join(this.dir, "audit.log");
     const logs = new Logs({ file: op, auditFile: audit, instanceId: "inst-1" });
-    logs.op("info", "server.ready", { transport: "stdio" });
+    logs.op("info", "server.ready", { transport: "stdio", methods: 3 });
     logs.audit(
       "authorization.denied",
       "denied",
-      { operation: "PetsApi.listPets", policyId: "p1" },
+      {
+        operation: "PetsApi.listPets",
+        httpMethod: "GET",
+        policyId: "p1",
+        reason: "default_deny",
+      },
       "warn",
     );
     logs.flush();
-    const opRecords = readJsonLines(op);
-    const auditRecords = readJsonLines(audit);
-    assert.equals(opRecords.length, 1);
-    assert.equals(auditRecords.length, 1);
-    assert.equals(opRecords[0].logCategory, "operational");
-    assert.equals(opRecords[0].event, "server.ready");
-    assert.equals(auditRecords[0].logCategory, "security_audit");
-    assert.equals(auditRecords[0].event, "authorization.denied");
-    assert.equals(auditRecords[0].outcome, "denied");
-    for (const r of [...opRecords, ...auditRecords]) {
-      assert.equals(r.service, "oag-mcp");
-      assert.equals(r.instanceId, "inst-1");
-      assert.isString(r.time);
-      assert.isString(r.level);
-      assert.isString(r.severity);
-      assert.isString(r.version);
-    }
+    const [opRecord, ...moreOp] = readJsonLines(op);
+    const [auditRecord, ...moreAudit] = readJsonLines(audit);
+    assert.equals(moreOp.length + moreAudit.length, 0);
+
+    // OpenTelemetry Logs Data Model.
+    assert.equals(opRecord.SeverityText, "INFO");
+    assert.equals(opRecord.SeverityNumber, 9);
+    assert.match(opRecord.Timestamp, /^\d{19}$/);
+    assert.equals(opRecord.Resource, {
+      "service.name": "oag-mcp",
+      "service.version": oagMcpVersion(),
+      "service.instance.id": "inst-1",
+    });
+    assert.equals(opRecord.InstrumentationScope, {
+      Name: "oag-mcp.operational",
+      Version: oagMcpVersion(),
+    });
+    assert.equals(opRecord.EventName, "server.ready");
+    assert.equals(opRecord.Body, "server.ready");
+    assert.equals(opRecord.Attributes, {
+      "network.transport": "pipe",
+      "oag_mcp.methods": 3,
+    });
+
+    // OCSF API Activity: Read, denied.
+    assert.equals(auditRecord.class_uid, 6003);
+    assert.equals(auditRecord.category_uid, 6);
+    assert.equals(auditRecord.activity_id, 2);
+    assert.equals(auditRecord.type_uid, 600302);
+    assert.equals(auditRecord.severity_id, 2);
+    assert.equals(auditRecord.status_id, 2);
+    assert.equals(auditRecord.status_detail, "default_deny");
+    assert.equals(auditRecord.action_id, 2);
+    assert.equals(auditRecord.policy, { uid: "p1" });
+    assert.equals(auditRecord.api, match({ operation: "PetsApi.listPets" }));
+    assert.isNumber(auditRecord.time);
+    assert.equals(auditRecord.message, "authorization.denied");
+    assert.equals(
+      auditRecord.metadata,
+      match({
+        version: OCSF_VERSION,
+        event_code: "authorization.denied",
+        product: match({ name: "oag-mcp", version: oagMcpVersion() }),
+        reporter: match({ uid: "inst-1" }),
+      }),
+    );
+    assert.isUndefined(auditRecord.level);
   });
 
   it("should write both categories to one stream when only one destination is given", function () {
     const file = path.join(this.dir, "all.log");
     const logs = new Logs({ file, auditFile: file });
     logs.op("info", "a.event");
-    logs.audit("b.event", "success");
-    const records = readJsonLines(file);
+    logs.audit("execution.requested", "accepted");
     assert.equals(
-      records.map((r) => r.logCategory),
+      readLogRecords(file).map((r) => r.category),
       ["operational", "security_audit"],
     );
   });
@@ -79,7 +117,7 @@ describe("logger - Logs", function () {
     logs.op("error", "should.not.appear");
     logs.audit("authentication.failed", "failure", { reason: "invalid_token" });
     assert.equals(fs.existsSync(op) ? fs.readFileSync(op, "utf8") : "", "");
-    assert.equals(readJsonLines(audit)[0].event, "authentication.failed");
+    assert.equals(readLogRecords(audit)[0].event, "authentication.failed");
   });
 
   it("should carry child context fields into every record", function () {
@@ -87,11 +125,28 @@ describe("logger - Logs", function () {
     const logs = new Logs({ file, auditFile: file }).child({
       requestId: "req_1",
       executionId: "exec_1",
+      principalId: "local:test",
     });
+    logs.op("info", "execution.started");
     logs.audit("authorization.allowed", "allowed", { operation: "X.y" });
-    const [r] = readJsonLines(file);
-    assert.equals(r.requestId, "req_1");
-    assert.equals(r.executionId, "exec_1");
+    for (const r of readLogRecords(file)) {
+      assert.equals(r.requestId, "req_1", r.category);
+      assert.equals(r.executionId, "exec_1", r.category);
+      assert.equals(r.principalId, "local:test", r.category);
+    }
+  });
+
+  it("should keep fields that neither standard defines, namespaced or unmapped", function () {
+    const file = path.join(this.dir, "all.log");
+    const logs = new Logs({ file, auditFile: file });
+    logs.op("info", "prepare.stage.completed", { stage: "sdk", durationMs: 5 });
+    logs.audit("execution.capability_denied", "denied", { capability: "net" });
+    const [op, audit] = readJsonLines(file);
+    assert.equals(op.Attributes, {
+      "oag_mcp.stage": "sdk",
+      "oag_mcp.duration_ms": 5,
+    });
+    assert.equals(audit.unmapped, { capability: "net" });
   });
 
   it("should redact registered secrets and sensitive keys from records", function () {
@@ -131,7 +186,9 @@ describe("logger - Logs", function () {
       headers: { ...values },
       deep: { a: { b: { ...values } } },
     });
-    logs.audit("test.keys", "success", { request: { headers: values } });
+    logs.audit("execution.requested", "accepted", {
+      request: { headers: values },
+    });
     const text = fs.readFileSync(file, "utf8");
     for (const k of keys) {
       refute.contains(text, `plain-${k}-value`, k);
@@ -180,7 +237,7 @@ describe("logger - Logs", function () {
       data: string,
       ...rest: never[]
     ) => {
-      if (busy && fd !== 2 && String(data).includes("security_audit")) {
+      if (busy && fd !== 2 && String(data).includes('"class_uid"')) {
         attempts++;
         throw Object.assign(new Error("busy"), { code: "EAGAIN" });
       }
@@ -188,23 +245,23 @@ describe("logger - Logs", function () {
     }) as typeof fs.writeSync);
 
     // First record: the first attempt plus MAX_WRITE_RETRIES retries.
-    assert.isFalse(logs.audit("test.first", "success"));
+    assert.isFalse(logs.audit("execution.requested", "accepted", { n: 1 }));
     assert.equals(attempts, MAX_WRITE_RETRIES + 1);
     assert.isTrue(logs.auditBlocksExecution());
 
     // While still busy, later records fail fast instead of waiting again.
     attempts = 0;
     const started = performance.now();
-    assert.isFalse(logs.audit("test.second", "success"));
+    assert.isFalse(logs.audit("execution.requested", "accepted", { n: 2 }));
     assert.equals(attempts, 1);
     assert.less(performance.now() - started, 90);
 
     // Once the reader drains the pipe, the backlog is written in order.
     busy = false;
-    assert.isTrue(logs.audit("test.third", "success"));
+    assert.isTrue(logs.audit("execution.requested", "accepted", { n: 3 }));
     assert.equals(
-      readJsonLines(file).map((r) => r.event),
-      ["test.first", "test.second", "test.third"],
+      readLogRecords(file).map((r) => r.get("n")),
+      [1, 2, 3],
     );
     // Fail-closed stays in force once an audit record has failed.
     assert.isTrue(logs.auditBlocksExecution());
@@ -215,7 +272,7 @@ describe("logger - Logs", function () {
     // persistent error (here EBADF) that must give up, not retry forever.
     const logs = new Logs({ file: "fd:99", auditFile: "fd:98" });
     logs.op("fatal", "test.fatal");
-    logs.audit("test.audit", "failure", {}, "error");
+    logs.audit("security.config_invalid", "failure", {}, "error");
     logs.flush();
     assert.isFalse(logs.auditHealthy);
   });

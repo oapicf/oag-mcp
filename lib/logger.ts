@@ -1,20 +1,21 @@
 "use strict";
 /**
- * Structured logging with Pino.
+ * Structured logging with Pino, in two standard formats.
  *
- * Two event categories are produced, distinguished by the stable
- * `logCategory` field rather than by severity or logger name:
+ * Two event categories are produced, each in the standard suited to it:
  *
  * - `operational`: lifecycle, builds, transports, performance, failures.
- *   Filtered by the configurable operational log level.
+ *   OpenTelemetry log records (see {@link module:otel}), filtered by the
+ *   configurable operational log level.
  * - `security_audit`: authentication, authorisation, credential handling and
- *   policy enforcement. Always recorded at `info` or above, independent of the
- *   operational level, and never sampled.
+ *   policy enforcement. OCSF events (see {@link module:ocsf}), always
+ *   recorded independent of the operational level, and never sampled.
  *
- * Every record carries `event` (stable name) and `logCategory`. Destinations
- * are synchronous sonic-boom destinations over file descriptors, so a
- * failing audit destination is detected immediately; with fail-closed
- * enabled, callers must refuse execution while auditing is unavailable.
+ * Every record carries a stable event name: `EventName` in operational
+ * records, `metadata.event_code` in audit records. Destinations are
+ * synchronous sonic-boom destinations over file descriptors, so a failing
+ * audit destination is detected immediately; with fail-closed enabled,
+ * callers must refuse execution while auditing is unavailable.
  *
  * @module logger
  */
@@ -23,11 +24,25 @@ import fs from "node:fs";
 import tty from "node:tty";
 
 import pino, { type Logger as PinoLogger } from "pino";
-import pinoPretty from "pino-pretty";
+import pinoPretty, { prettyFactory } from "pino-pretty";
 import sonicBoomModule, { type SonicBoomOpts } from "sonic-boom";
 
-import { oagMcpName, oagMcpVersion } from "./util/version.js";
+import {
+  type AuditEvent,
+  type AuditLevel,
+  type AuditOutcome,
+  type OcsfProduct,
+  toOcsfEvent,
+} from "./ocsf.js";
+import {
+  type OtelSource,
+  SEVERITY_NUMBER,
+  otelRecord,
+  otelTimestamp,
+  toOtelAttributes,
+} from "./otel.js";
 import { boundValue } from "./util/redact.js";
+import { oagMcpAuthor, oagMcpName, oagMcpVersion } from "./util/version.js";
 
 /** An operational log level: one of pino's levels, or `silent`. */
 export type LogLevel = pino.LevelWithSilent;
@@ -66,9 +81,16 @@ export interface LoggingOptions {
 export interface LogContext {
   requestId?: string;
   executionId?: string;
-  callId?: string;
   transport?: string;
   principalId?: string;
+  /** Address and port of a Streamable HTTP client. */
+  clientAddress?: string;
+  clientPort?: number;
+  /** MCP session and JSON-RPC request of a tool call. */
+  mcpSessionId?: string;
+  jsonrpcRequestId?: string | number;
+  /** MCP tool being called. */
+  toolName?: string;
   [key: string]: unknown;
 }
 
@@ -89,6 +111,48 @@ type SonicBoom = InstanceType<typeof SonicBoom>;
 
 /** Upper bound on log data held in memory while a destination is failing. */
 const MAX_BUFFERED_BYTES = 1024 * 1024;
+
+/** Depth to which logged fields are kept; deeper values are cut. */
+const MAX_FIELD_DEPTH = 5;
+
+/**
+ * OpenTelemetry resource and scope of operational records.
+ *
+ * @param {String} [instanceId] - server instance identifier
+ * @return {Object} source
+ * @private
+ */
+function _otelSource(instanceId?: string): OtelSource {
+  return {
+    resource: {
+      "service.name": oagMcpName(),
+      "service.version": oagMcpVersion(),
+      ...(instanceId ? { "service.instance.id": instanceId } : {}),
+    },
+    scope: { Name: `${oagMcpName()}.operational`, Version: oagMcpVersion() },
+  };
+}
+
+/**
+ * Write one operational record to stderr directly, never through the
+ * logger, e.g. to report that a destination failed.
+ *
+ * @private
+ */
+function _reportToStderr(
+  event: string,
+  fields: Record<string, unknown>,
+  instanceId?: string,
+): void {
+  try {
+    fs.writeSync(
+      2,
+      `${JSON.stringify(otelRecord("error", event, { ...fields, outcome: "failure" }, _otelSource(instanceId)))}\n`,
+    );
+  } catch {
+    // stderr itself is unavailable; nothing more can be done.
+  }
+}
 
 /** A synchronous destination together with its failure count. */
 interface TrackedDestination {
@@ -133,23 +197,10 @@ function _trackedDestination(fd: number, label: string): TrackedDestination {
     health.failures++;
     if (reported < 3) {
       reported++;
-      try {
-        fs.writeSync(
-          2,
-          `${JSON.stringify({
-            time: new Date().toISOString(),
-            level: "error",
-            service: oagMcpName(),
-            logCategory: "operational",
-            event: "logging.destination_failed",
-            outcome: "failure",
-            destination: label,
-            errorCode,
-          })}\n`,
-        );
-      } catch {
-        // stderr itself is unavailable; nothing more can be done.
-      }
+      _reportToStderr("logging.destination_failed", {
+        destination: label,
+        errorCode,
+      });
     }
   };
   stream.on("error", (err: NodeJS.ErrnoException) =>
@@ -204,31 +255,41 @@ function _openDestination(spec: string | undefined): {
 }
 
 /**
- * Build a pino logger writing to a destination.
+ * Local wall-clock time of a timestamp, for pretty output.
  *
- * Redaction is done by the `log` formatter: {@link boundValue} censors
- * credential key names at any depth (case-insensitively), scrubs registered
- * secret values and credential-looking text, and bounds every record. Pino's
- * path-based `redact` option is not used; it would only repeat that for a
- * fixed set of case-sensitive paths.
+ * @param {Number} ms - milliseconds since the epoch
+ * @return {String} HH:MM:ss.mmm
+ * @private
+ */
+function _localTime(ms: number): string {
+  const d = new Date(ms);
+  const pad = (n: number, w = 2) => String(n).padStart(w, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
+}
+
+/**
+ * Build the pino logger for operational records: OpenTelemetry log records
+ * with the data model's field names.
  *
  * @private
  */
-function _buildPino(
+function _buildOperationalPino(
   level: string,
   dest: { fd: number; isStderr: boolean },
   tracked: TrackedDestination,
   format: "json" | "pretty",
-  base: Record<string, unknown>,
+  source: OtelSource,
 ): PinoLogger {
   const opts: pino.LoggerOptions = {
     level,
-    base,
-    messageKey: "message",
-    timestamp: pino.stdTimeFunctions.isoTime,
+    base: { Resource: source.resource, InstrumentationScope: source.scope },
+    messageKey: "Body",
+    timestamp: () => `,"Timestamp":"${otelTimestamp()}"`,
     formatters: {
-      level: (label) => ({ level: label, severity: label.toUpperCase() }),
-      log: (obj) => boundValue(obj, { maxDepth: 5 }) as Record<string, unknown>,
+      level: (label) => ({
+        SeverityText: label.toUpperCase(),
+        SeverityNumber: SEVERITY_NUMBER[label as pino.Level],
+      }),
     },
   };
   if (format === "pretty" && dest.isStderr) {
@@ -237,10 +298,19 @@ function _buildPino(
     const stream = pinoPretty({
       destination: tracked.stream,
       colorize: tty.isatty(dest.fd),
-      translateTime: "SYS:HH:MM:ss.l",
-      ignore: "service,version,severity",
-      messageKey: "message",
-      messageFormat: "[{logCategory}] {event} {outcome}",
+      levelKey: "SeverityText",
+      timestampKey: "Timestamp",
+      translateTime: false,
+      ignore: "Resource,InstrumentationScope,EventName,SeverityNumber,Body",
+      messageFormat: (log) => {
+        const attributes = (log.Attributes ?? {}) as Record<string, unknown>;
+        const outcome = attributes["oag_mcp.outcome"];
+        return `[operational] ${String(log.EventName)}${outcome ? ` ${String(outcome)}` : ""}`;
+      },
+      customPrettifiers: {
+        // `Timestamp` is in nanoseconds, which pino-pretty cannot translate.
+        time: (ts) => `[${_localTime(Number(BigInt(String(ts)) / 1000000n))}]`,
+      },
     });
     return pino(opts, stream);
   }
@@ -248,15 +318,58 @@ function _buildPino(
 }
 
 /**
- * oag-mcp logger facade over two pino instances.
+ * Build the writer for security audit records. Each OCSF event is written
+ * exactly as built, one JSON object per line; pino is not used, since it
+ * would add its own level and time fields.
+ *
+ * @private
+ */
+function _buildAuditWriter(
+  dest: { fd: number; isStderr: boolean },
+  tracked: TrackedDestination,
+  format: "json" | "pretty",
+): (event: Record<string, unknown>) => void {
+  if (format === "pretty" && dest.isStderr) {
+    const pretty = prettyFactory({
+      colorize: tty.isatty(dest.fd),
+      timestampKey: "time",
+      translateTime: false,
+      customPrettifiers: {
+        time: (ts) => `[${_localTime(Number(ts))}]`,
+        // OCSF severity, e.g. "Informational", rather than a pino level.
+        level: (severity) => String(severity).toUpperCase(),
+      },
+      levelKey: "severity",
+      hideObject: true,
+      messageFormat: (log) => {
+        const metadata = (log.metadata ?? {}) as Record<string, unknown>;
+        const detail = log.status_detail
+          ? ` (${String(log.status_detail)})`
+          : "";
+        return `[security_audit] ${String(metadata.event_code)} ${String(log.class_name)}: ${String(log.activity_name)} ${String(log.action ?? log.status)}${detail}`;
+      },
+    });
+    return (event) => {
+      tracked.stream.write(pretty(event));
+    };
+  }
+  return (event) => {
+    tracked.stream.write(`${JSON.stringify(event)}\n`);
+  };
+}
+
+/**
+ * oag-mcp logger facade: a pino logger for operational records and an
+ * OCSF writer for security audit records.
  */
 export class Logs {
   private readonly opLogger: PinoLogger;
-  private readonly auditLogger: PinoLogger;
+  private readonly writeAudit: (event: Record<string, unknown>) => void;
   private readonly opDest: TrackedDestination;
   private readonly auditDest: TrackedDestination;
   private readonly context: LogContext;
   private readonly state: { auditOpenFailed: boolean };
+  private readonly product: OcsfProduct;
   readonly failClosed: boolean;
 
   /**
@@ -267,30 +380,34 @@ export class Logs {
     opts: LoggingOptions = {},
     shared?: {
       opLogger: PinoLogger;
-      auditLogger: PinoLogger;
+      writeAudit: (event: Record<string, unknown>) => void;
       opDest: TrackedDestination;
       auditDest: TrackedDestination;
       context: LogContext;
       state: { auditOpenFailed: boolean };
+      product: OcsfProduct;
       failClosed: boolean;
     },
   ) {
     if (shared) {
       this.opLogger = shared.opLogger;
-      this.auditLogger = shared.auditLogger;
+      this.writeAudit = shared.writeAudit;
       this.opDest = shared.opDest;
       this.auditDest = shared.auditDest;
       this.context = shared.context;
       this.state = shared.state;
+      this.product = shared.product;
       this.failClosed = shared.failClosed;
       return;
     }
     const format = opts.format ?? "json";
-    const base: Record<string, unknown> = {
-      service: oagMcpName(),
+    const instanceId = opts.instanceId ?? `inst_${crypto.randomUUID()}`;
+    this.product = {
+      name: oagMcpName(),
       version: oagMcpVersion(),
+      vendorName: oagMcpAuthor(),
+      instanceId,
     };
-    base.instanceId = opts.instanceId ?? `inst_${crypto.randomUUID()}`;
     const opDest = _openDestination(opts.file);
     const auditDest = _openDestination(opts.auditFile);
     this.opDest = _trackedDestination(opDest.fd, `operational:${opDest.label}`);
@@ -301,28 +418,32 @@ export class Logs {
     this.state = { auditOpenFailed: Boolean(auditDest.openError) };
     this.failClosed = Boolean(opts.auditFailClosed);
     this.context = {};
-    this.opLogger = _buildPino(
+    this.opLogger = _buildOperationalPino(
       opts.level ?? "info",
       opDest,
       this.opDest,
       format,
-      { ...base },
+      _otelSource(instanceId),
     );
     // Audit records are never filtered by the operational level.
-    this.auditLogger = _buildPino("info", auditDest, this.auditDest, format, {
-      ...base,
-    });
+    this.writeAudit = _buildAuditWriter(auditDest, this.auditDest, format);
     if (opDest.openError) {
-      fs.writeSync(
-        2,
-        `${JSON.stringify({ level: "error", logCategory: "operational", event: "logging.destination_open_failed", destination: "operational", errorCode: opDest.openError })}\n`,
+      _reportToStderr(
+        "logging.destination_open_failed",
+        { destination: "operational", errorCode: opDest.openError },
+        instanceId,
       );
     }
     if (auditDest.openError) {
       this.auditDest.health.failures++;
-      fs.writeSync(
-        2,
-        `${JSON.stringify({ level: "error", logCategory: "operational", event: "logging.destination_open_failed", destination: "security_audit", errorCode: auditDest.openError, failClosed: this.failClosed })}\n`,
+      _reportToStderr(
+        "logging.destination_open_failed",
+        {
+          destination: "security_audit",
+          errorCode: auditDest.openError,
+          failClosed: this.failClosed,
+        },
+        instanceId,
       );
     }
   }
@@ -338,11 +459,12 @@ export class Logs {
       {},
       {
         opLogger: this.opLogger,
-        auditLogger: this.auditLogger,
+        writeAudit: this.writeAudit,
         opDest: this.opDest,
         auditDest: this.auditDest,
         context: { ...this.context, ...ctx },
         state: this.state,
+        product: this.product,
         failClosed: this.failClosed,
       },
     );
@@ -354,12 +476,15 @@ export class Logs {
   }
 
   /**
-   * Record an operational event.
+   * Record an operational event as an OpenTelemetry log record.
+   *
+   * Fields are redacted and bounded, then named by the OpenTelemetry
+   * semantic conventions (see {@link toOtelAttributes}).
    *
    * @param {String} level - pino level
-   * @param {String} event - stable event name, e.g. "server.started"
+   * @param {String} event - stable event name, e.g. "server.ready"
    * @param {Object} [fields] - structured context (never secrets or bodies)
-   * @param {String} [message] - optional human message
+   * @param {String} [message] - optional human message (default: the event)
    */
   op(
     level: pino.Level,
@@ -367,15 +492,22 @@ export class Logs {
     fields: Record<string, unknown> = {},
     message?: string,
   ): void {
+    if (!this.opLogger.isLevelEnabled(level)) {
+      return;
+    }
+    const bounded = boundValue(
+      { ...this.context, ...fields },
+      { maxDepth: MAX_FIELD_DEPTH },
+    ) as Record<string, unknown>;
     this.opLogger[level](
-      { ...this.context, ...fields, logCategory: "operational", event },
+      { EventName: event, Attributes: toOtelAttributes(bounded) },
       message ?? event,
     );
   }
 
   /**
-   * Record a security audit event. Audit records bypass the operational
-   * level filter and are never sampled.
+   * Record a security audit event as an OCSF event. Audit records bypass
+   * the operational level filter and are never sampled.
    *
    * @param {String} event - stable event name, e.g. "authorization.denied"
    * @param {String} outcome - "success", "failure", "allowed", "denied", ...
@@ -384,22 +516,20 @@ export class Logs {
    * @return {Boolean} whether the record was written successfully
    */
   audit(
-    event: string,
-    outcome: string,
+    event: AuditEvent,
+    outcome: AuditOutcome,
     fields: Record<string, unknown> = {},
-    level: "info" | "warn" | "error" = "info",
+    level: AuditLevel = "info",
   ): boolean {
     const before = this.auditDest.health.failures;
-    this.auditLogger[level](
-      {
-        ...this.context,
-        ...fields,
-        logCategory: "security_audit",
-        event,
-        outcome,
-      },
-      event,
-    );
+    const bounded = boundValue(
+      { ...this.context, ...fields },
+      { maxDepth: MAX_FIELD_DEPTH },
+    ) as Record<string, unknown>;
+    this.writeAudit({
+      ...toOcsfEvent(event, outcome, level, bounded, this.product),
+      message: event,
+    });
     return (
       this.auditDest.health.failures === before && !this.state.auditOpenFailed
     );

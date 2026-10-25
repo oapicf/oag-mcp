@@ -264,7 +264,7 @@ diagnostics), `api_error` (HTTP status and body), `sdk_error`,
 - [Configuration reference](docs/configuration.md)
 - [Authentication and authorization](docs/authentication.md) — `mcpAuth`, `upstreamAuth`, permissions
 - [Execution sandbox and limits](docs/security.md) — what is and is not isolated
-- [Logging](docs/logging.md) — operational vs security audit records
+- [Logging](docs/logging.md) — operational records (OpenTelemetry) and security audit records (OCSF)
 - [Deployment](docs/deployment.md)
 - [Testing](docs/testing.md)
 

@@ -30,6 +30,10 @@ import {
   UPSTREAM_CLIENT_SECRET,
   type AuthServer,
 } from "./auth-server.js";
+import {
+  type LogRecordView,
+  readLogRecords,
+} from "../../test/helpers/log-records.js";
 
 export const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -64,7 +68,7 @@ const preparations = new Map<string, Promise<PreparedSdk>>();
 export function fileLogs(name = "it"): {
   logs: Logs;
   file: string;
-  records: () => Array<Record<string, unknown>>;
+  records: () => LogRecordView[];
 } {
   const file = path.join(
     WORK,
@@ -74,14 +78,7 @@ export function fileLogs(name = "it"): {
   return {
     logs,
     file,
-    records: () =>
-      fs.existsSync(file)
-        ? fs
-            .readFileSync(file, "utf8")
-            .split("\n")
-            .filter(Boolean)
-            .map((l) => JSON.parse(l))
-        : [],
+    records: () => readLogRecords(file),
   };
 }
 

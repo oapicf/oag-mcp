@@ -45,8 +45,8 @@ Each `execute` call:
    refused immediately with `resource_limit` (`executor_busy`).
 
 Violations produce structured errors (`permission_denied` with `capability`
-or `reason`, `timeout`, `output_limit`, `resource_limit`) and
-`security_audit` log records.
+or `reason`, `timeout`, `output_limit`, `resource_limit`) and security audit
+log records (OCSF events; see [Logging](logging.md)).
 
 ## Start-up preparation
 

@@ -124,8 +124,8 @@ http:
 logging:
   level: info
   format: json                            # pretty for local development (stderr only)
-  file: /var/log/oag-mcp/operational.log  # or stderr (default) or fd:N
-  auditFile: /var/log/oag-mcp/audit.log
+  file: /var/log/oag-mcp/operational.log  # OpenTelemetry records; or stderr (default) or fd:N
+  auditFile: /var/log/oag-mcp/audit.log   # OCSF records; or stderr (default) or fd:N
   auditFailClosed: false
 ```
 

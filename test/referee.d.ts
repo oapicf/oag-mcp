@@ -10,6 +10,7 @@ declare module "@sinonjs/referee" {
     isUndefined(value: unknown, message?: string): void;
     defined(value: unknown, message?: string): void;
     isString(value: unknown, message?: string): void;
+    isNumber(value: unknown, message?: string): void;
     isFunction(value: unknown, message?: string): void;
     isObject(value: unknown, message?: string): void;
     isArray(value: unknown, message?: string): void;
@@ -25,7 +26,6 @@ declare module "@sinonjs/referee" {
     equals(actual: unknown, expected: unknown, message?: string): void;
     contains(haystack: unknown, needle: unknown, message?: string): void;
     match(actual: unknown, matcher: unknown, message?: string): void;
-    defined(value: unknown, message?: string): void;
     isNull(value: unknown, message?: string): void;
   }
   const referee: {

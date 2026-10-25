@@ -167,9 +167,17 @@ describe("broker - RequestBroker.handle", function () {
     if (res.ok) {
       refute(res.headers.some(([k]) => k === "set-cookie"));
     }
-    assert.contains(
-      records().map((r) => r.event),
-      "credential.agent_supplied_stripped",
+    // One allowed decision, marked as modified: agent-supplied credentials
+    // were removed.
+    const decisions = records().filter((r) =>
+      r.event.startsWith("authorization."),
+    );
+    assert.equals(decisions.length, 1);
+    assert.equals(decisions[0].event, "authorization.allowed");
+    assert.equals(decisions[0].outcome, "modified");
+    assert.equals(
+      (decisions[0].get("strippedCredentials") as string[]).sort(),
+      ["authorization", "x-api-key"],
     );
   });
 
@@ -206,8 +214,9 @@ describe("broker - RequestBroker.handle", function () {
     if (!res.ok) assert.equals(res.error.reason, "authorization_denied");
     assert.equals(f.calls.length, 0);
     const audit = records().find((r) => r.event === "authorization.denied")!;
-    assert.equals(audit.operation, "AdminApi.deletePet");
-    assert.equals(audit.policyId, "default");
+    assert.equals(audit.get("operation"), "AdminApi.deletePet");
+    assert.equals(audit.get("policyId"), "default");
+    assert.equals(audit.outcome, "denied");
   });
 
   it("should reject requests that do not match the operation or base URL", async function () {

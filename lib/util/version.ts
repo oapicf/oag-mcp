@@ -25,7 +25,8 @@ export const SUPPORTED_GENERATOR = "typescript-fetch";
 /** Deno versions accepted by the executor, as a semver range. */
 export const DENO_VERSION_RANGE = ">=2.5.0 <3.0.0";
 
-let cachedPackage: { name: string; version: string } | undefined;
+let cachedPackage:
+  { name: string; version: string; author?: string } | undefined;
 
 /**
  * Locate the oag-mcp package root by walking up from this module.
@@ -52,14 +53,20 @@ export function packageRoot(): string {
  *
  * @private
  */
-function _package(): { name: string; version: string } {
+function _package(): { name: string; version: string; author?: string } {
   if (!cachedPackage) {
     const pkg = JSON.parse(
       fs.readFileSync(path.join(packageRoot(), "package.json"), "utf8"),
     );
+    // npm's "Name <email> (url)" form, or an object with a name.
+    const author =
+      typeof pkg.author === "string"
+        ? pkg.author.replace(/\s*[<(].*$/, "").trim()
+        : pkg.author?.name;
     cachedPackage = {
       name: pkg.name as string,
       version: pkg.version as string,
+      author: author || undefined,
     };
   }
   return cachedPackage;
@@ -81,6 +88,15 @@ export function oagMcpName(): string {
  */
 export function oagMcpVersion(): string {
   return _package().version;
+}
+
+/**
+ * Read the oag-mcp author's name from package.json.
+ *
+ * @return {String} author name, or undefined when not set
+ */
+export function oagMcpAuthor(): string | undefined {
+  return _package().author;
 }
 
 /**

@@ -12,7 +12,7 @@ import * as z from "zod";
 
 import type { Principal } from "../types.js";
 import { oagMcpVersion } from "../util/version.js";
-import type { OagMcpService } from "./service.js";
+import type { ClientEndpoint, OagMcpService } from "./service.js";
 
 /** The only tools oag-mcp exposes. */
 export const TOOL_NAMES = ["search", "execute"] as const;
@@ -98,6 +98,7 @@ function _result(payload: Record<string, unknown>, isError = false) {
  * @param {Object} principal - authenticated principal
  * @param {String} transport - transport name
  * @param {String} [httpRequestId] - correlation id of the HTTP request
+ * @param {Object} [client] - address and port of the HTTP client
  * @return {McpServer} server
  */
 export function createMcpServer(
@@ -105,6 +106,7 @@ export function createMcpServer(
   principal: Principal,
   transport: "stdio" | "streamable-http",
   httpRequestId?: string,
+  client: ClientEndpoint = {},
 ): McpServer {
   const server = new McpServer(
     {
@@ -156,11 +158,14 @@ export function createMcpServer(
         openWorldHint: false,
       },
     },
-    async (args) => {
+    async (args, extra) => {
       const out = service.search(args, {
         principal,
         requestId: requestId(),
         transport,
+        ...client,
+        mcpSessionId: extra.sessionId,
+        jsonrpcRequestId: extra.mcpReq.id,
       });
       return _result(out, Boolean(out.error));
     },
@@ -194,11 +199,14 @@ export function createMcpServer(
         openWorldHint: true,
       },
     },
-    async (args) => {
+    async (args, extra) => {
       const out = await service.execute(args, {
         principal,
         requestId: requestId(),
         transport,
+        ...client,
+        mcpSessionId: extra.sessionId,
+        jsonrpcRequestId: extra.mcpReq.id,
       });
       return _result(out as unknown as Record<string, unknown>, !out.ok);
     },

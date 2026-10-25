@@ -78,7 +78,7 @@ async function expectPrepareError(
     assert.equals(err.code, code, err.message);
     assert.equals(workspaces(root), [], "workspace removed on failure");
     const failed = records().find((r) => r.event === "prepare.failed");
-    assert.equals(failed?.errorCode, code);
+    assert.equals(failed?.get("errorCode"), code);
     return err;
   }
   throw new Error(`expected ${code}`);
@@ -373,7 +373,7 @@ describe("serve - start-up preparation and lifecycle", function () {
     assert.equals(count("execution.completed"), 3);
     const stages = records()
       .filter((r) => r.event === "prepare.stage.completed")
-      .map((r) => r.stage);
+      .map((r) => r.get("stage"));
     assert.equals(stages, [
       "inputs",
       "compatibility",
@@ -382,8 +382,9 @@ describe("serve - start-up preparation and lifecycle", function () {
       "executor",
     ]);
     assert.equals(
-      typeof records().find((r) => r.event === "server.ready")!
-        .startupDurationMs,
+      typeof records()
+        .find((r) => r.event === "server.ready")!
+        .get("startupDurationMs"),
       "number",
     );
     // Normal shutdown removes the workspace.
@@ -421,7 +422,7 @@ describe("serve - start-up preparation and lifecycle", function () {
     }
     assert.equals(workspaces(root), []);
     const failed = records().find((r) => r.event === "prepare.stage.failed");
-    assert.equals(failed?.stage, "executor");
+    assert.equals(failed?.get("stage"), "executor");
     refute(records().some((r) => r.event === "server.ready"));
   });
 
@@ -570,7 +571,7 @@ describe("serve - CLI processes", function () {
     });
     const earlyCode = await new Promise((r) => early.on("close", r));
     assert.equals(earlyCode, 1, earlyErr);
-    assert.match(earlyErr, /"phase":"starting"/);
+    assert.match(earlyErr, /"oag_mcp\.phase":"starting"/);
     assert.match(earlyErr, /STARTUP_ABORTED/);
     refute.match(earlyErr, /server\.ready/);
     assert.equals(workspaces(root), [], earlyErr);

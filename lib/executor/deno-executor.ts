@@ -266,6 +266,9 @@ export class DenoExecutor implements Executor {
       fs.rmSync(tmp, { recursive: true, force: true });
       throw err;
     }
+    // Audit records about the sandbox identify its process.
+    const audit: Logs["audit"] = (event, outcome, fields = {}, level) =>
+      logs.audit(event, outcome, { ...fields, pid: child.pid }, level);
     const abort = new AbortController();
     let sdkCalls = 0;
     let stdoutBytes = 0;
@@ -281,7 +284,7 @@ export class DenoExecutor implements Executor {
         child.kill("SIGKILL");
         if (forced && !terminated) {
           terminated = true;
-          logs.audit(
+          audit(
             "executor.terminated",
             "terminated",
             { reason, executor: this.name },
@@ -322,7 +325,7 @@ export class DenoExecutor implements Executor {
       };
 
       const timer = setTimeout(() => {
-        logs.audit(
+        audit(
           "execution.timeout",
           "denied",
           { timeoutMs: req.limits.timeoutMs, reason: "wall_clock_timeout" },
@@ -343,7 +346,7 @@ export class DenoExecutor implements Executor {
       const handleFetch = async (msg: BridgeFetchRequest) => {
         sdkCalls++;
         if (sdkCalls > req.limits.maxSdkCalls) {
-          logs.audit(
+          audit(
             "execution.resource_limit",
             "denied",
             { limit: "maxSdkCalls", value: req.limits.maxSdkCalls },
@@ -384,7 +387,7 @@ export class DenoExecutor implements Executor {
             reason: "stdout_limit",
             message: `Sandbox output exceeded ${req.limits.maxStdoutBytes} bytes`,
           };
-          logs.audit(
+          audit(
             "execution.resource_limit",
             "denied",
             { limit: "maxStdoutBytes", value: req.limits.maxStdoutBytes },
@@ -450,7 +453,7 @@ export class DenoExecutor implements Executor {
         }
         const oom = /out of memory|heap limit|Allocation failed/i.test(stderr);
         if (oom) {
-          logs.audit(
+          audit(
             "execution.resource_limit",
             "denied",
             { limit: "memoryMb", value: req.limits.memoryMb },

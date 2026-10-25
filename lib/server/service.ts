@@ -34,10 +34,41 @@ import { ServiceIdentityCredentialProvider } from "../upstream/credentials.js";
 import { Semaphore } from "../util/semaphore.js";
 
 /** Context of one tool invocation. */
-export interface CallContext {
+export interface CallContext extends ClientEndpoint {
   principal: Principal;
   requestId: string;
   transport: "stdio" | "streamable-http";
+  /** MCP session of a Streamable HTTP call. */
+  mcpSessionId?: string;
+  /** JSON-RPC id of the tool call request. */
+  jsonrpcRequestId?: string | number;
+}
+
+/** Address and port of a Streamable HTTP client. */
+export interface ClientEndpoint {
+  clientAddress?: string;
+  clientPort?: number;
+}
+
+/**
+ * Context fields for the records of one tool call.
+ *
+ * @private
+ */
+function _callContext(
+  ctx: CallContext,
+  toolName: "search" | "execute",
+): Record<string, unknown> {
+  return {
+    requestId: ctx.requestId,
+    transport: ctx.transport,
+    principalId: ctx.principal.id,
+    clientAddress: ctx.clientAddress,
+    clientPort: ctx.clientPort,
+    mcpSessionId: ctx.mcpSessionId,
+    jsonrpcRequestId: ctx.jsonrpcRequestId,
+    toolName,
+  };
 }
 
 /** Input of the search tool. */
@@ -318,11 +349,7 @@ export class OagMcpService {
    */
   search(input: SearchInput, ctx: CallContext): Record<string, unknown> {
     const started = Date.now();
-    const logs = this.logs.child({
-      requestId: ctx.requestId,
-      transport: ctx.transport,
-      principalId: ctx.principal.id,
-    });
+    const logs = this.logs.child(_callContext(ctx, "search"));
     const visible = this._visible(ctx.principal);
     const limit = Math.min(Math.max(input.limit ?? 5, 1), 20);
     let mode: string;
@@ -397,10 +424,8 @@ export class OagMcpService {
     const started = Date.now();
     const executionId = `exec_${crypto.randomUUID()}`;
     const logs = this.logs.child({
-      requestId: ctx.requestId,
+      ..._callContext(ctx, "execute"),
       executionId,
-      transport: ctx.transport,
-      principalId: ctx.principal.id,
     });
     const cfg = this.config.execution;
     const language = input.language ?? "typescript";
