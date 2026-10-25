@@ -55,7 +55,8 @@ test-ocsf:
 	  https://github.com/ocsf/ocsf-schema.git stage/ocsf/ocsf-schema/
 	python3 -m venv stage/ocsf/venv/
 	stage/ocsf/venv/bin/pip install --quiet --disable-pip-version-check ocsf-lib==$(OCSF_LIB_VERSION)
-	stage/ocsf/venv/bin/python -I -m ocsf.compile stage/ocsf/ocsf-schema/ > stage/ocsf/schema.json
+	stage/ocsf/venv/bin/python -I test-integration/helpers/compile-ocsf.py \
+	  stage/ocsf/ocsf-schema/ > stage/ocsf/schema.json
 	node_modules/.bin/tsx test-integration/helpers/ocsf-events.ts stage/ocsf/audit.jsonl
 	stage/ocsf/venv/bin/python -I test-integration/helpers/validate-ocsf.py \
 	  stage/ocsf/schema.json stage/ocsf/ocsf-schema/ stage/ocsf/audit.jsonl

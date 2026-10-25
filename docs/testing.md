@@ -33,7 +33,9 @@ make -f Makefile-extras test-ocsf
 checks that oag-mcp's security audit records are valid OCSF events. It
 downloads the OCSF schema at the version in `lib/ocsf.ts`, compiles it with
 [ocsf-lib](https://pypi.org/project/ocsf-lib/) in a Python virtual
-environment under `stage/ocsf/`, writes an audit record for every audit event
+environment under `stage/ocsf/` (through
+`test-integration/helpers/compile-ocsf.py`, which lets ocsf-lib 0.10.4 run on
+Python 3.14), writes an audit record for every audit event
 plus the records of real executions against the mock API
 (`test-integration/helpers/ocsf-events.ts`), and validates each one
 (`test-integration/helpers/validate-ocsf.py`): class, activity and type ids,
