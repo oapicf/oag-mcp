@@ -96,7 +96,11 @@ describe("cli - documentation", function () {
   it("should document only serve invocations that pass --spec and --sdk", function () {
     const files = [
       "README.md",
-      ...fs.readdirSync(path.join(ROOT, "docs")).map((f) => `docs/${f}`),
+      ...fs
+        .readdirSync(path.join(ROOT, "docs"), { recursive: true })
+        .map(String)
+        .filter((f) => f.endsWith(".md"))
+        .map((f) => `docs/${f}`),
       ...fs
         .readdirSync(path.join(ROOT, "examples"))
         .map((f) => `examples/${f}`),
