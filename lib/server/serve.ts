@@ -26,12 +26,14 @@ import type { Readable, Writable } from "node:stream";
 
 import {
   hostHeaderValidation,
-  localhostHostValidation,
   localhostOriginValidation,
   originValidation,
   toNodeHandler,
 } from "@modelcontextprotocol/node";
-import { createMcpHandler } from "@modelcontextprotocol/server";
+import {
+  createMcpHandler,
+  localhostAllowedHostnames,
+} from "@modelcontextprotocol/server";
 import {
   StdioServerTransport,
   serveStdio,
@@ -42,7 +44,7 @@ import {
   createHttpAuthenticator,
   isLoopbackHost,
 } from "./authentication.js";
-import type { Config } from "../config.js";
+import { type Config, browserOrigin } from "../config.js";
 import type { Executor } from "../executor/types.js";
 import { SecretResolver } from "../util/secrets.js";
 import { OagMcpError } from "../errors.js";
@@ -374,8 +376,8 @@ export function mcpRequestHandler(
 }
 
 /**
- * Host header validation: loopback names on loopback binds, otherwise the
- * configured hosts, if any.
+ * Host header validation: the localhost names plus the configured hosts on
+ * loopback binds; elsewhere the configured hosts, if any.
  *
  * @private
  */
@@ -384,7 +386,10 @@ function _hostValidator(
   loopback: boolean,
 ): RequestValidator | undefined {
   if (loopback) {
-    return localhostHostValidation();
+    return hostHeaderValidation([
+      ...localhostAllowedHostnames(),
+      ...h.allowedHosts,
+    ]);
   }
   return h.allowedHosts.length > 0
     ? hostHeaderValidation(h.allowedHosts)
@@ -392,8 +397,9 @@ function _hostValidator(
 }
 
 /**
- * Origin validation: the configured origins, otherwise loopback origins on
- * loopback binds and none elsewhere.
+ * Origin validation: exactly the configured origins, otherwise loopback
+ * origins on loopback binds and none elsewhere. Requests without an Origin
+ * header (non-browser clients) pass.
  *
  * @private
  */
@@ -402,9 +408,38 @@ function _originValidator(
   loopback: boolean,
 ): RequestValidator {
   if (h.allowedOrigins.length > 0) {
-    return originValidation(h.allowedOrigins);
+    return _exactOriginValidation(h.allowedOrigins);
   }
   return loopback ? localhostOriginValidation() : originValidation([]);
+}
+
+/**
+ * Admit only these origins, compared by scheme, host and port. The MCP SDK's
+ * own guard compares hostnames only.
+ *
+ * @private
+ */
+function _exactOriginValidation(origins: string[]): RequestValidator {
+  const allowed = new Set(origins.map(browserOrigin));
+  return (req, res) => {
+    const origin = req.headers.origin;
+    if (!origin) {
+      return true;
+    }
+    const normalised = browserOrigin(origin);
+    if (normalised !== undefined && allowed.has(normalised)) {
+      return true;
+    }
+    res.writeHead(403, { "content-type": "application/json" });
+    res.end(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "Origin not allowed" },
+        id: null,
+      }),
+    );
+    return false;
+  };
 }
 
 /**

@@ -37,6 +37,8 @@ export interface ExecutionError {
   line?: number;
   column?: number;
   operation?: string;
+  /** SDK function a runtime error was thrown in, when not the agent's code. */
+  thrownIn?: string;
   diagnostics?: Diagnostic[];
   [key: string]: unknown;
 }

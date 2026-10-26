@@ -250,6 +250,21 @@ describe("execute - feedback for invalid code and API errors", function () {
     assert.equals(res.error!.type, "runtime_error");
     assert.equals(res.error!.name, "RangeError");
     assert.equals(res.error!.message, "boom");
+    assert.isUndefined(res.error!.thrownIn);
+    assert.isUndefined(res.hint);
+  });
+
+  it("should name the SDK function an error was thrown in", async function () {
+    // The mock API answers pet 13's visits with null, which the SDK cannot map.
+    const res = await run(
+      `const visits = await sdk.PetsApi.listPetVisits({ petId: 13 });\nreturn visits.length;`,
+    );
+    assert.equals(res.error!.type, "runtime_error");
+    assert.equals(res.error!.name, "TypeError");
+    assert.match(res.error!.message, /reading 'map'/);
+    assert.match(String(res.error!.thrownIn), /^JSONApiResponse\./);
+    assert.equals(res.error!.line, 1, "the agent's call site");
+    assert.match(res.hint!, /thrown inside the SDK \(JSONApiResponse\.\w+\)/);
   });
 });
 

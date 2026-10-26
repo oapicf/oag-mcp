@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import referee from "@sinonjs/referee";
+import ts from "typescript";
 
 import { inspectSdk } from "../../lib/prepare/compat.js";
 import { extractArchive } from "../../lib/prepare/sdk-input.js";
@@ -16,7 +17,7 @@ import {
   tmpDir,
 } from "../helpers/paths.js";
 
-const { assert } = referee;
+const { assert, refute } = referee;
 
 function expectCode(fn: () => unknown, code: string): OagMcpError {
   try {
@@ -266,6 +267,68 @@ describe("compat - inspectSdk edge cases", function () {
     assert.equals(
       inspectSdk(SDK_726, { declaredOagVersion: "7.26.0" }).oagVersion,
       "7.26.0",
+    );
+  });
+});
+
+describe("compat - inspectSdk stringEnums in compiled SDKs", function () {
+  this.timeout(60000);
+
+  /**
+   * A packed SDK whose Species model is a TypeScript enum, compiled the way
+   * typescript-fetch's build does: CommonJS to dist/, ESM to dist/esm/.
+   */
+  async function compiledEnumSdk(esmDeclarations: boolean): Promise<string> {
+    const root = await extractArchive(SDK_TGZ, path.join(tmpDir(), "x"));
+    const model = path.join(root, "src", "models", "Species.ts");
+    const text = fs.readFileSync(model, "utf8");
+    const enumText = text.replace(
+      /export const Species = \{[\s\S]*?\} as const;\nexport type Species = [^\n]*/,
+      "export enum Species {\n    Dog = 'dog',\n    Cat = 'cat'\n}",
+    );
+    assert.match(enumText, /export enum Species/);
+    fs.writeFileSync(model, enumText);
+    for (const [module, out, declaration] of [
+      [ts.ModuleKind.CommonJS, "dist", true],
+      [ts.ModuleKind.ESNext, path.join("dist", "esm"), esmDeclarations],
+    ] as const) {
+      fs.rmSync(path.join(root, out, "models"), { recursive: true });
+      ts.createProgram([path.join(root, "src", "index.ts")], {
+        declaration,
+        target: ts.ScriptTarget.ES2015,
+        module,
+        rootDir: path.join(root, "src"),
+        outDir: path.join(root, out),
+      }).emit();
+    }
+    // tsc's enum output, which no JavaScript pattern needs to recognise.
+    assert.match(
+      fs.readFileSync(
+        path.join(root, "dist", "esm", "models", "Species.js"),
+        "utf8",
+      ),
+      /export var Species;\n\(function \(Species\)/,
+    );
+    return root;
+  }
+
+  it("should reject a compiled stringEnums SDK", async function () {
+    const root = await compiledEnumSdk(true);
+    const err = expectCode(
+      () => inspectSdk(root, { layout: "compiled" }),
+      "SDK_OPTION_UNSUPPORTED",
+    );
+    assert.match(err.message, /stringEnums/);
+  });
+
+  it("should reject one whose ESM build has no declarations beside it", async function () {
+    const root = await compiledEnumSdk(false);
+    refute(
+      fs.existsSync(path.join(root, "dist", "esm", "models", "Species.d.ts")),
+    );
+    expectCode(
+      () => inspectSdk(root, { layout: "compiled" }),
+      "SDK_OPTION_UNSUPPORTED",
     );
   });
 });

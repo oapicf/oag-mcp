@@ -212,17 +212,49 @@ describe("serve - servePrepared over Streamable HTTP", function () {
     );
   });
 
-  it("should admit requests without an Origin when origins are configured", async function () {
+  it("should admit exactly the configured origins, and requests without one", async function () {
     started = await start({
-      http: { allowedOrigins: ["https://app.example.test"] },
+      http: {
+        allowedOrigins: ["https://app.example.test", "http://localhost:5173/"],
+      },
     });
     const health = new URL("/healthz", started.running.url).toString();
-    assert.equals((await rawRequest(health)).status, 200);
-    assert.equals(
-      (await rawRequest(health, { headers: { origin: "https://evil.test" } }))
-        .status,
-      403,
-    );
+    const status = async (origin?: string) =>
+      (await rawRequest(health, origin ? { headers: { origin } } : {})).status;
+    assert.equals(await status(), 200, "no Origin: a non-browser client");
+    for (const ok of [
+      "https://app.example.test",
+      "https://app.example.test:443",
+      "http://localhost:5173",
+    ]) {
+      assert.equals(await status(ok), 200, ok);
+    }
+    for (const refused of [
+      "http://app.example.test",
+      "https://app.example.test:8443",
+      "https://evil.test",
+      "http://localhost:3000",
+      "http://127.0.0.1:5173",
+      "null",
+    ]) {
+      assert.equals(await status(refused), 403, refused);
+    }
+    const res = await rawRequest(health, {
+      headers: { origin: "https://evil.test" },
+    });
+    assert.equals(JSON.parse(res.body).error.message, "Origin not allowed");
+  });
+
+  it("should accept configured hosts as well as localhost names on loopback", async function () {
+    started = await start({ http: { allowedHosts: ["mcp.example.test"] } });
+    const health = new URL("/healthz", started.running.url).toString();
+    const status = async (host: string) =>
+      (await rawRequest(health, { headers: { host } })).status;
+    assert.equals(await status("mcp.example.test"), 200);
+    assert.equals(await status("mcp.example.test:8080"), 200);
+    assert.equals(await status(new URL(health).host), 200);
+    assert.equals(await status("localhost"), 200);
+    assert.equals(await status("evil.example.test"), 403);
   });
 
   it("should relay authentication challenges and serve authenticated callers", async function () {

@@ -27,6 +27,7 @@ import os from "node:os";
 import path from "node:path";
 
 import semver from "semver";
+import which from "which";
 
 import { OagMcpError } from "../errors.js";
 import type { Logs } from "../logging/logger.js";
@@ -42,6 +43,9 @@ import type {
 } from "./types.js";
 
 const require = createRequire(import.meta.url);
+
+/** Sandbox stderr characters kept to classify an unexpected exit. */
+const STDERR_KEPT = 16384;
 
 /** Resolved Deno runtime. */
 export interface DenoRuntime {
@@ -104,8 +108,19 @@ function _denoCandidates(configured: string | undefined): DenoCandidate[] {
     ...(fromEnv ? [{ path: fromEnv, source: "env" as const }] : []),
     ..._packageBinary(denoPlatformPackage(), exe),
     ..._packageBinary("deno", exe),
-    { path: "deno", source: "path" },
+    ..._onPath(),
   ];
+}
+
+/**
+ * Deno on this process's PATH, as an absolute path: the probe and the
+ * sandbox run with an environment that has no PATH of its own.
+ *
+ * @private
+ */
+function _onPath(): DenoCandidate[] {
+  const found = which.sync("deno", { nothrow: true });
+  return found ? [{ path: found, source: "path" }] : [];
 }
 
 /**
@@ -114,7 +129,7 @@ function _denoCandidates(configured: string | undefined): DenoCandidate[] {
  * @private
  */
 function _denoVersion(c: DenoCandidate): string | undefined {
-  if (c.source !== "path" && !fs.existsSync(c.path)) {
+  if (!fs.existsSync(c.path)) {
     return undefined;
   }
   const res = spawnSync(c.path, ["--version"], {
@@ -461,9 +476,9 @@ export class DenoExecutor implements Executor {
         }
       });
       child.stderr!.on("data", (chunk: Buffer) => {
-        if (stderr.length < 16384) {
-          stderr += chunk.toString("utf8");
-        }
+        // Keep the end: Deno's fatal errors (out of memory) come last, and
+        // sandboxed code may write to stderr before them.
+        stderr = (stderr + chunk.toString("utf8")).slice(-STDERR_KEPT);
       });
       child.on("error", (err) => {
         finish({

@@ -369,23 +369,26 @@ function _resolveLayout(
 }
 
 /**
- * Whether any model is generated as a TypeScript enum (stringEnums=true),
- * in source or compiled form.
+ * Whether any model is generated as a TypeScript enum (stringEnums=true).
+ * Sources declare `export enum`; compiled SDKs are checked through their
+ * declarations (`export declare enum`), which are the same whatever module
+ * format the JavaScript was compiled to, and which a compiled SDK always
+ * has even when its JavaScript directory holds none.
  *
  * @private
  */
-function _hasEnumDeclarations(implDir: string): boolean {
-  const modelsDir = path.join(implDir, "models");
-  if (!fs.existsSync(modelsDir)) {
-    return false;
-  }
-  return fs
-    .readdirSync(modelsDir)
-    .some((f) =>
-      /export (declare )?enum |exports\.\w+ = \{\};\s*\(function \(/.test(
-        _read(path.join(modelsDir, f)) ?? "",
-      ),
+function _hasEnumDeclarations(dirs: string[]): boolean {
+  return dirs.some((dir) => {
+    const modelsDir = path.join(dir, "models");
+    return (
+      fs.existsSync(modelsDir) &&
+      fs
+        .readdirSync(modelsDir)
+        .some((f) =>
+          /export (declare )?enum /.test(_read(path.join(modelsDir, f)) ?? ""),
+        )
     );
+  });
 }
 
 /**
@@ -402,7 +405,7 @@ function _checkGeneratorOptions(resolved: ResolvedLayout): void {
   ) {
     _unsupported("sagasAndRecords", "sagasAndRecords");
   }
-  if (_hasEnumDeclarations(implDir)) {
+  if (_hasEnumDeclarations([implDir, resolved.typesDir ?? implDir])) {
     _unsupported("stringEnums", "stringEnums=true");
   }
   const runtimeText = _read(path.join(implDir, `runtime.${ext}`)) ?? "";

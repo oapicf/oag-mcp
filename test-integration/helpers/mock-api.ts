@@ -154,6 +154,10 @@ export async function startMockApi(
     if (visitsMatch && req.method === "GET") {
       if (!apiKeyOk && !bearerOk) return deny();
       const id = Number(visitsMatch[1]);
+      if (id === 13) {
+        // A response the spec does not describe: the SDK fails to map it.
+        return send(res, 200, null);
+      }
       return send(res, 200, [
         {
           id: id * 10 + 1,

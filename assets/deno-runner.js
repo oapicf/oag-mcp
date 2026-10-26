@@ -190,6 +190,26 @@ function agentLine(err) {
   return line >= 1 ? { line, column: Number(m[2]) } : undefined;
 }
 
+// The innermost named function of the SDK bundle an error was thrown in,
+// when it was thrown inside the SDK rather than in the agent's code. Function
+// names carry no sandbox paths, so they are safe to report.
+const SDK_FRAME =
+  /^\s*at (?:async )?([\w$.<>]+) \([^()]*\/sdk\/sdk\.bundle\.js:\d+:\d+\)$/;
+
+function sdkFrame(err) {
+  const stack = typeof err?.stack === "string" ? err.stack : "";
+  for (const frame of stack.split("\n").slice(1)) {
+    if (frame.includes("data:text/javascript")) {
+      return undefined;
+    }
+    const m = SDK_FRAME.exec(frame);
+    if (m) {
+      return m[1].slice(0, 200);
+    }
+  }
+  return undefined;
+}
+
 const CAPABILITY = /Requires (\w+) access/;
 
 async function classify(err) {
@@ -259,11 +279,13 @@ async function classify(err) {
       ...(where ?? {}),
     };
   }
+  const thrownIn = sdkFrame(e) ?? sdkFrame(err);
   return {
     type: "runtime_error",
     name: e.name ?? "Error",
     message: message.length > 2000 ? `${message.slice(0, 2000)}…` : message,
     ...(where ?? {}),
+    ...(thrownIn ? { thrownIn } : {}),
   };
 }
 

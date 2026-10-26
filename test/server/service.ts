@@ -444,6 +444,32 @@ describe("service - execute", function () {
     assert.match(out.hint!, /use `return`/);
   });
 
+  it("should hint when an error was thrown inside the SDK, and only then", async function () {
+    const failing = (thrownIn?: string) =>
+      service({
+        executor: executor(async () => ({
+          error: {
+            type: "runtime_error",
+            name: "TypeError",
+            message: "Cannot read properties of undefined (reading 'map')",
+            ...(thrownIn ? { thrownIn } : {}),
+          },
+        })),
+      });
+    const inSdk = await (
+      await failing("PetFromJSONTyped")
+    ).svc.execute({ code: "return 1;" }, CTX);
+    assert.equals(inSdk.error!.thrownIn, "PetFromJSONTyped");
+    assert.match(
+      inSdk.hint!,
+      /thrown inside the SDK \(PetFromJSONTyped\), not in your code\. The API's response may not match/,
+    );
+    const inAgent = await (
+      await failing()
+    ).svc.execute({ code: "return 1;" }, CTX);
+    assert.isUndefined(inAgent.hint);
+  });
+
   it("should scrub registered secrets from results, logs and errors", async function () {
     secrets.add("service-test-secret-123");
     const { svc } = await service({

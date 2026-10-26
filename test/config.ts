@@ -4,7 +4,7 @@ import path from "node:path";
 
 import referee from "@sinonjs/referee";
 
-import { loadConfig, parseConfig } from "../lib/config.js";
+import { browserOrigin, loadConfig, parseConfig } from "../lib/config.js";
 import { OagMcpError } from "../lib/errors.js";
 import { tmpDir } from "./helpers/paths.js";
 
@@ -95,5 +95,54 @@ describe("config - loadConfig defaults and parse errors", function () {
       assert.equals((e as OagMcpError).code, "CONFIG_INVALID");
       assert.match((e as OagMcpError).message, /is not valid YAML\/JSON/);
     }
+  });
+});
+
+describe("config - http.allowedOrigins", function () {
+  it("should accept origins and reject hostnames, paths and other URL parts", function () {
+    assert.equals(
+      parseConfig({
+        http: {
+          allowedOrigins: [
+            "https://app.example.test",
+            "http://localhost:5173/",
+            "chrome-extension://abcdef",
+          ],
+        },
+      }).http.allowedOrigins.length,
+      3,
+    );
+    for (const bad of [
+      "app.example.test",
+      "https://app.example.test/path",
+      "https://user:pw@app.example.test",
+      "https://app.example.test?x=1",
+      "https://app.example.test#",
+      "*",
+    ]) {
+      try {
+        parseConfig({ http: { allowedOrigins: [bad] } });
+        assert(false, bad);
+      } catch (e) {
+        assert.equals((e as OagMcpError).code, "CONFIG_INVALID", bad);
+        assert.match((e as OagMcpError).message, /must be an origin/, bad);
+      }
+    }
+  });
+});
+
+describe("config - browserOrigin", function () {
+  it("should normalise origins the way browsers send them", function () {
+    assert.equals(
+      browserOrigin("https://App.Example.test:443/"),
+      "https://app.example.test",
+    );
+    assert.equals(
+      browserOrigin("http://localhost:5173"),
+      "http://localhost:5173",
+    );
+    assert.equals(browserOrigin("http://[::1]:80"), "http://[::1]");
+    assert.isUndefined(browserOrigin("null"));
+    assert.isUndefined(browserOrigin(""));
   });
 });

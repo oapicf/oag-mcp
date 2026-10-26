@@ -136,9 +136,22 @@ describe("deno-executor - resolveDeno candidates", function () {
   });
 
   it("should report that no Deno was found when no candidate runs", function () {
-    // Only the PATH candidate remains, and the probe gets no PATH of its own.
     sinon.stub(fs, "existsSync").returns(false);
     assert.exception(() => resolveDeno(), match({ code: "DENO_NOT_FOUND" }));
+  });
+
+  it("should find Deno on PATH and use it by absolute path", function () {
+    const dir = tmpDir();
+    const deno = script(dir, "deno", 'echo "deno 2.9.9 (stable)"');
+    sinon.stub(process.env, "PATH").value(`${dir}${path.delimiter}/usr/bin`);
+    // Only the PATH candidate exists: no configured path, no npm package.
+    const existsSync = fs.existsSync;
+    sinon
+      .stub(fs, "existsSync")
+      .callsFake((p) => String(p).startsWith(dir) && existsSync(p));
+    const runtime = resolveDeno();
+    assert.equals(runtime, { path: deno, version: "2.9.9", source: "path" });
+    assert(path.isAbsolute(runtime.path), "spawnable without a PATH");
   });
 });
 
@@ -403,7 +416,20 @@ Deno.exit(1);
     );
   });
 
-  it("should keep reading a sandbox's stderr beyond the part it keeps", async function () {
+  it("should recognise running out of memory after any amount of other stderr output", async function () {
+    const { ex } = executor(`
+for (let i = 0; i < 8; i++) {
+  Deno.stderr.writeSync(encoder.encode("x".repeat(4096)));
+}
+await new Promise((r) => setTimeout(r, 50));
+Deno.stderr.writeSync(encoder.encode("Fatal JavaScript out of memory: Reached heap limit"));
+Deno.exit(1);
+`);
+    const outcome = await run(ex);
+    assert.equals(outcome.error!.reason, "memory_limit");
+  });
+
+  it("should report other unexpected exits whatever the sandbox wrote to stderr", async function () {
     const { ex } = executor(`
 for (let i = 0; i < 8; i++) {
   Deno.stderr.writeSync(encoder.encode("x".repeat(4096)));

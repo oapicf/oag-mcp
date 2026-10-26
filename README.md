@@ -260,7 +260,9 @@ TypeScript is type-checked against the SDK declarations before it runs.
 Failures are structured: `syntax_error`, `type_error` (with line/column
 diagnostics), `api_error` (HTTP status and body), `sdk_error`,
 `upstream_auth_error`, `permission_denied`, `timeout`, `output_limit`,
-`resource_limit`, `unsupported_result`.
+`resource_limit`, `unsupported_result`. A `runtime_error` thrown inside the SDK
+rather than in the submitted code, for example while mapping an API response
+the OpenAPI document does not describe, names the SDK function in `thrownIn`.
 
 ## Documentation
 

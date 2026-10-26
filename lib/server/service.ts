@@ -262,6 +262,21 @@ function _boundSearchOutput(
  * Prepared SDK plus runtime components, shared by every session of one
  * server process.
  */
+/**
+ * A hint for the agent about an execution's outcome, when there is one.
+ *
+ * @private
+ */
+function _outcomeHint(outcome: ExecutionOutcome): string | undefined {
+  if (outcome.ok && outcome.resultUndefined) {
+    return "The code returned no value; use `return` to send results back.";
+  }
+  if (outcome.error?.thrownIn) {
+    return `The error was thrown inside the SDK (${outcome.error.thrownIn}), not in your code. The API's response may not match the OpenAPI document the SDK was generated from.`;
+  }
+  return undefined;
+}
+
 export class OagMcpService {
   readonly info: PreparedSdkInfo;
   readonly index: MethodSearchIndex;
@@ -768,10 +783,7 @@ export class OagMcpService {
       })),
       logsTruncated: outcome.logsTruncated,
       error: outcome.error ? this._scrubError(outcome.error) : undefined,
-      hint:
-        outcome.ok && outcome.resultUndefined
-          ? "The code returned no value; use `return` to send results back."
-          : undefined,
+      hint: _outcomeHint(outcome),
       stats: { durationMs: durationMs(), sdkCalls: outcome.stats.sdkCalls },
     };
   }

@@ -26,6 +26,51 @@ export const SecretRef = z.union([
 ]);
 export type SecretRef = z.infer<typeof SecretRef>;
 
+/**
+ * The browser origin a value names, `scheme://host[:port]` as browsers send
+ * it in the Origin header (default ports omitted), or undefined when the
+ * value is not an origin: unparseable, or with credentials, a path, a query
+ * or a fragment.
+ *
+ * @param {String} value - an origin, e.g. https://app.example.com
+ * @return {String} the normalised origin
+ */
+export function browserOrigin(value: string): string | undefined {
+  const u = _url(value);
+  return u && _isBareOrigin(u, value) ? `${u.protocol}//${u.host}` : undefined;
+}
+
+/**
+ * A URL, or undefined when the value does not parse as one.
+ *
+ * @private
+ */
+function _url(value: string): URL | undefined {
+  try {
+    return new URL(value);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Whether a URL is only an origin: a host, and no credentials, path, query
+ * or fragment (an empty `?` or `#` included).
+ *
+ * @private
+ */
+function _isBareOrigin(u: URL, value: string): boolean {
+  return (
+    Boolean(u.host) &&
+    !u.username &&
+    !u.password &&
+    (u.pathname === "" || u.pathname === "/") &&
+    !u.search &&
+    !u.hash &&
+    !/[?#]$/.test(value)
+  );
+}
+
 const UpstreamSchemeConfig = z
   .object({
     /** apiKey schemes */
@@ -196,7 +241,14 @@ export const ConfigSchema = z
         path: z.string().startsWith("/").default("/mcp"),
         publicUrl: z.string().url().optional(),
         allowedHosts: z.array(z.string()).default([]),
-        allowedOrigins: z.array(z.string()).default([]),
+        allowedOrigins: z
+          .array(
+            z.string().refine((v) => browserOrigin(v) !== undefined, {
+              message:
+                "must be an origin such as https://app.example.com: scheme, host and optional port, without a path",
+            }),
+          )
+          .default([]),
         maxBodyBytes: z
           .number()
           .int()
