@@ -92,6 +92,7 @@
     "eslint": "10.13.0",
     "esmock": "2.8.0",
     "mocha": "12.0.3",
+    "mochawesome": "8.1.1",
     "npm-check-updates": "23.1.0",
     "prettier": "3.9.10",
     "sinon": "22.1.0",
