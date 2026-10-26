@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import tty from "node:tty";
 
 import referee from "@sinonjs/referee";
 import sinon from "sinon";
@@ -317,6 +318,9 @@ describe("logger - Logs on stderr", function () {
 
   beforeEach(function () {
     stderr = [];
+    // Pretty output is colourised only on a TTY; pin it off so the
+    // assertions hold whether or not the tests run in a terminal.
+    sinon.stub(tty, "isatty").returns(false);
     const writeSync = fs.writeSync;
     sinon.stub(fs, "writeSync").callsFake(((
       fd: number,
