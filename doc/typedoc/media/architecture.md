@@ -15,7 +15,7 @@ reuses that preparation for every session and call.
 | Method indexing and search | `lib/prepare/spec.ts`, `analyze.ts`, `method-records.ts`, `lib/search/search-index.ts` | Parse OpenAPI, statically map SDK methods to operations, extract signatures and types, merge them into method records, build and query the in-memory MiniSearch index (English stop words from `stopword`, Porter stemming from `stemmer`). |
 | MCP server | `lib/server/serve.ts`, `tools.ts`, `service.ts`, `authentication.ts`, `authorization.ts` | Start the stdio or Streamable HTTP transport, register `search`/`execute` and implement them, authenticate MCP callers and authorise each operation they call. |
 | Execution and SDK initialisation | `lib/executor/*`, `assets/deno-runner.js`, `lib/upstream/*` | Code policy, type checking, the Deno subprocess executor, the SDK-shaped bridge, the trusted request broker and upstream credential providers. |
-| Cross-cutting | `lib/logger.ts`, `lib/otel.ts`, `lib/ocsf.ts`, `lib/util/redact.ts`, `lib/config.ts`, `lib/util/secrets.ts` | Logging (OpenTelemetry operational records, OCSF audit records) and redaction, configuration, secret resolution. |
+| Cross-cutting | `lib/logging/logger.ts`, `lib/logging/otel.ts`, `lib/logging/ocsf.ts`, `lib/util/redact.ts`, `lib/config.ts`, `lib/util/secrets.ts` | Logging (OpenTelemetry operational records, OCSF audit records) and redaction, configuration, secret resolution. |
 
 Boundaries are interfaces rather than a plugin system:
 

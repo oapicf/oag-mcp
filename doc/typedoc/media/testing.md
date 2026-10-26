@@ -31,7 +31,7 @@ make -f Makefile-extras test-ocsf
 ```
 
 checks that oag-mcp's security audit records are valid OCSF events. It
-downloads the OCSF schema at the version in `lib/ocsf.ts`, compiles it with
+downloads the OCSF schema at the version in `lib/logging/ocsf.ts`, compiles it with
 [ocsf-lib](https://pypi.org/project/ocsf-lib/) in a Python virtual
 environment under `stage/ocsf/` (through
 `test-integration/helpers/compile-ocsf.py`, which lets ocsf-lib 0.10.4 run on
@@ -93,4 +93,4 @@ produces both `sdk-7.26.0/` and `petclinic-sdk-1.2.0.tgz` equivalents under
 | sandbox limits, isolation and denied capabilities | `execute.ts` "limits, isolation and denied capabilities" |
 | forged bridge messages written by agent code are refused or re-checked (denied operation, mismatched method/path/origin, unknown binding, agent-supplied credentials) | `execute.ts` "forged bridge messages from agent code" |
 | agent code cannot obtain credentials; none in the workspace | `upstream-auth.ts`, `execute.ts`, `serve.ts` "keep secrets out of the workspace" |
-| logging: separable categories, audit independent of level, redaction, correlation, audit failure policy | `logging.ts`, `test/logger.ts`, `test/util/redact.ts` |
+| logging: separable categories, audit independent of level, redaction, correlation, audit failure policy | `logging.ts`, `test/logging/*`, `test/util/redact.ts` |

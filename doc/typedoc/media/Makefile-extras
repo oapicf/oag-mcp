@@ -1,8 +1,8 @@
 OPENAPI_GENERATOR_VERSION = 7.26.0
 
-# OCSF schema version that security audit records follow (from lib/ocsf.ts),
+# OCSF schema version that security audit records follow (from lib/logging/ocsf.ts),
 # and the ocsf-lib version used to compile it.
-OCSF_VERSION = $(shell sed -n 's/^export const OCSF_VERSION = "\(.*\)";$$/\1/p' lib/ocsf.ts)
+OCSF_VERSION = $(shell sed -n 's/^export const OCSF_VERSION = "\(.*\)";$$/\1/p' lib/logging/ocsf.ts)
 OCSF_LIB_VERSION = 0.10.4
 
 # npm package name and version of the generated SDK.
@@ -48,7 +48,7 @@ gen-sdk:
 # schema. Needs git, python3 (with venv) and network access to GitHub and
 # PyPI.
 test-ocsf:
-	$(if $(OCSF_VERSION),,$(error OCSF_VERSION not found in lib/ocsf.ts))
+	$(if $(OCSF_VERSION),,$(error OCSF_VERSION not found in lib/logging/ocsf.ts))
 	rm -rf stage/ocsf/
 	mkdir -p stage/ocsf/
 	git -c advice.detachedHead=false clone --quiet --depth 1 --branch $(OCSF_VERSION) \
