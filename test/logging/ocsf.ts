@@ -1,7 +1,11 @@
 "use strict";
 import referee from "@sinonjs/referee";
 
-import { AUDIT_EVENTS, OCSF_VERSION, toOcsfEvent } from "../../lib/logging/ocsf.js";
+import {
+  AUDIT_EVENTS,
+  OCSF_VERSION,
+  toOcsfEvent,
+} from "../../lib/logging/ocsf.js";
 
 const { assert, refute, match } = referee;
 
