@@ -9,10 +9,15 @@
 <div class="tsd-page-title">
 <h1>oag-mcp</h1></div>
 <div class="tsd-panel tsd-typography"><!-- BEGIN:AVATAR -->
-<p>To be populated by generator-node typescript-cli-partials</p>
+<p><img src="media/avatar.jpg" alt="Avatar"></p>
 <!-- END:AVATAR -->
 <!-- BEGIN:BADGES -->
-<p>To be populated by generator-node typescript-cli-partials</p>
+<p><a href="https://github.com/oapicf/oag-mcp/actions?query=workflow%3ACI"><img src="https://github.com/oapicf/oag-mcp/workflows/CI/badge.svg" alt="Build Status"></a>
+<a href="https://libraries.io/npm/oag-mcp"><img src="https://img.shields.io/librariesio/release/npm/oag-mcp" alt="Dependencies Status"></a>
+<a href="https://github.com/oapicf/oag-mcp/actions?query=workflow%3ACodeQL"><img src="https://github.com/oapicf/oag-mcp/workflows/CodeQL/badge.svg" alt="Code Scanning Status"></a>
+<a href="https://coveralls.io/r/oapicf/oag-mcp?branch=main"><img src="https://coveralls.io/repos/github/oapicf/oag-mcp/badge.svg?branch=main" alt="Coverage Status"></a>
+<a href="https://snyk.io/test/github/oapicf/oag-mcp"><img src="https://snyk.io/test/github/oapicf/oag-mcp/badge.svg" alt="Security Status"></a>
+<a href="https://www.npmjs.com/package/oag-mcp"><img src="https://img.shields.io/npm/v/oag-mcp.svg" alt="Published Version"></a></p>
 <!-- END:BADGES -->
 <h1 id="oag-mcp" class="tsd-anchor-link">OAG-MCP<a href="#oag-mcp" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h1>
 <p>OAG-MCP turns an OpenAPI spec and its OAG-generated SDK into a code-mode MCP server at runtime. Instead of exposing hundreds of endpoints as individual tools, it exposes two: search, for discovering operations from the spec, and execute, which runs agent-written code against your SDK in a sandbox. The SDK stays on the host with your credentials, which are applied from the spec’s security schemes, so secrets never enter the sandbox. Point it at a spec and an SDK, and your whole API is agent-ready in a few hundred tokens of context.</p>
@@ -21,7 +26,7 @@
 
 <h2 id="why-oag-mcp" class="tsd-anchor-link">Why oag-mcp<a href="#why-oag-mcp" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
 <p>Most OpenAPI-to-MCP bridges expose one MCP tool per endpoint, or a generic
-HTTP request tool. oag-mcp takes a different approach — <strong>SDK-backed code
+HTTP request tool. oag-mcp takes a different approach  <strong>SDK-backed code
 mode</strong>:</p>
 <ul>
 <li><strong>OpenAPI supplies the contract and documentation</strong>: descriptions, tags,
@@ -193,10 +198,17 @@ diagnostics), <code>api_error</code> (HTTP status and body), <code>sdk_error</co
 </ul>
 <h2 id="colophon" class="tsd-anchor-link">Colophon<a href="#colophon" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
 <!-- BEGIN:DEVELOPERS_GUIDE -->
-<p>To be populated by generator-node typescript-cli-partials</p>
+<p><a href="https://cliffano.github.io/developers-guide-typescript.html">Developer's Guide</a></p>
 <!-- END:DEVELOPERS_GUIDE -->
 <!-- BEGIN:BUILD_REPORTS -->
-<p>To be populated by generator-node typescript-cli-partials</p>
+<p>Build reports:</p>
+<ul>
+<li><a href="https://oapicf.github.io/oag-mcp/complexity/eslint/index.html">Code complexity report</a></li>
+<li><a href="https://oapicf.github.io/oag-mcp/test/mochawesome/index.html">Unit tests report</a></li>
+<li><a href="https://oapicf.github.io/oag-mcp/coverage/c8/index.html">Test coverage report</a></li>
+<li><a href="https://oapicf.github.io/oag-mcp/test-integration/mochawesome/index.html">Integration tests report</a></li>
+<li><a href="https://oapicf.github.io/oag-mcp/doc/typedoc/index.html">API Documentation</a></li>
+</ul>
 <!-- END:BUILD_REPORTS --></div></div>
 <div class="col-sidebar">
 <div class="page-menu">
