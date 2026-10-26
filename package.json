@@ -108,7 +108,8 @@
   "license": "MIT",
   "mocha": {
     "node-option": [
-      "import=tsx"
+      "import=tsx",
+      "no-experimental-require-module"
     ],
     "extension": [
       "ts"
