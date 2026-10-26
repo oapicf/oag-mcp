@@ -17,7 +17,7 @@
  * audit destination is detected immediately; with fail-closed enabled,
  * callers must refuse execution while auditing is unavailable.
  *
- * @module logger
+ * @module logging/logger
  */
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -41,8 +41,8 @@ import {
   otelTimestamp,
   toOtelAttributes,
 } from "./otel.js";
-import { boundValue } from "./util/redact.js";
-import { oagMcpAuthor, oagMcpName, oagMcpVersion } from "./util/version.js";
+import { boundValue } from "../util/redact.js";
+import { oagMcpAuthor, oagMcpName, oagMcpVersion } from "../util/version.js";
 
 /** An operational log level: one of pino's levels, or `silent`. */
 export type LogLevel = pino.LevelWithSilent;

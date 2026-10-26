@@ -10,7 +10,7 @@
  */
 import fs from "node:fs";
 
-import { otelAttributeName } from "../../lib/otel.js";
+import { otelAttributeName } from "../../lib/logging/otel.js";
 
 type Json = Record<string, unknown>;
 

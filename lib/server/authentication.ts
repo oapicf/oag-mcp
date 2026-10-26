@@ -36,7 +36,7 @@ import * as jose from "jose";
 import type { Config } from "../config.js";
 import type { SecretResolver } from "../util/secrets.js";
 import { OagMcpError } from "../errors.js";
-import type { Logs } from "../logger.js";
+import type { Logs } from "../logging/logger.js";
 import type { SecretRegistry } from "../util/redact.js";
 import type { Principal } from "../types.js";
 import { opaquePrincipalId } from "./authorization.js";

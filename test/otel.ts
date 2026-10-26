@@ -6,7 +6,7 @@ import {
   otelRecord,
   otelTimestamp,
   toOtelAttributes,
-} from "../lib/otel.js";
+} from "../../lib/logging/otel.js";
 
 const { assert } = referee;
 

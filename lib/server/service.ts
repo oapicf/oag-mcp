@@ -23,7 +23,7 @@ import type {
   Executor,
   LogEntry,
 } from "../executor/types.js";
-import type { Logs } from "../logger.js";
+import type { Logs } from "../logging/logger.js";
 import { boundValue, secrets } from "../util/redact.js";
 import type { PreparedSdk } from "../prepare/prepare.js";
 import { WORKSPACE_PATHS } from "../prepare/workspace.js";

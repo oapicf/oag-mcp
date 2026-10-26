@@ -11,7 +11,7 @@ import { OagMcpError } from "../../lib/errors.js";
 import { DenoExecutor } from "../../lib/executor/deno-executor.js";
 import { AgentTypeChecker } from "../../lib/executor/typecheck.js";
 import type { ExecutionRequest, Executor } from "../../lib/executor/types.js";
-import { Logs } from "../../lib/logger.js";
+import { Logs } from "../../lib/logging/logger.js";
 import { type CallContext, OagMcpService } from "../../lib/server/service.js";
 import type { MethodRecord } from "../../lib/types.js";
 import { secrets } from "../../lib/util/redact.js";

@@ -11,7 +11,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parseConfig, type Config } from "../../lib/config.js";
-import { Logs } from "../../lib/logger.js";
+import { Logs } from "../../lib/logging/logger.js";
 import {
   type PrepareOptions,
   type PreparedSdk,

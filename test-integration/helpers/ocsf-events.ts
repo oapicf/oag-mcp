@@ -18,8 +18,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { Logs } from "../../lib/logger.js";
-import { AUDIT_EVENTS, type AuditEvent } from "../../lib/ocsf.js";
+import { Logs } from "../../lib/logging/logger.js";
+import { AUDIT_EVENTS, type AuditEvent } from "../../lib/logging/ocsf.js";
 import { startAuthServer } from "./auth-server.js";
 import { LOCAL, configFor, defaultPrepared, service } from "./env.js";
 import { startMockApi } from "./mock-api.js";

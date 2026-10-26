@@ -7,11 +7,11 @@ import tty from "node:tty";
 import referee from "@sinonjs/referee";
 import sinon from "sinon";
 
-import { Logs, MAX_WRITE_RETRIES } from "../lib/logger.js";
-import { OCSF_VERSION } from "../lib/ocsf.js";
-import { secrets } from "../lib/util/redact.js";
-import { oagMcpVersion } from "../lib/util/version.js";
-import { readLogRecords } from "./helpers/log-records.js";
+import { Logs, MAX_WRITE_RETRIES } from "../../lib/logging/logger.js";
+import { OCSF_VERSION } from "../../lib/logging/ocsf.js";
+import { secrets } from "../../lib/util/redact.js";
+import { oagMcpVersion } from "../../lib/util/version.js";
+import { readLogRecords } from "../helpers/log-records.js";
 
 const { assert, refute, match } = referee;
 

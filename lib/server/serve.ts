@@ -46,7 +46,7 @@ import type { Config } from "../config.js";
 import type { Executor } from "../executor/types.js";
 import { SecretResolver } from "../util/secrets.js";
 import { OagMcpError } from "../errors.js";
-import type { Logs } from "../logger.js";
+import type { Logs } from "../logging/logger.js";
 import { secrets } from "../util/redact.js";
 import {
   type PrepareOptions,

@@ -22,7 +22,7 @@
  * Call sites log camelCase fields; {@link toOcsfEvent} places the ones OCSF
  * defines in their OCSF attribute and keeps the rest under `unmapped`.
  *
- * @module ocsf
+ * @module logging/ocsf
  */
 import crypto from "node:crypto";
 import net from "node:net";

@@ -14,7 +14,7 @@
  *
  * Call sites log camelCase fields; {@link toOtelAttributes} maps them.
  *
- * @module otel
+ * @module logging/otel
  */
 import type pino from "pino";
 

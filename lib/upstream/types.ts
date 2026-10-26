@@ -6,7 +6,7 @@
  *
  * @module upstream/types
  */
-import type { Logs } from "../logger.js";
+import type { Logs } from "../logging/logger.js";
 import type {
   OperationBinding,
   Principal,

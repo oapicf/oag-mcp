@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { Logs } from "../../lib/logger.js";
+import { Logs } from "../../lib/logging/logger.js";
 import type { SecuritySchemeInfo } from "../../lib/types.js";
 import { type LogRecordView, readLogRecords } from "./log-records.js";
 

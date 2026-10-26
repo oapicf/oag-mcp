@@ -7,7 +7,7 @@ import bag from "bagofcli";
 import sinon from "sinon";
 
 import cli from "../lib/cli.js";
-import { LOG_LEVELS, Logs } from "../lib/logger.js";
+import { LOG_LEVELS, Logs } from "../lib/logging/logger.js";
 import { readLogRecords } from "./helpers/log-records.js";
 import { ROOT, SDK_726, SPEC, tmpDir } from "./helpers/paths.js";
 

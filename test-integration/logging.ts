@@ -11,8 +11,8 @@ import path from "node:path";
 
 import referee from "@sinonjs/referee";
 
-import { Logs } from "../lib/logger.js";
-import { OCSF_VERSION } from "../lib/ocsf.js";
+import { Logs } from "../lib/logging/logger.js";
+import { OCSF_VERSION } from "../lib/logging/ocsf.js";
 import type { PreparedSdk } from "../lib/prepare/prepare.js";
 import {
   BIN,
