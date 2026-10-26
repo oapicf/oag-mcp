@@ -184,7 +184,9 @@ code rather than assuming they are equal.</p>
 Failures are structured: <code>syntax_error</code>, <code>type_error</code> (with line/column
 diagnostics), <code>api_error</code> (HTTP status and body), <code>sdk_error</code>,
 <code>upstream_auth_error</code>, <code>permission_denied</code>, <code>timeout</code>, <code>output_limit</code>,
-<code>resource_limit</code>, <code>unsupported_result</code>.</p>
+<code>resource_limit</code>, <code>unsupported_result</code>. A <code>runtime_error</code> thrown inside the SDK
+rather than in the submitted code, for example while mapping an API response
+the OpenAPI document does not describe, names the SDK function in <code>thrownIn</code>.</p>
 <h2 id="documentation" class="tsd-anchor-link">Documentation<a href="#documentation" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
 <ul>
 <li><a href="media/architecture.md">Architecture</a> — start-up preparation, execution model, design choices</li>

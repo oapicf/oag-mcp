@@ -117,8 +117,8 @@ http:
   port: 3000
   path: /mcp
   publicUrl: https://mcp.example.com/mcp  # externally visible URL (behind TLS proxy)
-  allowedHosts: []                        # Host header allowlist for non-loopback binds
-  allowedOrigins: []                      # Origin allowlist (browser clients)
+  allowedHosts: []                        # Host names accepted (loopback binds also accept localhost)
+  allowedOrigins: []                      # exact browser origins, e.g. https://app.example.com
   maxBodyBytes: 1048576
 
 logging:
@@ -128,6 +128,16 @@ logging:
   auditFile: /var/log/oag-mcp/audit.log   # OCSF records; or stderr (default) or fd:N
   auditFailClosed: false
 ```
+
+`http.allowedHosts` and `http.allowedOrigins` protect browsers against DNS
+rebinding and cross-site requests. Host names are compared without the port.
+Origins are compared exactly (scheme, host and port, as browsers send them),
+so `https://app.example.com` does not admit `http://app.example.com` or
+`https://app.example.com:8443`; a value that is not an origin, such as a bare
+host name or a URL with a path, is a configuration error. Requests without an
+Origin header (non-browser MCP clients) are not affected. With no origins
+configured, loopback binds accept localhost origins and other binds accept
+none.
 
 ## Authorization patterns
 
