@@ -142,7 +142,7 @@ and client.
 | `network.protocol.name` | `http`, with Streamable HTTP. | string | Streamable HTTP | `"http"` |
 | `enduser.id` | The authenticated MCP caller: `local:<principal>` for stdio, `static:<principal>` for a static bearer token, `oauth:<hash>` for OAuth, `anonymous` with `mcpAuth.mode: none`. | string | Tool calls | `"local:local"`, `"static:ci-bot"` |
 | `client.address`, `client.port` | The Streamable HTTP client. | string, integer | Streamable HTTP | `"127.0.0.1"`, `50000` |
-| `mcp.session.id` | The MCP session. | string | Streamable HTTP tool calls | `"6f1c…"` |
+| `mcp.session.id` | The MCP session. oag-mcp's Streamable HTTP handler serves each request on its own, without sessions, so this is normally absent. | string | Tool calls in a session that has an id | `"6f1c…"` |
 | `jsonrpc.request.id` | The JSON-RPC id of the tool call. | string or integer | Tool calls | `3` |
 | `mcp.method.name` | Always `tools/call`. | string | Tool calls | `"tools/call"` |
 | `gen_ai.operation.name` | Always `execute_tool`. | string | Tool calls | `"execute_tool"` |
