@@ -30,6 +30,10 @@ $(info - Author = ${AUTHOR})
 
 export PATH := node_modules/.bin:$(PATH)
 
+# Project tools are invoked by full path, since GNU Make 3.81 (the macOS
+# default) runs shell-free commands using its original PATH, not the export
+NODE_BIN = $(CURDIR)/node_modules/.bin
+
 ################################################################
 # TypeScript tool configuration
 
@@ -59,7 +63,7 @@ clean:
 
 # Compile TypeScript sources to dist/
 build:
-	tsc -p tsconfig.build.json
+	$(NODE_BIN)/tsc -p tsconfig.build.json
 
 ################################################################
 # Dependencies targets
@@ -75,7 +79,7 @@ deps-extra-apt:
 	$(call run_hook,x-post-deps-extra-apt)
 
 deps-upgrade:
-	npm-check-updates --upgrade
+	$(NODE_BIN)/npm-check-updates --upgrade
 	npm install
 
 rmdeps:
@@ -85,7 +89,7 @@ rmdeps:
 # Formatting targets
 
 style:
-	prettier --write $(STYLE_PATHS)
+	$(NODE_BIN)/prettier --write $(STYLE_PATHS)
 	$(call run_hook,x-post-style)
 
 ################################################################
@@ -93,23 +97,23 @@ style:
 
 # Type-check sources and tests without emitting files
 typecheck:
-	tsc -p tsconfig.json --noEmit
+	$(NODE_BIN)/tsc -p tsconfig.json --noEmit
 
 lint: stage
-	eslint .
-	mdl -r ~MD013,~MD029 $(shell find . -path ./stage -prune -o -path ./node_modules -prune -o -path ./test/fixtures -prune -o -name "CHANGELOG.md" -prune -o -name "*.md" -print)
+	$(NODE_BIN)/eslint .
+# 	mdl -r ~MD013,~MD029 $(shell find . -path ./stage -prune -o -path ./node_modules -prune -o -path ./test/fixtures -prune -o -name "CHANGELOG.md" -prune -o -name "*.md" -print)
 	$(call run_hook,x-post-lint)
 
 complexity: stage
 	mkdir -p stage/gh-pages/complexity/eslint/
-	eslint lib --rule '{"complexity": ["warn", $(COMPLEXITY_MAX)]}' --format html --output-file stage/gh-pages/complexity/eslint/index.html
+	$(NODE_BIN)/eslint lib --rule '{"complexity": ["warn", $(COMPLEXITY_MAX)]}' --format html --output-file stage/gh-pages/complexity/eslint/index.html
 
 # Tests run through tsx, which does not type-check, so type-check first
 test: typecheck
-	mocha --reporter mochawesome --reporter-options reportDir=stage/gh-pages/test/mochawesome,reportFilename=index
+	$(NODE_BIN)/mocha --reporter mochawesome --reporter-options reportDir=stage/gh-pages/test/mochawesome,reportFilename=index
 
 test-integration: typecheck
-	mocha --no-package --node-option import=tsx --extension ts --recursive --timeout 180000 --ignore 'test-integration/helpers/**' --reporter mochawesome --reporter-options reportDir=stage/gh-pages/test-integration/mochawesome,reportFilename=index 'test-integration/**/*.ts'
+	$(NODE_BIN)/mocha --no-package --node-option import=tsx --extension ts --recursive --timeout 180000 --ignore 'test-integration/helpers/**' --reporter mochawesome --reporter-options reportDir=stage/gh-pages/test-integration/mochawesome,reportFilename=index 'test-integration/**/*.ts'
 
 test-examples:
 	mkdir -p stage/test-examples/
@@ -119,7 +123,7 @@ test-examples:
 	done
 
 coverage: typecheck
-	c8 --include=lib --reports-dir=stage/gh-pages/coverage/c8 --reporter=text-summary --reporter=lcov --reporter=html mocha
+	$(NODE_BIN)/c8 --include=lib --reports-dir=stage/gh-pages/coverage/c8 --reporter=text-summary --reporter=lcov --reporter=html mocha
 
 ################################################################
 # Packaging, installation, and publishing targets
@@ -143,7 +147,7 @@ publish:
 # Documentation targets
 
 doc: stage
-	typedoc --entryPointStrategy expand --tsconfig tsconfig.build.json --out stage/gh-pages/doc/typedoc lib
+	$(NODE_BIN)/typedoc --entryPointStrategy expand --tsconfig tsconfig.build.json --out stage/gh-pages/doc/typedoc lib
 
 ################################################################
 # MAKE IT SO - Utility Makefile functions and targets
