@@ -434,6 +434,33 @@ function _compact(obj: Fields): Fields {
 }
 
 /**
+ * Authentication of oag-mcp's own service identity to obtain an upstream
+ * OAuth token. The MCP request that needed the token is described as in API
+ * Activity: the caller as the actor and the client as the source endpoint.
+ * The execution id stays under `unmapped`: Authentication has `api` only
+ * through the Cloud profile, which describes cloud provider API calls.
+ *
+ * @private
+ */
+function _upstreamToken(r: FieldReader, product: OcsfProduct): Fields {
+  const status = r.num("status");
+  const fromRequest = r.has("clientAddress") || r.has("transport");
+  return _compact({
+    actor: _actor(r, product),
+    user: {
+      uid: r.str("provider") ?? "upstream",
+      type_id: 4,
+      type: "Service",
+    },
+    service: { name: r.str("scheme") },
+    auth_protocol_id: 6,
+    auth_protocol: "OAUTH 2.0",
+    status_code: status === undefined ? undefined : String(status),
+    src_endpoint: fromRequest ? _client(r) : undefined,
+  });
+}
+
+/**
  * Authentication: an MCP caller, or oag-mcp's own service identity obtaining
  * an upstream OAuth token.
  *
@@ -441,18 +468,7 @@ function _compact(obj: Fields): Fields {
  */
 function _authentication(r: FieldReader, product: OcsfProduct): Fields {
   if (r.has("scheme")) {
-    const status = r.num("status");
-    return _compact({
-      user: {
-        uid: r.str("provider") ?? "upstream",
-        type_id: 4,
-        type: "Service",
-      },
-      service: { name: r.str("scheme") },
-      auth_protocol_id: 6,
-      auth_protocol: "OAUTH 2.0",
-      status_code: status === undefined ? undefined : String(status),
-    });
+    return _upstreamToken(r, product);
   }
   const principal = r.str("principalId");
   const [protocolId, protocol] = AUTH_PROTOCOL[r.str("mode") ?? ""] ?? [

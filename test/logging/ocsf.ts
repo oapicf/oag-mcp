@@ -187,6 +187,40 @@ describe("ocsf - toOcsfEvent", function () {
     assert.equals(e.status_code, "401");
   });
 
+  it("should describe the caller and client that needed an upstream token in OCSF attributes", function () {
+    const e = event("upstream.token.issue", "success", {
+      requestId: "req_1",
+      transport: "streamable-http",
+      principalId: "static:ops",
+      clientAddress: "127.0.0.1",
+      clientPort: 50000,
+      executionId: "exec_1",
+      scheme: "oauth2cc",
+      provider: "service-identity",
+      expiresInSec: 3600,
+      scopeCount: 1,
+    });
+    assert.equals(e.actor, { user: { uid: "static:ops" } });
+    assert.equals(e.src_endpoint, { ip: "127.0.0.1", port: 50000 });
+    assert.isUndefined(e.api);
+    assert.equals(e.metadata.correlation_uid, "req_1");
+    assert.equals(e.unmapped, {
+      executionId: "exec_1",
+      expiresInSec: 3600,
+      scopeCount: 1,
+    });
+  });
+
+  it("should name oag-mcp as the actor of an upstream token outside any request", function () {
+    const e = event("upstream.token.invalidated", "success", {
+      scheme: "oauth2cc",
+      provider: "service-identity",
+    });
+    assert.equals(e.actor, match({ app_name: "oag-mcp" }));
+    assert.isUndefined(e.src_endpoint);
+    assert.isUndefined(e.api);
+  });
+
   it("should describe a denied destination by its endpoint, never its query", function () {
     const e = event("network.destination_denied", "denied", {
       httpMethod: "POST",
