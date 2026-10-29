@@ -13,9 +13,17 @@ export const REDACTED = "[REDACTED]";
 const SENSITIVE_KEY =
   /^(authorization|proxy-authorization|cookie|set-cookie|password|passwd|secret|client_?secret|api_?key|apikey|x-api-key|token|access_?token|refresh_?token|id_?token|bearer|credentials?|private_?key)$/i;
 
+/**
+ * An HTTP authentication scheme followed by a value, as in an Authorization
+ * header. Scheme names are case-insensitive in HTTP, so the match is too;
+ * {@link _credentialLike} then decides whether the value is a credential or
+ * just the next word of a sentence.
+ */
+const AUTH_SCHEME_VALUE =
+  /\b(Bearer|Basic|Digest)\s+([A-Za-z0-9._~+/=-]{4,})/gi;
+
 /** Patterns that look like credentials inside free text. */
 const TEXT_PATTERNS: Array<[RegExp, string]> = [
-  [/\b(Bearer|Basic|Digest)\s+[A-Za-z0-9._~+/=-]{4,}/gi, `$1 ${REDACTED}`],
   [/\beyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]*/g, REDACTED],
   [
     /([?&;](?:api[_-]?key|apikey|access_token|token|key|secret|password|client_secret|code|sig|signature)=)[^&#\s"']+/gi,
@@ -100,11 +108,34 @@ export class SecretRegistry {
         out = out.split(v).join(REDACTED);
       }
     }
+    out = out.replace(
+      AUTH_SCHEME_VALUE,
+      (match, scheme: string, value: string) =>
+        _credentialLike(value) ? `${scheme} ${REDACTED}` : match,
+    );
     for (const [re, replacement] of TEXT_PATTERNS) {
       out = out.replace(re, replacement);
     }
     return out;
   }
+}
+
+/**
+ * Whether the value after an authentication scheme looks like a credential
+ * rather than a word of prose ("bearer does not…", "Basic authentication"):
+ * it has a digit or token punctuation, mixes cases the way base64 does, or is
+ * long. Registered secrets are scrubbed whatever they look like.
+ *
+ * @param {String} value - the value after the scheme name
+ * @return {Boolean} true when it should be redacted
+ * @private
+ */
+function _credentialLike(value: string): boolean {
+  return (
+    value.length >= 20 ||
+    /[0-9._~+/=-]/.test(value) ||
+    (/[a-z]/.test(value) && /[A-Z]/.test(value.slice(1)))
+  );
 }
 
 /** Process-wide registry used by the logger and error sanitisers. */

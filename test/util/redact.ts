@@ -40,6 +40,35 @@ describe("redact - SecretRegistry.scrub", function () {
     assert.contains(out, "ok=1");
   });
 
+  it("should scrub credentials after an authentication scheme in any letter case", function () {
+    const reg = new SecretRegistry();
+    for (const [text, value] of [
+      ["Authorization: Bearer abcdef123456", "abcdef123456"],
+      ["authorization: bearer tok_9f8a7b", "tok_9f8a7b"],
+      ["Basic dXNlcjpwYXNz", "dXNlcjpwYXNz"],
+      ["BASIC YWRtaW46c2VjcmV0", "YWRtaW46c2VjcmV0"],
+      ["Bearer opaqueaccesstokenvalue", "opaqueaccesstokenvalue"],
+      ["Digest username=alice", "username=alice"],
+    ]) {
+      const out = reg.scrub(text);
+      refute.contains(out, value, text);
+      assert.contains(out, REDACTED, text);
+    }
+  });
+
+  it("should leave prose that mentions an authentication scheme intact", function () {
+    const reg = new SecretRegistry();
+    for (const text of [
+      "static bearer does not implement MCP OAuth discovery",
+      "Bearer token required",
+      "use Basic authentication for the admin API",
+      "the API accepts basic HTTP credentials",
+      "Digest Auth is not supported",
+    ]) {
+      assert.equals(reg.scrub(text), text);
+    }
+  });
+
   it("should only replace registered values when using scrubKnown", function () {
     const reg = new SecretRegistry();
     reg.add("token-1234567");
