@@ -13,17 +13,26 @@
 
 # OAG-MCP
 
-OAG-MCP turns an OpenAPI spec and its OAG-generated SDK into a code-mode MCP server at runtime. Instead of exposing hundreds of endpoints as individual tools, it exposes two: search, for discovering operations from the spec, and execute, which runs agent-written code against your SDK in a sandbox. The SDK stays on the host with your credentials, which are applied from the spec’s security schemes, so secrets never enter the sandbox. Point it at a spec and an SDK, and your whole API is agent-ready in a few hundred tokens of context.
+OAG-MCP turns an OpenAPI spec and its OAG-generated SDK into a code-mode MCP server at runtime.
+
+Instead of exposing hundreds of endpoints as individual tools, it exposes two:
+
+* `search` for discovering operations from the spec.
+* `execute` for running agent-written code against your SDK in a sandbox.
+
+The SDK stays on the host with your credentials, which are applied from the spec’s security schemes, so secrets never enter the sandbox.
+
+Point OAG-MCP at a spec and an SDK, and your whole API is agent-ready in a few hundred tokens of context.
 
 ```bash
-oag-mcp serve --spec ./openapi.yaml --sdk ./generated-sdk --transport stdio
+oag-mcp serve --spec ./openapi.yaml --sdk ./generated-sdk --transport streamable-http
 ```
 
-## Why oag-mcp
+## Why OAG-MCP
 
-Most OpenAPI-to-MCP bridges expose one MCP tool per endpoint, or a generic
-HTTP request tool. oag-mcp takes a different approach  **SDK-backed code
-mode**:
+A lot of OpenAPI-to-MCP bridges expose one MCP tool per endpoint, or a generic
+HTTP request tool. OAG-MCP takes a different approach by utilising **SDK-backed code
+mode** where the SDK is generated out of the OpenAPI specification itself:
 
 * **OpenAPI supplies the contract and documentation**: descriptions, tags,
   parameters, schemas, examples and security requirements.
@@ -34,8 +43,8 @@ mode**:
 * **`execute`** runs agent-written TypeScript that composes real SDK calls —
   loops, filtering, aggregation, `Promise.all` — inside an isolated Deno
   sandbox, and returns only the compact result.
-* **The SDK stays an ordinary package** that your applications and CLIs keep
-  using directly; oag-mcp only reads it.
+* **The SDK stays an ordinary package** that your applications, CLIs, and other consumers keep
+  using directly; OAG-MCP only reads it.
 * **MCP sees two tools**, not one per endpoint, so large APIs don't flood the
   agent's context.
 
@@ -58,19 +67,20 @@ mode**:
 npm install -g oag-mcp
 ```
 
-| Requirement | Needed for | Notes |
-| --- | --- | --- |
-| Node.js 22+ | everything | |
-| Deno 2.x | `execute`, and checking the SDK bundle at start-up | Installed automatically through the `deno` npm dependency; or set `OAG_MCP_DENO_PATH` / put `deno` on `PATH`. |
-| A typescript-fetch SDK | everything | Generated with [OpenAPI Generator](https://openapi-generator.tech)'s `typescript-fetch` generator, version 7.26.0. |
+## Requirements
+
+* Node.js 22+ - For running oag-mcp command.
+* Deno 2.x - Installed automatically through the `deno` npm dependency; or set `OAG_MCP_DENO_PATH` / put `deno` on `PATH`.
+* OpenAPI specification
+* A typescript-fetch SDK generated with [OpenAPI Generator](https://openapi-generator.tech)'s `typescript-fetch`.
+
+## Quick start
 
 oag-mcp serves the SDK you give it; generating that SDK is done with
 OpenAPI Generator itself, so the machine running the server needs neither
 Docker nor OpenAPI Generator. No account, licence, cloud service or
 telemetry is involved; while running, the server only connects to your API and
 to any OAuth endpoints you configure.
-
-## Quick start
 
 ### 1. Generate a typescript-fetch SDK
 
