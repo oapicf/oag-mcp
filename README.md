@@ -153,18 +153,35 @@ for every option.
 ## Learn more
 
 * [How it works](docs/how-it-works.md) — what happens, step by step, from start-up to each tool call
-* [Recipes](docs/recipes/README.md) — set-ups for common situations: read-only, curated, per-caller, remote, audit logging and more
-* [Troubleshooting](docs/troubleshooting.md) — why OAG-MCP does not start, a client cannot connect, or a call failed
-* [Reference](docs/reference/README.md) — [MCP tools](docs/reference/tools.md), [CLI](docs/reference/cli.md), [configuration](docs/reference/configuration.md), [HTTP endpoints](docs/reference/http-endpoints.md), [error codes](docs/reference/error-codes.md), [error types](docs/reference/error-types.md), [log events](docs/reference/log-events.md)
-* [Architecture](docs/architecture.md) — components, start-up preparation, execution model, design choices
 * [SDK compatibility](docs/sdk-compatibility.md) — supported versions, options, package layouts, dependencies
+* [Architecture](docs/architecture.md) — components, start-up preparation, execution model, design choices
+* [Decision records](docs/decisions/README.md) — why OAG-MCP is built the way it is
+* [Security](docs/security.md) — OAG-MCP's security features, and what is not claimed
 * [Authentication](docs/authentication.md) — who may call OAG-MCP (`mcpAuth`), and how it calls your API (`upstreamAuth`)
 * [Authorisation](docs/authorisation.md) — what each caller may do (`authorization`)
-* [Security](docs/security.md) — OAG-MCP's security features, and what is not claimed
 * [Logging](docs/logging.md) — operational records (OpenTelemetry) and security audit records (OCSF)
 * [Deployment](docs/deployment.md) — running OAG-MCP as a server, in a container and in production
+* [Troubleshooting](docs/troubleshooting.md) — why OAG-MCP does not start, a client cannot connect, or a call failed
 * [Testing](docs/testing.md) — lint checks, unit and integration tests, and extra checks
 * [Releasing](docs/releasing.md) — for maintainers: packaging and publishing OAG-MCP
+* [Recipes](docs/recipes/README.md) — set-ups for common situations, from configuration to logs:
+   * [Read-only server](docs/recipes/read-only.md) — try OAG-MCP safely, reading but not changing anything
+   * [Upstream credentials](docs/recipes/upstream-credentials.md) — API keys, bearer tokens and basic authentication
+   * [Upstream OAuth2](docs/recipes/upstream-oauth.md) — OAuth2 client credentials tokens
+   * [Curated operations](docs/recipes/curated.md) — expose only some of an API
+   * [Per-caller permissions](docs/recipes/per-caller-permissions.md) — give each caller its own operations
+   * [Execution limits](docs/recipes/execution-limits.md) — tune time, memory, result and API-call limits
+   * [Remote server](docs/recipes/remote-server.md) — serve remote MCP clients over HTTPS
+   * [Packaged SDK](docs/recipes/packaged-sdk.md) — deploy the SDK as a versioned archive
+   * [Audit logging](docs/recipes/audit-logging.md) — keep security audit records in a file, a log shipper or a SIEM
+* [Reference](docs/reference/README.md) — everything OAG-MCP accepts and produces:
+   * [MCP tools](docs/reference/tools.md) — the `search` and `execute` tools
+   * [CLI](docs/reference/cli.md) — the `serve` command, its flags and environment variables
+   * [Configuration](docs/reference/configuration.md) — every configuration property
+   * [HTTP endpoints](docs/reference/http-endpoints.md) — paths, request checks and responses
+   * [Error codes](docs/reference/error-codes.md) — why OAG-MCP did not start
+   * [Error types](docs/reference/error-types.md) — errors `execute` returns to the agent
+   * [Log events](docs/reference/log-events.md) — every operational and security audit record
 
 ## Colophon
 
