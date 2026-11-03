@@ -56,7 +56,7 @@ npm install -g oag-mcp
 
 ## Requirements
 
-* Node.js 22+ - For running oag-mcp command.
+* Node.js 22+ - For running the `oag-mcp` command.
 * Deno 2.x - Installed automatically through the `deno` npm dependency; or set `OAG_MCP_DENO_PATH` / put `deno` on `PATH`.
 * OpenAPI specification
 * An SDK generated with [OpenAPI Generator](https://openapi-generator.tech)'s `typescript-fetch`.
@@ -146,24 +146,25 @@ Secrets are resolved at start-up from environment variables or a `0600`
 secrets file. They are never accepted as CLI arguments and never written to
 the method index, the prepared SDK bundle, logs or anything agent code can
 read. See [authentication](docs/authentication.md) for MCP access control
-(`mcpAuth`), upstream credentials (`upstreamAuth`) and per-operation
-`authorization`, and the [configuration reference](docs/reference/configuration.md)
+(`mcpAuth`) and upstream credentials (`upstreamAuth`),
+[authorisation](docs/authorisation.md) for per-operation permissions, and the [configuration reference](docs/reference/configuration.md)
 for every option.
 
 ## Learn more
 
 * [How it works](docs/how-it-works.md) — what happens, step by step, from start-up to each tool call
 * [Recipes](docs/recipes/README.md) — set-ups for common situations: read-only, curated, per-caller, remote, audit logging and more
-* [Troubleshooting](docs/troubleshooting.md) — why oag-mcp does not start, a client cannot connect, or a call failed
-* Reference — [CLI](docs/reference/cli.md), [configuration](docs/reference/configuration.md), [error codes](docs/reference/error-codes.md), [error types](docs/reference/error-types.md), [log events](docs/reference/log-events.md)
+* [Troubleshooting](docs/troubleshooting.md) — why OAG-MCP does not start, a client cannot connect, or a call failed
+* [Reference](docs/reference/README.md) — [MCP tools](docs/reference/tools.md), [CLI](docs/reference/cli.md), [configuration](docs/reference/configuration.md), [HTTP endpoints](docs/reference/http-endpoints.md), [error codes](docs/reference/error-codes.md), [error types](docs/reference/error-types.md), [log events](docs/reference/log-events.md)
 * [Architecture](docs/architecture.md) — components, start-up preparation, execution model, design choices
 * [SDK compatibility](docs/sdk-compatibility.md) — supported versions, options, package layouts, dependencies
-* [Configuration guide](docs/configuration.md) — the configuration file and secrets
-* [Authentication and authorization](docs/authentication.md) — `mcpAuth`, `upstreamAuth`, permissions
-* [Execution sandbox and limits](docs/security.md) — what is and is not isolated
+* [Authentication](docs/authentication.md) — who may call OAG-MCP (`mcpAuth`), and how it calls your API (`upstreamAuth`)
+* [Authorisation](docs/authorisation.md) — what each caller may do (`authorization`)
+* [Security](docs/security.md) — OAG-MCP's security features, and what is not claimed
 * [Logging](docs/logging.md) — operational records (OpenTelemetry) and security audit records (OCSF)
-* [Deployment](docs/deployment.md)
-* [Testing](docs/testing.md)
+* [Deployment](docs/deployment.md) — running OAG-MCP as a server, in a container and in production
+* [Testing](docs/testing.md) — lint checks, unit and integration tests, and extra checks
+* [Releasing](docs/releasing.md) — for maintainers: packaging and publishing OAG-MCP
 
 ## Colophon
 

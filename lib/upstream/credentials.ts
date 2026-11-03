@@ -240,7 +240,7 @@ export class ServiceIdentityCredentialProvider implements CredentialProvider {
       throw new OagMcpError(
         "UPSTREAM_AUTH_CONFIG_INVALID",
         `Invalid upstreamAuth configuration: ${problems.join("; ")}`,
-        { hint: "See docs/authentication.md#upstream-api-authentication." },
+        { hint: "See docs/authentication.md#upstream-auth." },
       );
     }
     opts.logs.audit("credential.provider.configured", "success", {

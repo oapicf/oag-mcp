@@ -8,19 +8,21 @@ sequence from the moment the command starts to the moment it stops.
 
 Each step stays at the level of what happens and why. The detail lives in the
 pages linked from each step: [Architecture](architecture.md) for the
-components, [Security](security.md) for the sandbox,
-[Authentication](authentication.md) for callers and credentials, and
-[Logging](logging.md) for the records each step writes.
+components, [Security](security.md) for the protections,
+[Authentication](authentication.md) for callers and credentials,
+[Authorisation](authorisation.md) for permissions, and
+[Logging](logging.md) and the [log events reference](reference/log-events.md)
+for the records each step writes.
 
 Because preparation happens once, the inputs are fixed for the life of the
 process. After regenerating the SDK, editing the OpenAPI document or changing
-the configuration, restart oag-mcp.
+the configuration, restart OAG-MCP.
 
 ## Starting up
 
 ### 1. Read the command line and the configuration
 
-oag-mcp first checks the command line: `--spec` and `--sdk` are required,
+OAG-MCP first checks the command line: `--spec` and `--sdk` are required,
 values such as `--transport` must be one of the allowed choices, and
 `--port` must be in range. A mistake stops it here with a short message,
 before anything else happens. The [CLI reference](reference/cli.md) lists
@@ -32,39 +34,39 @@ silently ignored. Every problem in the file is reported at once. Without
 `--config`, the built-in defaults apply. The flags `--host`, `--port`,
 `--path` and the logging flags override the file.
 
-With the configuration known, oag-mcp opens its log destinations, stderr by
+With the configuration known, OAG-MCP opens its log destinations, stderr by
 default, and installs handlers for `SIGINT` and `SIGTERM`, so that from here
 on a stop request is handled cleanly, even during start-up. The first log
 record, `cli.command.started`, is written.
 
 ### 2. Read the OpenAPI document and the SDK
 
-oag-mcp loads the OpenAPI document, in YAML or JSON, and checks that it is a
+OAG-MCP loads the OpenAPI document, in YAML or JSON, and checks that it is a
 valid OpenAPI 3.0 or 3.1 document. Only references within the document are
-followed: oag-mcp does not fetch anything from the network to read it.
+followed: OAG-MCP does not fetch anything from the network to read it.
 
-It then finds the SDK. A folder is used where it is, and only read: oag-mcp
+It then finds the SDK. A folder is used where it is, and only read: OAG-MCP
 never writes to it, never installs packages into it and never runs its
 scripts. An `npm pack` archive is extracted into a private temporary folder,
-the *workspace*, which oag-mcp creates for this process and removes when it
+the *workspace*, which OAG-MCP creates for this process and removes when it
 stops.
 
 From here on, preparation runs as a series of stages, each logged with its
-duration (`prepare.stage.completed`). If any stage fails, oag-mcp logs which
+duration (`prepare.stage.completed`). If any stage fails, OAG-MCP logs which
 one, removes the workspace and exits with an [error code](reference/error-codes.md) and a hint: it never
 starts a partially working server. [Troubleshooting](troubleshooting.md)
 lists the common errors.
 
 ### 3. Check the SDK is compatible
 
-oag-mcp supports SDKs from OpenAPI Generator's typescript-fetch generator, so
+OAG-MCP supports SDKs from OpenAPI Generator's typescript-fetch generator, so
 it checks that the SDK is one: its runtime files, the generator version
 recorded in `.openapi-generator/VERSION`, the generator options it was made
 with, and its layout, TypeScript sources (`src/*.ts`) or a compiled package
 (`dist/*.js` with `.d.ts` declarations).
 
 It also checks that any runtime dependencies the SDK declares are already
-installed next to it. oag-mcp does not install them; if one is missing,
+installed next to it. OAG-MCP does not install them; if one is missing,
 start-up stops with `SDK_DEPENDENCIES_MISSING`, naming the packages to
 install (`npm install --omit=dev --ignore-scripts` in the SDK folder).
 
@@ -75,7 +77,7 @@ untested generator version or an unsupported option.
 
 ### 4. Prepare the SDK for the sandbox
 
-Agent code will run the real SDK, inside a sandbox, so oag-mcp prepares a
+Agent code will run the real SDK, inside a sandbox, so OAG-MCP prepares a
 copy the sandbox can load: one JavaScript bundle containing the SDK and
 everything it needs. Sources are compiled first; a compiled package is used
 as it is.
@@ -91,7 +93,7 @@ few seconds.
 
 ### 5. Index the SDK's methods
 
-oag-mcp now connects the two inputs. It reads each SDK method's generated
+OAG-MCP now connects the two inputs. It reads each SDK method's generated
 code to find the HTTP method and path it calls, and matches that to the
 operation in the OpenAPI document. A method's name is never assumed to equal
 the operation's `operationId`; an SDK method that matches no operation, or
@@ -104,19 +106,19 @@ records go into an in-memory full-text index.
 
 This index is what `search` answers from, and the binding ids it holds, such
 as `PetsApi.listPetVisits`, are what the agent calls and what
-[authorization rules](recipes/curated.md) select. The log record
+[authorisation rules](authorisation.md) select. The log record
 `prepare.index.created` gives the number of methods.
 
 ### 6. Set up credentials, policy and the sandbox
 
-oag-mcp resolves the upstream credentials configured for each security
+OAG-MCP resolves the upstream credentials configured for each security
 scheme, reading environment variables and the secrets file. A missing one
 stops start-up now, before any client connects, rather than failing on the
 first call. OAuth2 tokens are not requested yet: they are obtained when a
 call first needs one. See [Upstream credentials](recipes/upstream-credentials.md).
 
-It loads the authorization policy, which decides which operations each
-caller may use, and builds the *request broker*: the part of oag-mcp,
+It loads the authorisation policy, which decides which operations each
+caller may use, and builds the *request broker*: the part of OAG-MCP,
 outside the sandbox, through which every SDK request will pass. It then finds
 the Deno runtime that runs the sandbox, and starts it once with the prepared
 bundle to verify that every SDK method in the index is present.
@@ -128,7 +130,7 @@ start. Credentials themselves are never logged.
 
 ### 7. Open the transport
 
-oag-mcp registers its two tools, `search` and `execute`, whose descriptions
+OAG-MCP registers its two tools, `search` and `execute`, whose descriptions
 are computed once from the index. Then it starts the transport. With stdio,
 the default, it reads MCP messages from stdin and writes responses to stdout,
 which carries nothing else, not even logs.
@@ -139,14 +141,14 @@ default. On any other address it refuses to start unless MCP authentication
 front of it. See [Remote server](recipes/remote-server.md).
 
 The `server.ready` record marks the end of start-up, with its total duration;
-for HTTP, oag-mcp also prints `oag-mcp listening on <url>` to stderr. From
+for HTTP, OAG-MCP also prints `oag-mcp listening on <url>` to stderr. From
 now on it serves MCP clients.
 
 ## Serving a call
 
 ### 8. Identify the caller
 
-Every tool call has a caller, a *principal*, that authorization rules and
+Every tool call has a caller, a *principal*, that authorisation rules and
 audit records refer to. Over stdio, the caller is whoever started the
 process, named by `mcpAuth.stdio.principal`.
 
@@ -158,7 +160,7 @@ answered with `401`, `403` or `400` and never reaches the tools.
 Each check is audited (`authentication.succeeded`, `authentication.failed`,
 `transport.host_rejected`, …). The caller's token is used only to identify
 the caller: it is never passed on to the API. See
-[Authentication](authentication.md) and
+[Authentication](authentication.md), [Authorisation](authorisation.md) and
 [Per-caller permissions](recipes/per-caller-permissions.md).
 
 ### 9. Answer `search`
@@ -193,7 +195,7 @@ A detail result gives the agent what it needs to call the method correctly
 }
 ```
 
-Results are filtered by the caller's permissions: a method the caller may not
+Results are filtered by the caller's [permissions](authorisation.md): a method the caller may not
 call is not listed, and asking for it by id gets the same answer as for a
 method that does not exist.
 
@@ -214,7 +216,7 @@ return unvaccinated.map((p, i) => ({
 }));
 ```
 
-Before anything runs, oag-mcp records the request in the audit log, refusing
+Before anything runs, OAG-MCP records the request in the audit log, refusing
 it if fail-closed auditing is on and the audit log cannot be written. It then
 checks the code: within the size limit, free of imports, and valid
 TypeScript or JavaScript. TypeScript is also type-checked against the SDK's
@@ -231,13 +233,13 @@ can fix the code and try again.
 Each call gets a new sandbox: a separate Deno process with no permissions at
 all. It cannot read or write files, open network connections, read
 environment variables or start programs, and `eval` is disabled. It
-inherits none of oag-mcp's environment variables, and its memory is capped.
-See [Security](security.md).
+inherits none of OAG-MCP's environment variables, and its memory is capped.
+See [Security](security.md#execution-sandbox).
 
 Inside it, the agent's code runs against the real SDK from step 4, so request
 building, parameter serialisation and response parsing are the SDK's own. The
 one thing replaced is the SDK's `fetch`: instead of reaching the network, each
-request is handed to the request broker in oag-mcp.
+request is handed to the request broker in OAG-MCP.
 
 The sandbox is killed when the call ends, or when it reaches its time limit.
 The time, memory and other limits are in
@@ -247,7 +249,7 @@ The time, memory and other limits are in
 
 Every request the SDK makes arrives at the broker, outside the sandbox, tagged
 with the SDK method that made it. The broker first checks the caller may use
-that operation, under the authorization policy, and that the request matches
+that operation, under the [authorisation](authorisation.md) policy, and that the request matches
 the operation's method and path on the configured API. Anything else is
 refused and never sent.
 
@@ -295,7 +297,7 @@ are never logged.
 
 ### 14. Shut down cleanly
 
-oag-mcp stops on `SIGINT` or `SIGTERM`, or, over stdio, when the client closes
+OAG-MCP stops on `SIGINT` or `SIGTERM`, or, over stdio, when the client closes
 stdin. It stops the transport, flushes its logs, and removes the workspace
 with everything prepared in it.
 

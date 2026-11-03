@@ -171,7 +171,7 @@ in. Each event is in one of six OCSF classes, chosen by its event name:
 | Class | Used for |
 | --- | --- |
 | Authentication (3002) | Authenticating MCP callers (activity Logon), and the upstream OAuth2 tokens OAG-MCP obtains (Token Issue, Token Refresh, Token Invalidate). |
-| API Activity (6003) | The `execute` call (activity Execute), and the authorization decision for each SDK call (Create, Read, Update or Delete, from its HTTP method). |
+| API Activity (6003) | The `execute` call (activity Execute), and the authorisation decision for each SDK call (Create, Read, Update or Delete, from its HTTP method). |
 | HTTP Activity (4002) | Denied upstream destinations and redirects, and inbound requests rejected for their `Host` or `Origin` (activity from the HTTP method). |
 | Process Activity (1007) | The Deno sandbox process: denied capabilities, limits, timeouts and termination. |
 | Application Lifecycle (6002) | Security configuration applied at start-up (activity Configure), and start-up refused for security reasons (Start, with status Failure). |
@@ -273,7 +273,7 @@ This record is from the same stdio session, where a `read-only` rule denied
 | `finding_info` | What was detected. | object | Detection Finding | `{"title": "Agent code sent a forged bridge message", …}` |
 | `message_context` | The MCP tool call (AI Operation profile): session id, `tools/call <tool>`, and OAG-MCP in the Tool role. | object | Records from a tool call | `{"name": "tools/call execute", "ai_role": "Tool", …}` |
 | `action_id`, `action`, `disposition_id`, `disposition` | The decision (Security Control profile): Allowed, Denied, or Modified/Corrected when credentials the agent's code supplied were removed from an allowed request. | integer, string | Allow and deny decisions | `2`, `"Denied"`, `2`, `"Blocked"` |
-| `policy.uid` | The policy that decided: an `authorization` rule id, `default`, or `implicit-allow-all` with no `authorization` section. | string | Authorization decisions | `"read-only"` |
+| `policy.uid` | The policy that decided: an `authorization` rule id, `default`, or `implicit-allow-all` with no `authorization` section. | string | Authorisation decisions | `"read-only"` |
 | `unmapped` | Details OCSF has no attribute for, under their OAG-MCP names (camelCase), listed per event below. | object | When there are any | `{"limit": "maxSdkCalls", "value": 200}` |
 | `message` | The event name again. | string | Always | `"authorization.denied"` |
 
@@ -296,7 +296,7 @@ or `credential.lookup_failed`.
 | `upstream.token.refresh` | Authentication: Token Refresh | Informational | OAG-MCP replaced an expiring upstream token. | `expiresInSec`, `scopeCount` |
 | `upstream.token.refresh_failed` | Authentication: Token Refresh | Low | OAG-MCP could not replace an upstream token. | as `upstream.token.issue_failed` |
 | `upstream.token.invalidated` | Authentication: Token Invalidate | Informational | A cached upstream token was discarded after the API rejected it. | reason |
-| `authorization.policy_loaded` | Application Lifecycle: Configure | Informational | The authorization policy at start-up. | `policyMode` (`configured` or `implicit-allow-all`), `rules`, `default` |
+| `authorization.policy_loaded` | Application Lifecycle: Configure | Informational | The authorisation policy at start-up. | `policyMode` (`configured` or `implicit-allow-all`), `rules`, `default` |
 | `authorization.allowed` | API Activity: Create, Read, Update or Delete | Informational | An SDK call was allowed and sent, with credentials applied. | `rule_allow`, `default_allow`, `no_policy_configured`; `provider`, `schemes`, `unauthenticated`, `strippedCredentials` |
 | `authorization.denied` | API Activity: Create, Read, Update or Delete | Low | An SDK call was refused by the `authorization` policy. | `rule_deny`, `default_deny` |
 | `credential.provider.configured` | Application Lifecycle: Configure | Informational | Upstream credentials were resolved at start-up. | `provider`, `schemes`, `sharedIdentity` |

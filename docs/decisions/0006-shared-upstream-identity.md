@@ -16,7 +16,7 @@ provider.
 Version 1 uses one service identity: credentials configured for OAG-MCP
 (API keys, bearer tokens, basic authentication, OAuth2 client credentials)
 are used for every caller's calls. MCP callers are distinguished inside
-OAG-MCP, by authorization rules per operation and by audit records naming
+OAG-MCP, by authorisation rules per operation and by audit records naming
 them. The `CredentialProvider` interface receives the caller, so a per-caller
 provider can be added later.
 
@@ -24,7 +24,7 @@ provider can be added later.
 
 - No token store, consent flow or identity-provider integration is needed.
 - The API sees one identity: its own per-user permissions and audit do not
-  apply, so OAG-MCP's authorization rules and audit log carry that
+  apply, so OAG-MCP's authorisation rules and audit log carry that
   responsibility.
 - The shared identity is stated in the start-up audit record
   (`credential.provider.configured`, `sharedIdentity: true`).

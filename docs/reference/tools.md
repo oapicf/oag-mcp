@@ -24,7 +24,7 @@ Input validation error: Invalid arguments for tool execute: timeoutMs: Too small
 ```
 
 Both tools show and run only the methods the caller is allowed to call: the
-[authorization rules](configuration.md#authorization-patterns) filter
+[authorisation rules](configuration.md#authorisation-patterns) filter
 `search`, and the broker checks every SDK call `execute` makes.
 
 ## Annotations
@@ -214,7 +214,7 @@ The code can use:
 It cannot import modules, reach the network, files, environment variables or
 subprocesses, generate code from strings, or start workers. Each call runs in
 a new process, so nothing carries over from one call to the next.
-[Security](../security.md) describes the sandbox.
+[Security](../security.md#execution-sandbox) describes the sandbox.
 
 ### execute result
 
@@ -264,6 +264,15 @@ A failed call keeps the same shape, with `ok: false` and an `error`:
   "stats": { "durationMs": 71, "sdkCalls": 1 }
 }
 ```
+
+### Result values
+
+The returned value must be JSON-compatible. A `Date` becomes an ISO 8601
+string, and `undefined` properties are left out (`null` in arrays). `Map`,
+`Set`, `BigInt`, functions, symbols, typed arrays, `Blob`, a `Promise` (a
+missing `await`), `Error`, non-finite numbers and circular structures are
+refused with `unsupported_result` and a hint. Binary responses reach the code
+as `Blob`s, and must be converted before they are returned.
 
 The limits on each call are set in the `execution` section of the
 configuration: time, memory, code size, result size, console output and the

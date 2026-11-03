@@ -28,5 +28,5 @@ as one program and returns only its result.
 - Agents must write code, so OAG-MCP needs a sandbox
   ([ADR 2](0002-real-sdk-in-a-deno-sandbox.md)), type checking and
   structured errors that let an agent correct its code.
-- Authorization cannot be expressed as "which tools a caller sees"; it is
+- Authorisation cannot be expressed as "which tools a caller sees"; it is
   applied per SDK operation inside `execute` instead.

@@ -10,7 +10,7 @@ with [How it works](../how-it-works.md); to set it up for a situation, see the
 | --- | --- |
 | [MCP tools](tools.md) | The `search` and `execute` tools: their inputs, results and limits. |
 | [CLI](cli.md) | The `oag-mcp serve` command, every flag and the environment variables it reads. |
-| [Configuration](configuration.md) | Every property of the configuration file, how secrets are referenced, and the authorization patterns. |
+| [Configuration](configuration.md) | Every property of the configuration file, how secrets are referenced, and the authorisation patterns. |
 | [HTTP endpoints](http-endpoints.md) | The paths a Streamable HTTP server answers, the checks on each request, and the responses it refuses with. |
 | [Error codes](error-codes.md) | The codes OAG-MCP exits with when it cannot start, with the stage that raises each and how to fix it. |
 | [Error types](error-types.md) | The errors an `execute` call can return to the agent, and the reasons that narrow them down. |

@@ -297,7 +297,7 @@ export function parseConfig(raw: unknown, source = "config"): Config {
       "CONFIG_INVALID",
       `Invalid configuration in ${source}: ${issues}`,
       {
-        hint: "See docs/configuration.md. Secret values must be referenced with { env: NAME } or { secret: key }, never written inline.",
+        hint: "See docs/reference/configuration.md. Secret values must be referenced with { env: NAME } or { secret: key }, never written inline.",
       },
     );
   }

@@ -26,7 +26,7 @@ is recorded in an audit record naming the caller.
 These rules decide what each caller may ask for. They do not change who the
 API sees: OAG-MCP calls the API with one shared set of upstream credentials,
 whichever caller made the call (see
-[Authentication](../authentication.md#identity-model)).
+[Authentication](../authentication.md#one-identity-for-every-caller)).
 
 ## Who the callers are
 

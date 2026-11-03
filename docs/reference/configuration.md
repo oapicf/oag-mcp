@@ -184,7 +184,7 @@ used as a key, and `[]` marks the properties of each item in a list, so
 | `authorization.rules[].principals` | The rule applies only to these principals, by name or id; `*` wildcards allowed. | string[] | No | Any principal | `[ci-bot, "team-*"]` |
 | `authorization.rules[].scopes` | The rule applies only to callers holding all of these scopes. | string[] | No | Any scopes | `[pets:read]` |
 | `authorization.rules[].clientIds` | The rule applies only to callers with one of these OAuth client ids. | string[] | No | Any client | `[my-oauth-client]` |
-| `authorization.rules[].allow` | Operations the rule allows, as [patterns](#authorization-patterns): `PetsApi.listPets` or a glob such as `PetsApi.*`, `tag:<tag>`, `method:<METHOD>` or `operationId:<glob>`. | string[] | No | `[]` | `["method:GET"]`, `["PetsApi.*", "tag:owners"]` |
+| `authorization.rules[].allow` | Operations the rule allows, as [patterns](#authorisation-patterns): `PetsApi.listPets` or a glob such as `PetsApi.*`, `tag:<tag>`, `method:<METHOD>` or `operationId:<glob>`. | string[] | No | `[]` | `["method:GET"]`, `["PetsApi.*", "tag:owners"]` |
 | `authorization.rules[].deny` | Operations the rule denies, in the same patterns as `allow`. A deny from any applicable rule wins over every allow. | string[] | No | `[]` | `["AdminApi.*"]` |
 | `execution.timeoutMs` | Time limit for each `execute` call, in milliseconds, when the call doesn't set its own. | integer, at least 100 | No | `30000` | `60000` |
 | `execution.maxTimeoutMs` | The highest time limit an `execute` call may ask for, in milliseconds. | integer, at least 100 | No | `120000` | `300000` |
@@ -210,7 +210,7 @@ used as a key, and `[]` marks the properties of each item in a list, so
 | `logging.auditFile` | Where security audit (OCSF) records go: a file path or `fd:N`. stdout is refused. Overridden by `--audit-log-file`. | string | No | stderr | `/var/log/oag-mcp/audit.log`, `fd:4` |
 | `logging.auditFailClosed` | Refuse `execute` calls while security audit records cannot be written. `--audit-fail-closed` also turns it on. | boolean | No | `false` | `true` |
 
-## Authorization patterns
+## Authorisation patterns
 
 A rule's `allow` and `deny` lists select operations with these patterns:
 

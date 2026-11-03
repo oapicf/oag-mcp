@@ -48,7 +48,7 @@ schemes it needs. Here `GET /pets` takes `apiKeyHeader` or `bearerAuth`,
 | `oauth2` client credentials | see [Upstream OAuth2](upstream-oauth.md) | `Authorization: Bearer …`, with a token OAG-MCP obtains |
 
 Cookie API keys, other HTTP schemes and interactive OAuth2 flows are not
-supported; [Authentication](../authentication.md#upstream-api-authentication)
+supported; [Authentication](../authentication.md#upstream-auth)
 lists what is.
 
 ## Configuration
@@ -105,12 +105,12 @@ it straight away, before any MCP client connects:
 
 ```text
 Error [UPSTREAM_AUTH_CONFIG_INVALID]: Invalid upstreamAuth configuration: bearerAuth: Environment variable API_TOKEN (for bearerAuth.token) is not set
-Hint: See docs/authentication.md#upstream-api-authentication.
+Hint: See docs/authentication.md#upstream-auth.
 ```
 
 ```text
 Error [UPSTREAM_AUTH_CONFIG_INVALID]: Invalid upstreamAuth configuration: adminBasic: Secrets file /srv/oag-mcp/secrets.yaml is readable by group or others (mode 644)
-Hint: See docs/authentication.md#upstream-api-authentication.
+Hint: See docs/authentication.md#upstream-auth.
 ```
 
 A scheme name that is not in the OpenAPI document is refused the same way,

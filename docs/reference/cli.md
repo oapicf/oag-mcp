@@ -13,7 +13,7 @@ are only read, never modified, and OAG-MCP does not generate SDKs or install
 packages.
 
 Flags cover the inputs, the transport and logging. Everything else
-(upstream API credentials, MCP authentication, authorization rules, execution
+(upstream API credentials, MCP authentication, authorisation rules, execution
 limits) lives in the configuration file passed with `--config`; see the
 [configuration reference](configuration.md). Where both set the same
 thing, the flag wins: `--host`, `--port`, `--path` and the logging flags
@@ -122,7 +122,7 @@ Options:
 
 OAG-MCP reads only these from its environment. The sandbox that runs agent
 code gets none of them, only a few variables OAG-MCP sets for Deno itself
-(see [Security](../security.md)).
+(see [Security](../security.md#execution-sandbox)).
 
 | Name | Description | Mandatory | Default | Example |
 | --- | --- | --- | --- | --- |

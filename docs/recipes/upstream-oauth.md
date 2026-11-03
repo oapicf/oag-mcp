@@ -79,7 +79,7 @@ refuses to start:
 
 ```text
 Error [UPSTREAM_AUTH_CONFIG_INVALID]: Invalid upstreamAuth configuration: clinicOAuth: token URL http://auth.example.test is not HTTPS (set upstreamAuth.allowInsecureTokenUrl only for local testing)
-Hint: See docs/authentication.md#upstream-api-authentication.
+Hint: See docs/authentication.md#upstream-auth.
 ```
 
 An OAuth2 scheme can be combined with any of the schemes in
