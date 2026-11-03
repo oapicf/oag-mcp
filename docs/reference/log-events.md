@@ -334,7 +334,7 @@ or `credential.lookup_failed`.
 | `authentication.failed` | Authentication: Logon | Low | A caller was refused. | reasons such as `missing_token`, `invalid_token`, `expired`, `audience_mismatch`, `insufficient_scope`; `mode`, `validation` |
 | `authentication.token_in_url_rejected` | Authentication: Logon | Low | A request carried an access token in its URL query, which is refused. | None |
 | `upstream.token.issue` | Authentication: Token Issue | Informational | oag-mcp obtained an OAuth2 token for the upstream API. | `expiresInSec`, `scopeCount` |
-| `upstream.token.issue_failed` | Authentication: Token Issue | Low | oag-mcp could not obtain an upstream token. | `token_request_failed`, `token_endpoint_unreachable`; `status_code` |
+| `upstream.token.issue_failed` | Authentication: Token Issue | Low | oag-mcp could not obtain an upstream token. | `token_endpoint_error` (the endpoint refused; `status_code` is its HTTP status and `oauthError` its OAuth error code), `no_access_token`, `unsupported_token_type`, `token_endpoint_unreachable` |
 | `upstream.token.refresh` | Authentication: Token Refresh | Informational | oag-mcp replaced an expiring upstream token. | `expiresInSec`, `scopeCount` |
 | `upstream.token.refresh_failed` | Authentication: Token Refresh | Low | oag-mcp could not replace an upstream token. | as `upstream.token.issue_failed` |
 | `upstream.token.invalidated` | Authentication: Token Invalidate | Informational | A cached upstream token was discarded after the API rejected it. | reason |

@@ -53,7 +53,8 @@ decides whether a retry is safe:
 
 These are the errors of the `execute` tool. Start-up failures (an invalid
 configuration file, an incompatible SDK) are not among them: they stop
-`oag-mcp serve` with an error code and hint on stderr. MCP protocol errors,
+`oag-mcp serve` with one of the [error codes](error-codes.md) and a hint on
+stderr. MCP protocol errors,
 such as invalid tool arguments or an HTTP 401 from `mcpAuth`, are reported by
 the MCP transport, not as an execution error.
 
