@@ -1,0 +1,25 @@
+# Example configuration for the Execution limits recipe
+# (docs/recipes/execution-limits.md), for the Pet Clinic fixture
+# (test/fixtures/petclinic/openapi.yaml). Limits for a shared server with many
+# callers and short tasks; the recipe also has a profile for long-running
+# jobs.
+# Secrets are referenced, never inlined:
+#   export API_KEY=...
+#   oag-mcp serve --spec test/fixtures/petclinic/openapi.yaml \
+#     --sdk test/fixtures/petclinic/sdk-7.26.0 --transport stdio \
+#     --config examples/oag-mcp-execution-limits.config.yaml
+upstreamAuth:
+  schemes:
+    apiKeyHeader:
+      apiKey: { env: API_KEY }
+
+execution:
+  timeoutMs: 15000
+  maxTimeoutMs: 30000
+  memoryMb: 128
+  maxConcurrent: 8          # 8 × 128 MB of heap
+  maxQueue: 32
+  maxSdkCalls: 50
+  maxResultBytes: 32768     # 32 KiB
+upstream:
+  timeoutMs: 5000

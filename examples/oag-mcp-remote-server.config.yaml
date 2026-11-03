@@ -1,0 +1,27 @@
+# Example configuration for the Remote server recipe (docs/recipes/remote-
+# server.md), for the Pet Clinic fixture
+# (test/fixtures/petclinic/openapi.yaml). Streamable HTTP for remote clients,
+# behind a TLS-terminating proxy at https://mcp.example.com.
+# Secrets are referenced, never inlined:
+#   export API_KEY=... MCP_TOKEN=...
+#   oag-mcp serve --spec test/fixtures/petclinic/openapi.yaml \
+#     --sdk test/fixtures/petclinic/sdk-7.26.0 --transport streamable-http \
+#     --config examples/oag-mcp-remote-server.config.yaml
+upstreamAuth:
+  schemes:
+    apiKeyHeader:
+      apiKey: { env: API_KEY }
+
+mcpAuth:
+  mode: static-bearer
+  staticBearer:
+    tokens:
+      - principal: team-agent
+        token: { env: MCP_TOKEN }
+
+http:
+  host: 0.0.0.0                          # or pass --host
+  port: 3000
+  publicUrl: https://mcp.example.com/mcp # what clients connect to
+  allowedHosts: [mcp.example.com]        # the Host header clients send through the proxy
+  allowedOrigins: [https://app.example.com]   # only if a browser-based client calls it

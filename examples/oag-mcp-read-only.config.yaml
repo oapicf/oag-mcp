@@ -1,0 +1,21 @@
+# Example configuration for the Read-only server recipe (docs/recipes/read-
+# only.md), for the Pet Clinic fixture (test/fixtures/petclinic/openapi.yaml).
+# The agent may call every GET operation, and nothing else.
+# Secrets are referenced, never inlined:
+#   export API_KEY=...
+#   oag-mcp serve --spec test/fixtures/petclinic/openapi.yaml \
+#     --sdk test/fixtures/petclinic/sdk-7.26.0 --transport stdio \
+#     --config examples/oag-mcp-read-only.config.yaml
+upstream:
+  baseUrl: https://api.example.com/v1   # optional: defaults to the OpenAPI document's first server
+
+upstreamAuth:
+  schemes:
+    apiKeyHeader:                       # a security scheme name from your OpenAPI document
+      apiKey: { env: API_KEY }          # read from the API_KEY environment variable
+
+authorization:
+  default: deny                         # anything no rule allows is refused
+  rules:
+    - id: read-only
+      allow: ["method:GET"]             # allow every GET operation

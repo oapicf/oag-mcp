@@ -73,6 +73,8 @@ upstreamAuth:
       password: { secret: admin_password }   # from the secrets file
 ```
 
+The same configuration is in [`examples/oag-mcp-upstream-credentials.config.yaml`](../../examples/oag-mcp-upstream-credentials.config.yaml).
+
 A credential can come from two places:
 
 - `{ env: NAME }`: the environment variable `NAME` of the OAG-MCP process.

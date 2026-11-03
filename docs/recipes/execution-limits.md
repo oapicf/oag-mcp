@@ -90,6 +90,9 @@ upstream:
   timeoutMs: 5000
 ```
 
+The same settings, with credentials for the Pet Clinic fixture, are in
+[`examples/oag-mcp-execution-limits.config.yaml`](../../examples/oag-mcp-execution-limits.config.yaml).
+
 ## What the agent and the logs show
 
 The examples below come from OAG-MCP with deliberately small limits, so that

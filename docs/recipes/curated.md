@@ -89,6 +89,8 @@ authorization:
         - "PetsApi.listLegacyPets"      # except this one
 ```
 
+The same configuration is in [`examples/oag-mcp-curated.config.yaml`](../../examples/oag-mcp-curated.config.yaml).
+
 - `allow` lists what the rule allows; an operation needs to match only one
   pattern.
 - `deny` carves operations out of the set. A `deny` wins over every `allow`,

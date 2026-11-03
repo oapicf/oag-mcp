@@ -1,0 +1,38 @@
+# Example configuration for the Per-caller permissions recipe
+# (docs/recipes/per-caller-permissions.md), for the Pet Clinic fixture
+# (test/fixtures/petclinic/openapi.yaml). Two static bearer tokens, each with
+# its own scopes, and rules that give each its operations. The recipe also
+# shows the same rules with OAuth.
+# Secrets are referenced, never inlined:
+#   export API_KEY=... SUPPORT_BOT_TOKEN=... CLINIC_OPS_TOKEN=...
+#   oag-mcp serve --spec test/fixtures/petclinic/openapi.yaml \
+#     --sdk test/fixtures/petclinic/sdk-7.26.0 --transport streamable-http \
+#     --config examples/oag-mcp-per-caller-permissions.config.yaml
+upstreamAuth:
+  schemes:
+    apiKeyHeader:                       # a security scheme name from your OpenAPI document
+      apiKey: { env: API_KEY }
+
+mcpAuth:
+  mode: static-bearer
+  staticBearer:
+    tokens:
+      - principal: support-bot
+        token: { env: SUPPORT_BOT_TOKEN }
+        scopes: [pets:read]
+      - principal: clinic-ops
+        token: { env: CLINIC_OPS_TOKEN }
+        scopes: [pets:read, pets:write]
+
+authorization:
+  default: deny
+  rules:
+    - id: pet-readers                   # every caller holding pets:read
+      scopes: [pets:read]
+      allow: ["PetsApi.list*", "PetsApi.get*", "OwnersApi.*"]
+    - id: pet-writers                   # every caller holding pets:write
+      scopes: [pets:write]
+      allow: ["PetsApi.createPet"]
+    - id: inventory                     # one caller, by name
+      principals: [clinic-ops]
+      allow: ["tag:store"]

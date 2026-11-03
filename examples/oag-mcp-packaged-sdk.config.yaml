@@ -1,0 +1,22 @@
+# Example configuration for the Packaged SDK recipe (docs/recipes/packaged-
+# sdk.md), for the Pet Clinic fixture (test/fixtures/petclinic/openapi.yaml).
+# The recipe is about the --sdk archive; this configuration is what serves it
+# read-only.
+# Secrets are referenced, never inlined:
+#   export API_KEY=...
+#   oag-mcp serve --spec test/fixtures/petclinic/openapi.yaml \
+#     --sdk test/fixtures/petclinic/petclinic-sdk-1.2.0.tgz --transport stdio \
+#     --config examples/oag-mcp-packaged-sdk.config.yaml
+upstream:
+  baseUrl: https://api.example.com/v1
+
+upstreamAuth:
+  schemes:
+    apiKeyHeader:
+      apiKey: { env: API_KEY }
+
+authorization:
+  default: deny
+  rules:
+    - id: read-only
+      allow: ["method:GET"]

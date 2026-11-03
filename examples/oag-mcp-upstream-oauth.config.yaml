@@ -1,0 +1,19 @@
+# Example configuration for the Upstream OAuth2 recipe (docs/recipes/upstream-
+# oauth.md), for the Pet Clinic fixture
+# (test/fixtures/petclinic/openapi.yaml). OAG-MCP obtains OAuth2 client
+# credentials tokens for the clinicOAuth scheme itself.
+# Secrets are referenced, never inlined:
+#   export CLIENT_ID=... CLIENT_SECRET=...
+#   oag-mcp serve --spec test/fixtures/petclinic/openapi.yaml \
+#     --sdk test/fixtures/petclinic/sdk-7.26.0 --transport stdio \
+#     --config examples/oag-mcp-upstream-oauth.config.yaml
+upstreamAuth:
+  schemes:
+    clinicOAuth:                        # the scheme name from your OpenAPI document
+      clientId: { env: CLIENT_ID }
+      clientSecret: { env: CLIENT_SECRET }
+      # optional:
+      tokenUrl: https://auth.example.com/oauth/token   # default: the scheme's tokenUrl
+      scopes: [pets:read, pets:write]   # default: the scopes of the operation being called
+      audience: https://api.example.com # added to the token request, for servers that need it
+      clientAuthMethod: client_secret_basic   # or client_secret_post

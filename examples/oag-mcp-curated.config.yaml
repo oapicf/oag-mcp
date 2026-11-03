@@ -1,0 +1,27 @@
+# Example configuration for the Curated operations recipe
+# (docs/recipes/curated.md), for the Pet Clinic fixture
+# (test/fixtures/petclinic/openapi.yaml). The agent may call only the pets and
+# owners operations and one store method.
+# Secrets are referenced, never inlined:
+#   export API_KEY=...
+#   oag-mcp serve --spec test/fixtures/petclinic/openapi.yaml \
+#     --sdk test/fixtures/petclinic/sdk-7.26.0 --transport stdio \
+#     --config examples/oag-mcp-curated.config.yaml
+upstream:
+  baseUrl: https://api.example.com/v1   # optional: defaults to the OpenAPI document's first server
+
+upstreamAuth:
+  schemes:
+    apiKeyHeader:                       # a security scheme name from your OpenAPI document
+      apiKey: { env: API_KEY }          # read from the API_KEY environment variable
+
+authorization:
+  default: deny                         # anything no rule allows is refused
+  rules:
+    - id: pet-support
+      allow:
+        - "tag:pets"                    # every operation tagged pets
+        - "tag:owners"                  # every operation tagged owners
+        - "StoreApi.getStoreInventory"  # one store method, by binding id
+      deny:
+        - "PetsApi.listLegacyPets"      # except this one

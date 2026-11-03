@@ -1,0 +1,19 @@
+# Example configuration for the Audit logging recipe (docs/recipes/audit-
+# logging.md), for the Pet Clinic fixture
+# (test/fixtures/petclinic/openapi.yaml). Security audit records go to their
+# own file, and execute stops if they cannot be written.
+# Secrets are referenced, never inlined:
+#   export API_KEY=...
+#   oag-mcp serve --spec test/fixtures/petclinic/openapi.yaml \
+#     --sdk test/fixtures/petclinic/sdk-7.26.0 --transport stdio \
+#     --config examples/oag-mcp-audit-logging.config.yaml
+upstreamAuth:
+  schemes:
+    apiKeyHeader:
+      apiKey: { env: API_KEY }
+
+logging:
+  auditFile: /var/log/oag-mcp/audit.log
+  auditFailClosed: true
+  file: /var/log/oag-mcp/operational.log
+  level: warn

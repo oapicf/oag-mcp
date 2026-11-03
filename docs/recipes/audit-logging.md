@@ -39,6 +39,9 @@ logging:
   level: warn
 ```
 
+The same settings, with credentials for the Pet Clinic fixture, are in
+[`examples/oag-mcp-audit-logging.config.yaml`](../../examples/oag-mcp-audit-logging.config.yaml).
+
 Files are opened for appending, created with `0600` permissions, and written
 synchronously, one JSON object per line. A relative path is resolved from the
 working directory, not from the configuration file.
