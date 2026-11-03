@@ -29,7 +29,7 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "oag-mcp": "./bin/oag-mcp.js"
+    "oag-mcp": "bin/oag-mcp.js"
   },
   "files": [
     "assets",
@@ -45,7 +45,7 @@
   "preferGlobal": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/oapicf/oag-mcp.git"
+    "url": "git+https://github.com/oapicf/oag-mcp.git"
   },
   "bugs": {
     "url": "https://github.com/oapicf/oag-mcp/issues"
