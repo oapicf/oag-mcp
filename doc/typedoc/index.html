@@ -56,7 +56,7 @@ agent's context.</li>
 
 <h2 id="requirements" class="tsd-anchor-link">Requirements<a href="#requirements" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
 <ul>
-<li>Node.js 22+ - For running oag-mcp command.</li>
+<li>Node.js 22+ - For running the <code>oag-mcp</code> command.</li>
 <li>Deno 2.x - Installed automatically through the <code>deno</code> npm dependency; or set <code>OAG_MCP_DENO_PATH</code> / put <code>deno</code> on <code>PATH</code>.</li>
 <li>OpenAPI specification</li>
 <li>An SDK generated with <a href="https://openapi-generator.tech">OpenAPI Generator</a>'s <code>typescript-fetch</code>.</li>
@@ -77,7 +77,7 @@ Docker image:</p>
 <p>On start-up OAG-MCP checks that the SDK is compatible, prepares it for the
 sandbox and indexes its methods — typically in one to three seconds — and
 only then accepts MCP requests. If anything cannot be prepared, it exits with
-<a href="docs/reference/error-codes.md">an error code</a> and a hint explaining what to fix, rather than starting a
+<a href="media/error-codes.md">an error code</a> and a hint explaining what to fix, rather than starting a
 partially working server.</p>
 <p>Example MCP client entry (stdio):</p>
 <pre><code class="json"><span class="hl-1">{</span><br/><span class="hl-1">  </span><span class="hl-8">&quot;mcpServers&quot;</span><span class="hl-1">: {</span><br/><span class="hl-1">    </span><span class="hl-8">&quot;petstore&quot;</span><span class="hl-1">: {</span><br/><span class="hl-1">      </span><span class="hl-8">&quot;command&quot;</span><span class="hl-1">: </span><span class="hl-2">&quot;oag-mcp&quot;</span><span class="hl-1">,</span><br/><span class="hl-1">      </span><span class="hl-8">&quot;args&quot;</span><span class="hl-1">: [</span><br/><span class="hl-1">        </span><span class="hl-2">&quot;serve&quot;</span><span class="hl-1">, </span><span class="hl-2">&quot;--spec&quot;</span><span class="hl-1">, </span><span class="hl-2">&quot;/path/to/openapi.yaml&quot;</span><span class="hl-1">, </span><span class="hl-2">&quot;--sdk&quot;</span><span class="hl-1">, </span><span class="hl-2">&quot;/path/to/generated-sdk&quot;</span><span class="hl-1">,</span><br/><span class="hl-1">        </span><span class="hl-2">&quot;--transport&quot;</span><span class="hl-1">, </span><span class="hl-2">&quot;stdio&quot;</span><span class="hl-1">, </span><span class="hl-2">&quot;--config&quot;</span><span class="hl-1">, </span><span class="hl-2">&quot;/path/to/oag-mcp.config.yaml&quot;</span><br/><span class="hl-1">      ],</span><br/><span class="hl-1">      </span><span class="hl-8">&quot;env&quot;</span><span class="hl-1">: { </span><span class="hl-8">&quot;PETSTORE_API_KEY&quot;</span><span class="hl-1">: </span><span class="hl-2">&quot;…&quot;</span><span class="hl-1"> }</span><br/><span class="hl-1">    }</span><br/><span class="hl-1">  }</span><br/><span class="hl-1">}</span>
@@ -96,23 +96,47 @@ partially working server.</p>
 secrets file. They are never accepted as CLI arguments and never written to
 the method index, the prepared SDK bundle, logs or anything agent code can
 read. See <a href="media/authentication.md">authentication</a> for MCP access control
-(<code>mcpAuth</code>), upstream credentials (<code>upstreamAuth</code>) and per-operation
-<code>authorization</code>, and the <a href="media/configuration.md">configuration reference</a>
+(<code>mcpAuth</code>) and upstream credentials (<code>upstreamAuth</code>),
+<a href="media/authorisation.md">authorisation</a> for per-operation permissions, and the <a href="media/configuration.md">configuration reference</a>
 for every option.</p>
 <h2 id="learn-more" class="tsd-anchor-link">Learn more<a href="#learn-more" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
 <ul>
 <li><a href="media/how-it-works.md">How it works</a> — what happens, step by step, from start-up to each tool call</li>
-<li><a href="media/README.md">Recipes</a> — set-ups for common situations: read-only, curated, per-caller, remote, audit logging and more</li>
-<li><a href="docs/troubleshooting.md">Troubleshooting</a> — why oag-mcp does not start, a client cannot connect, or a call failed</li>
-<li>Reference — <a href="media/cli.md">CLI</a>, <a href="media/configuration.md">configuration</a>, <a href="docs/reference/error-codes.md">error codes</a>, <a href="media/error-types.md">error types</a>, <a href="media/log-events.md">log events</a></li>
-<li><a href="media/architecture.md">Architecture</a> — components, start-up preparation, execution model, design choices</li>
 <li><a href="media/sdk-compatibility.md">SDK compatibility</a> — supported versions, options, package layouts, dependencies</li>
-<li><a href="media/configuration-1.md">Configuration guide</a> — the configuration file and secrets</li>
-<li><a href="media/authentication.md">Authentication and authorization</a> — <code>mcpAuth</code>, <code>upstreamAuth</code>, permissions</li>
-<li><a href="media/security.md">Execution sandbox and limits</a> — what is and is not isolated</li>
+<li><a href="media/architecture.md">Architecture</a> — components, start-up preparation, execution model, design choices</li>
+<li><a href="media/README.md">Decision records</a> — why OAG-MCP is built the way it is</li>
+<li><a href="media/security.md">Security</a> — OAG-MCP's security features, and what is not claimed</li>
+<li><a href="media/authentication.md">Authentication</a> — who may call OAG-MCP (<code>mcpAuth</code>), and how it calls your API (<code>upstreamAuth</code>)</li>
+<li><a href="media/authorisation.md">Authorisation</a> — what each caller may do (<code>authorization</code>)</li>
 <li><a href="media/logging.md">Logging</a> — operational records (OpenTelemetry) and security audit records (OCSF)</li>
-<li><a href="media/deployment.md">Deployment</a></li>
-<li><a href="media/testing.md">Testing</a></li>
+<li><a href="media/deployment.md">Deployment</a> — running OAG-MCP as a server, in a container and in production</li>
+<li><a href="media/troubleshooting.md">Troubleshooting</a> — why OAG-MCP does not start, a client cannot connect, or a call failed</li>
+<li><a href="media/testing.md">Testing</a> — lint checks, unit and integration tests, and extra checks</li>
+<li><a href="media/releasing.md">Releasing</a> — for maintainers: packaging and publishing OAG-MCP</li>
+<li><a href="media/README-1.md">Recipes</a> — set-ups for common situations, from configuration to logs:
+<ul>
+<li><a href="media/read-only.md">Read-only server</a> — try OAG-MCP safely, reading but not changing anything</li>
+<li><a href="media/upstream-credentials.md">Upstream credentials</a> — API keys, bearer tokens and basic authentication</li>
+<li><a href="media/upstream-oauth.md">Upstream OAuth2</a> — OAuth2 client credentials tokens</li>
+<li><a href="media/curated.md">Curated operations</a> — expose only some of an API</li>
+<li><a href="media/per-caller-permissions.md">Per-caller permissions</a> — give each caller its own operations</li>
+<li><a href="media/execution-limits.md">Execution limits</a> — tune time, memory, result and API-call limits</li>
+<li><a href="media/remote-server.md">Remote server</a> — serve remote MCP clients over HTTPS</li>
+<li><a href="media/packaged-sdk.md">Packaged SDK</a> — deploy the SDK as a versioned archive</li>
+<li><a href="media/audit-logging.md">Audit logging</a> — keep security audit records in a file, a log shipper or a SIEM</li>
+</ul>
+</li>
+<li><a href="media/README-2.md">Reference</a> — everything OAG-MCP accepts and produces:
+<ul>
+<li><a href="media/tools.md">MCP tools</a> — the <code>search</code> and <code>execute</code> tools</li>
+<li><a href="media/cli.md">CLI</a> — the <code>serve</code> command, its flags and environment variables</li>
+<li><a href="media/configuration.md">Configuration</a> — every configuration property</li>
+<li><a href="media/http-endpoints.md">HTTP endpoints</a> — paths, request checks and responses</li>
+<li><a href="media/error-codes.md">Error codes</a> — why OAG-MCP did not start</li>
+<li><a href="media/error-types.md">Error types</a> — errors <code>execute</code> returns to the agent</li>
+<li><a href="media/log-events.md">Log events</a> — every operational and security audit record</li>
+</ul>
+</li>
 </ul>
 <h2 id="colophon" class="tsd-anchor-link">Colophon<a href="#colophon" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
 <!-- BEGIN:DEVELOPERS_GUIDE -->

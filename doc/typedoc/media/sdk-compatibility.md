@@ -1,6 +1,6 @@
 # SDK compatibility
 
-oag-mcp supports **only** SDKs produced by the OpenAPI Generator
+OAG-MCP supports **only** SDKs produced by the OpenAPI Generator
 **typescript-fetch** target. Other OpenAPI Generator targets (typescript-axios,
 typescript-node, typescript-angular, typescript, …) and hand-written TypeScript
 SDKs are rejected with `SDK_GENERATOR_UNSUPPORTED` or
@@ -28,18 +28,13 @@ docker run --rm -v "$PWD":/local openapitools/openapi-generator-cli:v7.26.0 \
   --output /local/generated-sdk
 ```
 
-Generator options go in `--additional-properties` (e.g.
-`--additional-properties=npmName=petstore-sdk,npmVersion=1.0.0`, recommended
-so the SDK is a complete npm package). To turn the generated directory into
-an archive, run `npm install && npm pack` in it (see
-[Package archive](#package-archive---sdk-sdk-100tgz)).
+Generator options go in `--additional-properties`; pass at least
+`npmName` and `npmVersion` so the SDK is a complete npm package. Docker is
+needed only to generate the SDK, not to run OAG-MCP.
 
-The `gen-sdk` target in [`Makefile-extras`](../Makefile-extras) is an example
-of generating and packing in a Makefile:
-`make -f Makefile-extras gen-sdk SPEC=path/to/openapi.yaml [SDK_NAME=…]
-[SDK_VERSION=…]` writes `stage/generated-sdk/` and
-`stage/<SDK_NAME>-<SDK_VERSION>.tgz`. Docker is only needed for generation
-and npm for packing; neither is needed to run oag-mcp.
+The [packaged SDK recipe](recipes/packaged-sdk.md) goes on to pack the SDK
+as a versioned archive and serve it, and [Testing](testing.md#sdk-compatibility)
+shows the `gen-sdk` target that does both in one step.
 
 ## Generator options
 
@@ -93,12 +88,9 @@ SDKs generated without `npmName` (files at the root: `index.ts`,
 
 ### Package archive (`--sdk ./sdk-1.0.0.tgz`)
 
-An `npm pack` archive. Before extraction every entry is checked: absolute
-paths, `..` segments, symbolic/hard links, devices and FIFOs are rejected,
-the archive must have one top-level directory, and entry count (20 000) and
-uncompressed size (256 MiB) are bounded. After extraction every path is
-verified to resolve inside the private workspace, which is removed when the
-server stops.
+An `npm pack` archive, with one top-level directory. It is checked before
+it is extracted into the private workspace, and nothing in it can land
+outside; see [Security](security.md#safe-start-up).
 
 To create one from a generated SDK (generated with `npmName`/`npmVersion`, so
 it has a `package.json`):
@@ -110,7 +102,7 @@ npm pack      # runs the SDK's prepare/build script, then writes <name>-<version
 ```
 
 `npm pack` always runs the SDK's `prepare` script (`tsc`), so the archive
-contains both `src/` and the compiled `dist/`. oag-mcp serves the sources by
+contains both `src/` and the compiled `dist/`. OAG-MCP serves the sources by
 default; use `--sdk-layout compiled` to serve the compiled JavaScript.
 
 ### Source versus compiled packages
@@ -118,11 +110,11 @@ default; use `--sdk-layout compiled` to serve the compiled JavaScript.
 | | Source layout | Compiled layout |
 | --- | --- | --- |
 | What is read | `src/**/*.ts` | `dist/**/*.js` (or `dist/esm/`) and `dist/**/*.d.ts` |
-| Declarations | emitted by oag-mcp's pinned TypeScript into the workspace | copied into the workspace |
+| Declarations | emitted by OAG-MCP's pinned TypeScript into the workspace | copied into the workspace |
 | Execution bundle | esbuild compiles and bundles the sources | esbuild bundles the compiled JavaScript (CommonJS gets an ESM shim) |
 | Your build tooling | not needed | not run — the package must already contain `dist/` |
 
-oag-mcp never runs the SDK's own `build`/`prepare` scripts, `tsc` from the
+OAG-MCP never runs the SDK's own `build`/`prepare` scripts, `tsc` from the
 SDK, or any package lifecycle script. A package that ships neither sources
 nor compiled output is rejected with `SDK_LAYOUT_UNSUPPORTED`.
 
@@ -140,32 +132,29 @@ cd ./generated-sdk && npm install --omit=dev --ignore-scripts
 ```
 
 For an archive, extract it, install dependencies in the extracted
-`package/` directory, and pass that directory to `--sdk`. oag-mcp never
+`package/` directory, and pass that directory to `--sdk`. OAG-MCP never
 installs packages and never writes to the SDK; dependencies are bundled into
 the workspace's `sdk/sdk.bundle.js` and must not need Node.js built-ins,
 filesystem or network access at import time.
 
 ## How methods are mapped
 
-oag-mcp never assumes `operationId` equals the generated method name
+OAG-MCP never assumes `operationId` equals the generated method name
 (`list-pet-visits` becomes `listPetVisits`; operations without an
 operationId become e.g. `healthGet`). For every public method of every class
 extending `BaseAPI`, the HTTP method and path template are read from the
-generated `<method>RequestOpts` (7.x) or `<method>Raw` (older output) and
-matched to the spec by `METHOD + path`. Start-up errors:
-
-| Code | Meaning |
-| --- | --- |
-| `SDK_BINDING_AMBIGUOUS` | a method's HTTP binding could not be determined (modified SDK?) |
-| `SDK_SPEC_MISMATCH` | a method matches no operation, or several |
-| `SDK_NO_METHODS` | nothing could be bound |
+generated `<method>RequestOpts`, and matched to the spec by `METHOD + path`.
+If a method's HTTP call cannot be worked out (in a modified SDK, for
+example), or it matches no operation or several, start-up stops with
+`SDK_BINDING_AMBIGUOUS`, `SDK_SPEC_MISMATCH` or `SDK_NO_METHODS`; see the
+[error codes reference](reference/error-codes.md).
 
 Spec operations without an SDK method (e.g. excluded via
 `.openapi-generator-ignore`) are logged as `prepare.warning` records and are
 not offered by `search`.
 
 Bindings are fixed for the lifetime of the process. After regenerating the
-SDK or editing the spec, restart oag-mcp.
+SDK or editing the spec, restart OAG-MCP.
 
 ## Dates
 

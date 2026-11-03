@@ -1,63 +1,21 @@
 # Log events reference
 
-oag-mcp writes two kinds of log record, each in an open standard so that
-standard tooling can ingest it without custom parsing:
+This page lists every log record OAG-MCP writes: the fields each kind of
+record has, and every event, with its level or severity and the details it
+carries. [Logging](../logging.md) explains how logging works: where records
+go, levels and formats, redaction, following a request, and what happens when
+a destination fails.
+
+There are two kinds of record:
 
 - **Operational logs**, as [OpenTelemetry](https://opentelemetry.io/) log
-  records: start-up, transports, tool calls, upstream API calls, timings and
-  failures. Filtered by the operational log level.
-- **Security audit logs**, as [OCSF](https://ocsf.io/) (Open Cybersecurity
-  Schema Framework) events: authentication, authorization decisions,
-  credential use, security configuration and enforced limits. Always written,
-  whatever the log level, and never sampled.
+  records, filtered by the operational log level.
+- **Security audit logs**, as [OCSF](https://ocsf.io/) 1.9.0 events, always
+  written.
 
-Every record is one JSON object on one line, and has a stable event name:
+Every record is one JSON object on one line, with a stable event name:
 `EventName` in operational records, `metadata.event_code` in audit records.
-The tables below list every event.
-
-**With no log flags or `logging` configuration, both kinds go to stderr**, as
-JSON, interleaved in one stream, with operational records at level `info`
-and above. stdout is never used: with the stdio transport it carries only MCP
-protocol messages, so `stdout` and `fd:1` are refused as log destinations.
-To change that:
-
-| Setting | Flag | Configuration | Default |
-| --- | --- | --- | --- |
-| Operational destination: a file path or `fd:N` | `--log-file` | `logging.file` | stderr |
-| Audit destination: a file path or `fd:N` | `--audit-log-file` | `logging.auditFile` | stderr |
-| Operational level (`silent` turns operational records off; audit records continue) | `--log-level` | `logging.level` | `info` |
-| `json`, or `pretty` for local development (stderr only; files are always JSON) | `--log-format` | `logging.format` | `json` |
-| Refuse `execute` calls while audit records cannot be written | `--audit-fail-closed` | `logging.auditFailClosed` | off |
-
-Files are opened for appending with `0600` permissions, and written
-synchronously, so a failing destination is noticed at once. When both kinds
-share a stream, tell them apart by shape, not by level or text: audit records
-have `class_uid`, operational records have `SeverityNumber`.
-
-```bash
-oag-mcp serve --spec openapi.yaml --sdk ./sdk 2>oag-mcp.log
-jq 'select(.SeverityNumber)' oag-mcp.log     # operational
-jq 'select(.class_uid)' oag-mcp.log          # security audit
-```
-
-The `pretty` format prints one line per record, with an operational record's
-attributes below it:
-
-```text
-[00:11:16.578] INFORMATIONAL: [security_audit] authorization.allowed API Activity: Read Allowed (default_allow)
-[00:11:16.596] INFO: [operational] upstream.call.completed success
-    Attributes: {
-      "oag_mcp.operation": "PetsApi.listPets",
-      …
-    }
-[00:11:16.664] LOW: [security_audit] authorization.denied API Activity: Delete Denied (rule_deny)
-```
-
-Neither kind ever contains credentials, agent code, search queries, request
-or response bodies, or execution results: only identifiers, operation names,
-policy ids, reason codes, sizes and durations. URLs appear as a path template,
-without the query. [Logging](../logging.md) covers redaction, shipping logs to
-an OpenTelemetry Collector or a SIEM, and audit destination failures.
+Audit records have `class_uid`; operational records have `SeverityNumber`.
 
 ## Operational logs
 
@@ -119,10 +77,10 @@ they are written `.Resource["service.name"]` and
 | `SeverityText` | The level: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR` or `FATAL`. | string | Always | `"INFO"` |
 | `SeverityNumber` | The level as an OpenTelemetry severity number: 1, 5, 9, 13, 17 or 21. | integer | Always | `9` |
 | `Resource["service.name"]` | The service: always `oag-mcp`. | string | Always | `"oag-mcp"` |
-| `Resource["service.version"]` | The oag-mcp version. | string | Always | `"0.9.0-pre.0"` |
+| `Resource["service.version"]` | The OAG-MCP version. | string | Always | `"0.9.0-pre.0"` |
 | `Resource["service.instance.id"]` | A random id for this server process, the same as `metadata.reporter.uid` in its audit records. | string | Always, except in `logging.destination_failed` | `"inst_d1d08f0e-…"` |
 | `InstrumentationScope.Name` | Always `oag-mcp.operational`. | string | Always | `"oag-mcp.operational"` |
-| `InstrumentationScope.Version` | The oag-mcp version. | string | Always | `"0.9.0-pre.0"` |
+| `InstrumentationScope.Version` | The OAG-MCP version. | string | Always | `"0.9.0-pre.0"` |
 | `EventName` | The event name, from [Operational events](#operational-events). | string | Always | `"upstream.call.completed"` |
 | `Body` | The event name again. | string | Always | `"upstream.call.completed"` |
 | `Attributes` | The event's details: the context attributes below, then the event's own. | object | Always | `{"oag_mcp.outcome": "success"}` |
@@ -142,7 +100,7 @@ and client.
 | `network.protocol.name` | `http`, with Streamable HTTP. | string | Streamable HTTP | `"http"` |
 | `enduser.id` | The authenticated MCP caller: `local:<principal>` for stdio, `static:<principal>` for a static bearer token, `oauth:<hash>` for OAuth, `anonymous` with `mcpAuth.mode: none`. | string | Tool calls | `"local:local"`, `"static:ci-bot"` |
 | `client.address`, `client.port` | The Streamable HTTP client. | string, integer | Streamable HTTP | `"127.0.0.1"`, `50000` |
-| `mcp.session.id` | The MCP session. oag-mcp's Streamable HTTP handler serves each request on its own, without sessions, so this is normally absent. | string | Tool calls in a session that has an id | `"6f1c…"` |
+| `mcp.session.id` | The MCP session. OAG-MCP's Streamable HTTP handler serves each request on its own, without sessions, so this is normally absent. | string | Tool calls in a session that has an id | `"6f1c…"` |
 | `jsonrpc.request.id` | The JSON-RPC id of the tool call. | string or integer | Tool calls | `3` |
 | `mcp.method.name` | Always `tools/call`. | string | Tool calls | `"tools/call"` |
 | `gen_ai.operation.name` | Always `execute_tool`. | string | Tool calls | `"execute_tool"` |
@@ -212,8 +170,8 @@ in. Each event is in one of six OCSF classes, chosen by its event name:
 
 | Class | Used for |
 | --- | --- |
-| Authentication (3002) | Authenticating MCP callers (activity Logon), and the upstream OAuth2 tokens oag-mcp obtains (Token Issue, Token Refresh, Token Invalidate). |
-| API Activity (6003) | The `execute` call (activity Execute), and the authorization decision for each SDK call (Create, Read, Update or Delete, from its HTTP method). |
+| Authentication (3002) | Authenticating MCP callers (activity Logon), and the upstream OAuth2 tokens OAG-MCP obtains (Token Issue, Token Refresh, Token Invalidate). |
+| API Activity (6003) | The `execute` call (activity Execute), and the authorisation decision for each SDK call (Create, Read, Update or Delete, from its HTTP method). |
 | HTTP Activity (4002) | Denied upstream destinations and redirects, and inbound requests rejected for their `Host` or `Origin` (activity from the HTTP method). |
 | Process Activity (1007) | The Deno sandbox process: denied capabilities, limits, timeouts and termination. |
 | Application Lifecycle (6002) | Security configuration applied at start-up (activity Configure), and start-up refused for security reasons (Start, with status Failure). |
@@ -293,30 +251,30 @@ This record is from the same stdio session, where a `read-only` rule denied
 | `type_uid`, `type_name` | The class and activity combined: `class_uid` × 100 + `activity_id`. | integer, string | Always | `600304`, `"API Activity: Delete"` |
 | `severity_id`, `severity` | 1 Informational, 2 Low (denials and other warnings), 3 Medium (detection findings), 4 High (start-up refused). | integer, string | Always | `2`, `"Low"` |
 | `status_id`, `status` | 1 Success or 2 Failure; `New` for a detection finding. | integer, string | Always | `2`, `"Failure"` |
-| `status_detail` | oag-mcp's reason code, listed per event below. | string | When there is a reason | `"rule_deny"` |
+| `status_detail` | OAG-MCP's reason code, listed per event below. | string | When there is a reason | `"rule_deny"` |
 | `status_code` | An error code, or the HTTP status a token endpoint returned. | string | Some failures | `"401"` |
 | `duration` | How long the action took, in milliseconds. | integer | Token events | `84` |
 | `metadata.version` | The OCSF version. | string | Always | `"1.9.0"` |
 | `metadata.uid` | A unique id for this record. | string | Always | `"37d92a99-…"` |
-| `metadata.event_code` | The oag-mcp event name, from [Audit events](#audit-events). | string | Always | `"authorization.denied"` |
+| `metadata.event_code` | The OAG-MCP event name, from [Audit events](#audit-events). | string | Always | `"authorization.denied"` |
 | `metadata.profiles` | The OCSF profiles the record uses. | string[] | Always | `["datetime", "security_control"]` |
-| `metadata.product` | oag-mcp's name, version and vendor. | object | Always | `{"name": "oag-mcp", …}` |
+| `metadata.product` | OAG-MCP's name, version and vendor. | object | Always | `{"name": "oag-mcp", …}` |
 | `metadata.reporter` | The recording process: name, instance id (`service.instance.id` in operational records) and host name. | object | Always | `{"uid": "inst_d1d08f0e-…", …}` |
 | `metadata.correlation_uid` | The MCP request, the same as `oag_mcp.request.id` in operational records. | string | Records from a request | `"req_3ac1979f-…"` |
-| `actor.user.uid` | The authenticated MCP caller, as in `enduser.id`. Without a caller, `actor` names oag-mcp itself (`app_name` and `process`). | string | Records with an actor | `"local:local"` |
-| `user`, `service`, `auth_protocol_id`, `auth_protocol` | Authentication: who authenticated, to what, and how (`OAUTH 2.0`, `Bearer Token`, `Process Boundary` or `None`). For upstream tokens, `user` is oag-mcp's service identity and `service.name` the security scheme. | object, integer, string | Authentication | `{"uid": "static:ci-bot"}`, `"Bearer Token"` |
+| `actor.user.uid` | The authenticated MCP caller, as in `enduser.id`. Without a caller, `actor` names OAG-MCP itself (`app_name` and `process`). | string | Records with an actor | `"local:local"` |
+| `user`, `service`, `auth_protocol_id`, `auth_protocol` | Authentication: who authenticated, to what, and how (`OAUTH 2.0`, `Bearer Token`, `Process Boundary` or `None`). For upstream tokens, `user` is OAG-MCP's service identity and `service.name` the security scheme. | object, integer, string | Authentication | `{"uid": "static:ci-bot"}`, `"Bearer Token"` |
 | `src_endpoint` | Where the request came from: the Streamable HTTP client's `ip` and `port`, or `{"name": "stdio"}`. | object | Records from a request | `{"ip": "127.0.0.1", "port": 50000}` |
 | `dst_endpoint` | Where a denied upstream request or redirect was going. | object | HTTP Activity | `{"hostname": "evil.example.test", "port": 80}` |
 | `api.operation`, `api.request.uid` | The SDK method (or `execute`), and the execution id. | string | API Activity | `"AdminApi.deletePet"`, `"exec_bbfb35f5-…"` |
 | `resources` | The OpenAPI operation, by `operationId`. | object[] | SDK operations | `[{"uid": "deletePet", "type": "OpenAPI operation"}]` |
 | `http_request` | The upstream request's method and URL path template, never the query. | object | SDK operations; HTTP Activity | `{"http_method": "DELETE", "url": {"path": "/pets/{petId}"}}` |
 | `process`, `device` | The Deno sandbox process (`uid` is the execution id) and its host. | object | Process Activity | `{"name": "deno", "pid": 4242, "uid": "exec_…"}` |
-| `app` | oag-mcp itself. | object | Application Lifecycle | `{"name": "oag-mcp", "version": "0.9.0"}` |
+| `app` | OAG-MCP itself. | object | Application Lifecycle | `{"name": "oag-mcp", "version": "0.9.0"}` |
 | `finding_info` | What was detected. | object | Detection Finding | `{"title": "Agent code sent a forged bridge message", …}` |
-| `message_context` | The MCP tool call (AI Operation profile): session id, `tools/call <tool>`, and oag-mcp in the Tool role. | object | Records from a tool call | `{"name": "tools/call execute", "ai_role": "Tool", …}` |
+| `message_context` | The MCP tool call (AI Operation profile): session id, `tools/call <tool>`, and OAG-MCP in the Tool role. | object | Records from a tool call | `{"name": "tools/call execute", "ai_role": "Tool", …}` |
 | `action_id`, `action`, `disposition_id`, `disposition` | The decision (Security Control profile): Allowed, Denied, or Modified/Corrected when credentials the agent's code supplied were removed from an allowed request. | integer, string | Allow and deny decisions | `2`, `"Denied"`, `2`, `"Blocked"` |
-| `policy.uid` | The policy that decided: an `authorization` rule id, `default`, or `implicit-allow-all` with no `authorization` section. | string | Authorization decisions | `"read-only"` |
-| `unmapped` | Details OCSF has no attribute for, under their oag-mcp names (camelCase), listed per event below. | object | When there are any | `{"limit": "maxSdkCalls", "value": 200}` |
+| `policy.uid` | The policy that decided: an `authorization` rule id, `default`, or `implicit-allow-all` with no `authorization` section. | string | Authorisation decisions | `"read-only"` |
+| `unmapped` | Details OCSF has no attribute for, under their OAG-MCP names (camelCase), listed per event below. | object | When there are any | `{"limit": "maxSdkCalls", "value": 200}` |
 | `message` | The event name again. | string | Always | `"authorization.denied"` |
 
 ### Audit events
@@ -333,12 +291,12 @@ or `credential.lookup_failed`.
 | `authentication.succeeded` | Authentication: Logon | Informational | A caller was authenticated: once per stdio session, per request over Streamable HTTP. | `mode`, `validation`, `scopeCount` |
 | `authentication.failed` | Authentication: Logon | Low | A caller was refused. | reasons such as `missing_token`, `invalid_token`, `expired`, `audience_mismatch`, `insufficient_scope`; `mode`, `validation` |
 | `authentication.token_in_url_rejected` | Authentication: Logon | Low | A request carried an access token in its URL query, which is refused. | None |
-| `upstream.token.issue` | Authentication: Token Issue | Informational | oag-mcp obtained an OAuth2 token for the upstream API. | `expiresInSec`, `scopeCount` |
-| `upstream.token.issue_failed` | Authentication: Token Issue | Low | oag-mcp could not obtain an upstream token. | `token_endpoint_error` (the endpoint refused; `status_code` is its HTTP status and `oauthError` its OAuth error code), `no_access_token`, `unsupported_token_type`, `token_endpoint_unreachable` |
-| `upstream.token.refresh` | Authentication: Token Refresh | Informational | oag-mcp replaced an expiring upstream token. | `expiresInSec`, `scopeCount` |
-| `upstream.token.refresh_failed` | Authentication: Token Refresh | Low | oag-mcp could not replace an upstream token. | as `upstream.token.issue_failed` |
+| `upstream.token.issue` | Authentication: Token Issue | Informational | OAG-MCP obtained an OAuth2 token for the upstream API. | `expiresInSec`, `scopeCount` |
+| `upstream.token.issue_failed` | Authentication: Token Issue | Low | OAG-MCP could not obtain an upstream token. | `token_endpoint_error` (the endpoint refused; `status_code` is its HTTP status and `oauthError` its OAuth error code), `no_access_token`, `unsupported_token_type`, `token_endpoint_unreachable` |
+| `upstream.token.refresh` | Authentication: Token Refresh | Informational | OAG-MCP replaced an expiring upstream token. | `expiresInSec`, `scopeCount` |
+| `upstream.token.refresh_failed` | Authentication: Token Refresh | Low | OAG-MCP could not replace an upstream token. | as `upstream.token.issue_failed` |
 | `upstream.token.invalidated` | Authentication: Token Invalidate | Informational | A cached upstream token was discarded after the API rejected it. | reason |
-| `authorization.policy_loaded` | Application Lifecycle: Configure | Informational | The authorization policy at start-up. | `policyMode` (`configured` or `implicit-allow-all`), `rules`, `default` |
+| `authorization.policy_loaded` | Application Lifecycle: Configure | Informational | The authorisation policy at start-up. | `policyMode` (`configured` or `implicit-allow-all`), `rules`, `default` |
 | `authorization.allowed` | API Activity: Create, Read, Update or Delete | Informational | An SDK call was allowed and sent, with credentials applied. | `rule_allow`, `default_allow`, `no_policy_configured`; `provider`, `schemes`, `unauthenticated`, `strippedCredentials` |
 | `authorization.denied` | API Activity: Create, Read, Update or Delete | Low | An SDK call was refused by the `authorization` policy. | `rule_deny`, `default_deny` |
 | `credential.provider.configured` | Application Lifecycle: Configure | Informational | Upstream credentials were resolved at start-up. | `provider`, `schemes`, `sharedIdentity` |
@@ -358,3 +316,63 @@ or `credential.lookup_failed`.
 | `transport.origin_rejected` | HTTP Activity: the request's method | Low | An inbound request's `Origin` is not allowed (`http.allowedOrigins`). | `origin_not_allowed` |
 | `security.config_invalid` | Application Lifecycle: Start | High | Start-up was refused: a security setting is invalid. | `status_code`; `area` |
 | `security.unauthenticated_nonloopback_refused` | Application Lifecycle: Start | High | Start-up was refused: Streamable HTTP on a non-loopback address without `mcpAuth`. | `host`, `mode` |
+
+## Correlation ids
+
+The same ids appear in both kinds of record, under different field names.
+Use them to join operational and audit records, or to follow one request or
+execution through the logs.
+
+| Id | Operational field | Audit field | Present | Example |
+| --- | --- | --- | --- | --- |
+| Server instance | `Resource["service.instance.id"]` | `metadata.reporter.uid` | Every record, except operational `logging.destination_failed` | `"inst_d1d08f0e-…"` |
+| MCP request | `Attributes["oag_mcp.request.id"]` | `metadata.correlation_uid` | Records from an MCP request | `"req_952f0680-…"` |
+| Execution | `Attributes["oag_mcp.execution.id"]` | `api.request.uid` in API Activity, `process.uid` in Process Activity, `unmapped.executionId` in the other classes | Records from an `execute` call; the agent gets the same id as `executionId` | `"exec_ff046664-…"` |
+| MCP caller | `Attributes["enduser.id"]` | `actor.user.uid`; `user.uid` in caller authentication records | Records from an authenticated request | `"local:local"` |
+| JSON-RPC request | `Attributes["jsonrpc.request.id"]` | `unmapped.jsonrpcRequestId` | Records from a tool call | `3` |
+| MCP session | `Attributes["mcp.session.id"]` | `message_context.uid`; `unmapped.mcpSessionId` in Detection Finding | Tool calls in a session that has an id; normally absent, as Streamable HTTP is served without sessions | `"6f1c…"` |
+
+## Redaction
+
+Every record is sanitized before it is written. These tables list exactly
+what is masked; [Logging](../logging.md#what-is-never-logged) explains the
+approach.
+
+### Masked keys
+
+The value of a key with one of these names is replaced with `[REDACTED]`,
+at any depth. Names match whole, in any letter case: `clientSecret` and
+`CLIENT_SECRET` match, `upstreamToken` does not. A value under another name
+is still masked if it is a registered secret or looks like a credential (see
+below).
+
+| Name | Also matches |
+| --- | --- |
+| `authorization`, `proxy-authorization` | |
+| `cookie`, `set-cookie` | |
+| `password`, `passwd`, `secret` | |
+| `client_secret` | `clientsecret` |
+| `api_key` | `apikey`, `x-api-key` |
+| `token`, `bearer` | |
+| `access_token`, `refresh_token`, `id_token` | `accesstoken`, `refreshtoken`, `idtoken` |
+| `credential`, `credentials` | |
+| `private_key` | `privatekey` |
+
+### Masked values
+
+| What | Matched by | Becomes |
+| --- | --- | --- |
+| Registered secrets | Every upstream credential OAG-MCP resolves, every upstream token it obtains and every MCP bearer token, and their base64 forms, wherever they appear in a string. Values shorter than 4 characters are not registered. | `[REDACTED]` |
+| Authorization header values | `Bearer`, `Basic` or `Digest` followed by a credential-like value: 20 characters or more, or containing digits, punctuation or mixed case. Ordinary words after these words are left alone. | `Bearer [REDACTED]` |
+| JWT-shaped strings | Three dot-separated base64url parts starting `eyJ`. | `[REDACTED]` |
+| Credentials in URLs | `user:password@` before a host. | `//[REDACTED]@host` |
+| Query parameters | `api_key`, `api-key`, `apikey`, `access_token`, `token`, `key`, `secret`, `password`, `client_secret`, `code`, `sig` and `signature`, in any letter case. | `?token=[REDACTED]` |
+
+### Size limits
+
+| Limit | Value | Beyond it |
+| --- | --- | --- |
+| String length | 512 characters | The rest is replaced with `…[truncated N]`. |
+| Nesting depth | 4 levels, counting a field's own value as level 1 | A value nested 5 levels deep is replaced with `[max-depth]`. |
+| Keys per object | 50 | The rest are replaced with a `"…": "[more keys truncated]"` entry. |
+| Items per array | 50 | The rest are replaced with `[+N more]`. |

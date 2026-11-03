@@ -9,13 +9,13 @@ At start-up `serve` prepares the spec and SDK once (compatibility checks,
 execution bundle, method index), then starts the transport: stdio by
 default, or Streamable HTTP. If any stage fails it exits with status 1 and an
 error code and hint on stderr; it never starts partially. The spec and SDK
-are only read, never modified, and oag-mcp does not generate SDKs or install
+are only read, never modified, and OAG-MCP does not generate SDKs or install
 packages.
 
 Flags cover the inputs, the transport and logging. Everything else
-(upstream API credentials, MCP authentication, authorization rules, execution
+(upstream API credentials, MCP authentication, authorisation rules, execution
 limits) lives in the configuration file passed with `--config`; see the
-[configuration reference](../configuration.md). Where both set the same
+[configuration reference](configuration.md). Where both set the same
 thing, the flag wins: `--host`, `--port`, `--path` and the logging flags
 override the file. Secrets are never accepted as flags.
 
@@ -104,8 +104,8 @@ Options:
 | `--sdk <sdk>` | The typescript-fetch SDK: a package directory, or an npm package archive made with `npm pack`. It is read, never modified. | Yes | | `--sdk ./generated-sdk`, `--sdk ./petstore-sdk-1.0.0.tgz` |
 | `--sdk-layout <sdkLayout>` | Which form of the SDK to use: its TypeScript sources (`src/*.ts`), its compiled package (`dist/*.js` with `.d.ts` declarations), or `auto`, which uses the sources when they are present. | No | `auto` | `--sdk-layout auto`, `--sdk-layout source`, `--sdk-layout compiled` |
 | `--sdk-oag-version <sdkOagVersion>` | The OpenAPI Generator version that produced the SDK, for an SDK without `.openapi-generator/VERSION`. It must agree with that file when the file exists. | No | Read from `.openapi-generator/VERSION` | `--sdk-oag-version 7.26.0` |
-| `--allow-untested-oag-version` | Start even if the SDK comes from an OpenAPI Generator version oag-mcp has not been tested with. | No | Off | `--allow-untested-oag-version` |
-| `--transport <transport>` | How MCP clients connect: `stdio` for a client that starts oag-mcp as a subprocess, or `streamable-http` for an HTTP endpoint. | No | `stdio` | `--transport stdio`, `--transport streamable-http` |
+| `--allow-untested-oag-version` | Start even if the SDK comes from an OpenAPI Generator version OAG-MCP has not been tested with. | No | Off | `--allow-untested-oag-version` |
+| `--transport <transport>` | How MCP clients connect: `stdio` for a client that starts OAG-MCP as a subprocess, or `streamable-http` for an HTTP endpoint. | No | `stdio` | `--transport stdio`, `--transport streamable-http` |
 | `--port <port>` | The port Streamable HTTP listens on, 0 to 65535; `0` picks a free port. Overrides `http.port` in the configuration file. | No | `3000` | `--port 3000`, `--port 0` |
 | `--host <host>` | The address Streamable HTTP binds to. A non-loopback address requires `mcpAuth.mode` `static-bearer` or `oauth`. Overrides `http.host`. | No | `127.0.0.1` | `--host 127.0.0.1`, `--host 0.0.0.0` |
 | `--path <path>` | The URL path of the Streamable HTTP MCP endpoint. Overrides `http.path`. | No | `/mcp` | `--path /mcp` |
@@ -116,4 +116,17 @@ Options:
 | `--audit-log-file <auditLogFile>` | Where security audit (OCSF) records go: a file path or `fd:N`. stdout is refused. Overrides `logging.auditFile`. | No | stderr | `--audit-log-file /var/log/oag-mcp/audit.log`, `--audit-log-file fd:4` |
 | `--audit-fail-closed` | Refuse `execute` calls while security audit records cannot be written. Also enabled by `logging.auditFailClosed: true`; the flag cannot turn it off. | No | Off | `--audit-fail-closed` |
 | `-h`, `--help` | Show help: for `oag-mcp`, or for `serve` when given after it. | No | | `--help`, `serve --help` |
-| `-V`, `--version` | Show the oag-mcp version. | No | | `--version` |
+| `-V`, `--version` | Show the OAG-MCP version. | No | | `--version` |
+
+## Environment variables
+
+OAG-MCP reads only these from its environment. The sandbox that runs agent
+code gets none of them, only a few variables OAG-MCP sets for Deno itself
+(see [Security](../security.md#execution-sandbox)).
+
+| Name | Description | Mandatory | Default | Example |
+| --- | --- | --- | --- | --- |
+| Those named by `{ env: NAME }` | Secret values the configuration file refers to, such as upstream API keys or MCP bearer tokens. Read once at start-up; a missing one stops start-up. | When the configuration refers to them | | `PC_API_KEY=…` |
+| `OAG_MCP_DENO_PATH` | The Deno binary that runs the sandbox, when `execution.denoPath` is not set. Otherwise the `deno` npm package installed with OAG-MCP is used, then `deno` on `PATH`. The first one found must be Deno 2.x. | No | The bundled `deno` package | `OAG_MCP_DENO_PATH=/usr/local/bin/deno` |
+| `TMPDIR` | Where the prepared SDK and each execution's private folder are created. Set it to a writable volume on a read-only root filesystem. | No | The system temporary directory | `TMPDIR=/var/tmp` |
+| `PATH` | Searched for `deno` as a last resort. | No | | |

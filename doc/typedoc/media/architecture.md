@@ -5,7 +5,7 @@ it into an MCP server, so that AI agents can use the API. Instead of one MCP
 tool per operation, it exposes two: `search`, to find SDK methods, and
 `execute`, to run TypeScript that calls them. The agent's code runs with the
 real SDK in a sandbox without permissions; every request the SDK makes is
-checked, given credentials and sent by oag-mcp itself, outside the sandbox.
+checked, given credentials and sent by OAG-MCP itself, outside the sandbox.
 
 ```mermaid
 flowchart LR
@@ -26,7 +26,7 @@ flowchart LR
     search --> index[("Method index,<br/>filtered by permissions")]
     execute --> check["Code policy<br/>and type check"]
     check --> sandbox["Deno sandbox:<br/>agent code and real SDK"]
-    sandbox --> broker["Host broker: authorization,<br/>network policy, credentials"]
+    sandbox --> broker["Host broker: authorisation,<br/>network policy, credentials"]
   end
   inputs --> s1
   s7 -- "stdio or<br/>Streamable HTTP" --> caller
@@ -59,7 +59,7 @@ test API (11 operations) on a developer machine.
 
 | Attribute | Design | Observed |
 | --- | --- | --- |
-| Security | Agent code in a separate Deno process with no permissions; credentials and network only on the host side; per-operation authorization; secrets never logged; refuses to listen beyond loopback without MCP authentication. See [Security](security.md). | Every escape attempt in the integration tests (files, network, environment, subprocesses, `eval`, forged bridge messages) is denied and audited. |
+| Security | Agent code in a separate Deno process with no permissions; credentials and network only on the host side; per-operation authorisation; secrets never logged; refuses to listen beyond loopback without MCP authentication. See [Security](security.md). | Every escape attempt in the integration tests (files, network, environment, subprocesses, `eval`, forged bridge messages) is denied and audited. |
 | Start-up | Everything is prepared at start-up, once, with no cache ([ADR 5](decisions/0005-prepare-at-start-up-without-a-cache.md)). | 1.7 to 6 seconds, varying with machine load; grows with the size of the SDK. |
 | Latency | `search` answers from memory; each `execute` starts a fresh sandbox process. | `search` about 1 ms. `execute` of trivial code 50 to 90 ms, the first call or two a few hundred ms more; each SDK call adds the API's own response time. |
 | Concurrency | Executions run in separate processes, up to `execution.maxConcurrent` (default 4), with a bounded queue; each has its own memory limit. See [Execution limits](recipes/execution-limits.md). | Calls beyond the queue are refused at once with `executor_busy`, without affecting running ones. |
@@ -94,7 +94,7 @@ uses OAuth.
 ```mermaid
 flowchart LR
   person([Person]) --> client["MCP client and agent"]
-  client -- "MCP over stdio or Streamable HTTP" --> oag["oag-mcp"]
+  client -- "MCP over stdio or Streamable HTTP" --> oag["OAG-MCP"]
   oag -- "HTTP requests with credentials" --> api[("Your API")]
   oag -. "OAuth2 client credentials" .-> apiAuth["Authorization server for the API"]
   client -. "sign-in, OAuth mode" .-> mcpAuth["Authorization server for MCP callers"]
@@ -103,17 +103,17 @@ flowchart LR
   inputs[/"OpenAPI document, SDK, configuration, secrets"/] --> oag
 ```
 
-Everything runs in one oag-mcp process, except agent code, which runs in a
+Everything runs in one OAG-MCP process, except agent code, which runs in a
 separate sandbox process for each `execute` call. The sandbox has no way out
 except the bridge to the request broker.
 
 ```mermaid
 flowchart TB
-  subgraph host["oag-mcp process (trusted)"]
+  subgraph host["OAG-MCP process (trusted)"]
     cli["CLI and configuration<br/>cli.ts, config.ts"]
     prepare["Start-up preparation<br/>prepare/"]
     index["Method index<br/>search/"]
-    server["MCP server: transports, authentication,<br/>authorization, tools<br/>server/"]
+    server["MCP server: transports, authentication,<br/>authorisation, tools<br/>server/"]
     executor["Executor: code policy, type checker,<br/>sandbox processes<br/>executor/"]
     broker["Request broker and credentials<br/>upstream/"]
     logging["Logging: OpenTelemetry and OCSF<br/>logging/"]
@@ -141,7 +141,7 @@ The main data path: the agent's code, its SDK calls, and the result.
 ```mermaid
 sequenceDiagram
   participant C as MCP client
-  participant S as oag-mcp server
+  participant S as OAG-MCP server
   participant E as Executor
   participant D as Deno sandbox
   participant B as Request broker
@@ -153,7 +153,7 @@ sequenceDiagram
   E->>D: start process with SDK bundle and code
   loop each SDK call
     D->>B: request, tagged with its SDK method
-    B->>B: authorize, check destination, add credentials (audit)
+    B->>B: authorise, check destination, add credentials (audit)
     B->>A: HTTP request
     A-->>B: response
     B-->>D: response, within size limit

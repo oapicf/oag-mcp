@@ -1,36 +1,20 @@
-# Recipes
+# Decision records
 
-Each recipe sets up OAG-MCP for one situation, from the configuration to what
-you should see in the logs when it works. They build on each other, roughly
-in this order.
+Short records of OAG-MCP's significant design decisions: the problem, the
+choice made, and its consequences, good and bad. A decision that is later
+changed gets a new record, and the old one is marked as superseded.
 
-## Getting started
-
-| Recipe | For when you want to |
+| Record | Decision |
 | --- | --- |
-| [Read-only server](read-only.md) | Try OAG-MCP safely, with the agent able to read but not change anything. |
-| [Upstream credentials](upstream-credentials.md) | Call an API that needs an API key, a bearer token or basic authentication. |
-| [Upstream OAuth2](upstream-oauth.md) | Call an API that takes OAuth2 client credentials tokens. |
+| [1. Code mode with two tools](0001-code-mode-with-two-tools.md) | `search` and `execute`, not a tool per operation. |
+| [2. The real SDK in a Deno sandbox](0002-real-sdk-in-a-deno-sandbox.md) | Agent code and the SDK run without permissions; a host broker makes every API call. |
+| [3. typescript-fetch SDKs only](0003-typescript-fetch-sdks-only.md) | One supported generator target, at tested versions. |
+| [4. Bind methods by static analysis](0004-bind-methods-by-static-analysis.md) | Match SDK methods to operations by method and path, never by name. |
+| [5. Prepare at start-up, without a cache](0005-prepare-at-start-up-without-a-cache.md) | Prepare each time the server starts, in a temporary workspace. |
+| [6. One shared upstream identity](0006-shared-upstream-identity.md) | One service identity for all callers; no token passthrough. |
+| [7. Logging in OpenTelemetry and OCSF](0007-logging-in-opentelemetry-and-ocsf.md) | Open standards for operational and audit records. |
+| [8. Stateless Streamable HTTP](0008-stateless-streamable-http.md) | No MCP sessions; every request stands alone. |
+| [9. TypeScript and the Olympia build](0009-typescript-and-olympia-build.md) | TypeScript on Olympia, and what changed from the template. |
 
-## Choosing what agents can do
-
-| Recipe | For when you want to |
-| --- | --- |
-| [Curated operations](curated.md) | Expose only some of an API, by tag or SDK method. |
-| [Per-caller permissions](per-caller-permissions.md) | Give each caller its own operations, from static bearer tokens or OAuth scopes. |
-| [Execution limits](execution-limits.md) | Tune time, memory, result and API-call limits for your workload. |
-
-## Running in production
-
-[Deployment](../deployment.md) covers what a production server needs and how
-to run it; these recipes cover its most common parts.
-
-| Recipe | For when you want to |
-| --- | --- |
-| [Remote server](remote-server.md) | Serve MCP clients on other machines, over HTTPS behind a reverse proxy. |
-| [Packaged SDK](packaged-sdk.md) | Deploy the SDK as a versioned `npm pack` archive. |
-| [Audit logging](audit-logging.md) | Keep security audit records in their own file, a log shipper or a SIEM. |
-
-When something does not work, [Troubleshooting](../troubleshooting.md) helps
-find out why OAG-MCP does not start, a client cannot connect, or a call
-failed.
+To add a record, copy the shape of an existing one, `Status`, `Context`,
+`Decision` and `Consequences`, and number it after the last.
