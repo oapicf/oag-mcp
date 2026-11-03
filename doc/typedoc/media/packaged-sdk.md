@@ -36,6 +36,9 @@ oag-mcp serve --spec ./openapi.yaml --sdk ./petclinic-sdk-1.2.0.tgz \
   --config ./oag-mcp.yaml
 ```
 
+A configuration that serves the Pet Clinic archive read-only is in
+[`examples/oag-mcp-packaged-sdk.config.yaml`](../../examples/oag-mcp-packaged-sdk.config.yaml).
+
 An archive is served exactly like the folder it came from: the same methods,
 the same results. Restart OAG-MCP to change to another archive.
 

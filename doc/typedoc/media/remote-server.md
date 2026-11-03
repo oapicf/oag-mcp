@@ -47,6 +47,8 @@ http:
   allowedOrigins: [https://app.example.com]   # only if a browser-based client calls it
 ```
 
+The same configuration is in [`examples/oag-mcp-remote-server.config.yaml`](../../examples/oag-mcp-remote-server.config.yaml).
+
 Add `authorization` rules as in the [read-only](read-only.md),
 [curated](curated.md) or [per-caller](per-caller-permissions.md) recipes:
 anyone with a token can use whatever the rules allow.

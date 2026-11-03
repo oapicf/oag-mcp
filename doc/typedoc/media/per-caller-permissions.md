@@ -105,6 +105,8 @@ authorization:
       allow: ["tag:store"]
 ```
 
+The same configuration is in [`examples/oag-mcp-per-caller-permissions.config.yaml`](../../examples/oag-mcp-per-caller-permissions.config.yaml).
+
 The tokens themselves are never in the file: each is a secret reference,
 resolved from the environment at start-up. Generate them with, for example,
 `openssl rand -hex 32`, and give each caller only its own.

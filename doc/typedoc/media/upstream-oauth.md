@@ -65,6 +65,8 @@ upstreamAuth:
       clientAuthMethod: client_secret_basic   # or client_secret_post
 ```
 
+The same configuration is in [`examples/oag-mcp-upstream-oauth.config.yaml`](../../examples/oag-mcp-upstream-oauth.config.yaml).
+
 | Property | Default | Use |
 | --- | --- | --- |
 | `clientId`, `clientSecret` | (required) | The client application's credentials, as secret references. |

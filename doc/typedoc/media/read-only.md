@@ -41,6 +41,8 @@ authorization:
       allow: ["method:GET"]             # allow every GET operation
 ```
 
+The same configuration is in [`examples/oag-mcp-read-only.config.yaml`](../../examples/oag-mcp-read-only.config.yaml).
+
 - `upstreamAuth.schemes` holds the credentials OAG-MCP uses to call your API,
   keyed by the names under `components.securitySchemes` in your OpenAPI
   document. The file only references the key; its value comes from the
