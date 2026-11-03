@@ -22,7 +22,7 @@ Instead of exposing hundreds of endpoints as individual tools, it exposes two:
 
 The SDK stays on the host with your credentials, which are applied from the spec’s security schemes, so secrets never enter the sandbox.
 
-Point OAG-MCP at a spec and an SDK, and your whole API is agent-ready in a few hundred tokens of context.
+Point OAG-MCP at a spec and an SDK, and your whole API is agent-ready in under a thousand tokens of context.
 
 ```bash
 oag-mcp serve --spec ./openapi.yaml --sdk ./generated-sdk --transport streamable-http --port 3000
@@ -47,19 +47,6 @@ mode** where the SDK is generated out of the OpenAPI specification itself:
   using directly; OAG-MCP only reads it.
 * **MCP sees two tools**, not one per endpoint, so large APIs don't flood the
   agent's context.
-
-```text
-                    oag-mcp serve (one process)
- openapi.yaml ─┐   ┌──────────────── start-up, once ────────────────┐
-               ├──▶│ 1 inputs  2 compatibility  3 bundle + .d.ts     │
- SDK dir/.tgz ─┘   │ 4 method index  5 bridge + Deno executor        │
-  (read-only)      │ 6 register search/execute  7 start transport    │
-                   └───────────────────────┬─────────────────────────┘
-                                           ▼  (stdio or Streamable HTTP)
-                    search ─▶ in-memory index
-                    execute ─▶ type check ─▶ Deno sandbox (real SDK) ──┐
-                               host broker: authz, network, credentials ◀┘ ─▶ your API
-```
 
 ## Installation
 
@@ -113,7 +100,7 @@ oag-mcp serve --spec ./openapi.yaml --sdk ./petstore-sdk-1.0.0.tgz --transport s
 On start-up OAG-MCP checks that the SDK is compatible, prepares it for the
 sandbox and indexes its methods — typically in one to three seconds — and
 only then accepts MCP requests. If anything cannot be prepared, it exits with
-[an error type](docs/reference/error-types.md) and a hint explaining what to fix, rather than starting a
+[an error code](docs/reference/error-codes.md) and a hint explaining what to fix, rather than starting a
 partially working server.
 
 Example MCP client entry (stdio):
@@ -140,7 +127,7 @@ Create OAG-MCP configuration file:
 ```yaml
 # oag-mcp.config.yaml — contains references to secrets, never secret values
 upstream:
-  # default: the spec's first absolute server URL
+  # default: the spec's first server URL, which must be absolute
   baseUrl: https://api.example.com/v1
 upstreamAuth:
   schemes:
@@ -165,9 +152,13 @@ for every option.
 
 ## Learn more
 
-* [Architecture](docs/architecture.md) — start-up preparation, execution model, design choices
+* [How it works](docs/how-it-works.md) — what happens, step by step, from start-up to each tool call
+* [Recipes](docs/recipes/README.md) — set-ups for common situations: read-only, curated, per-caller, remote, audit logging and more
+* [Troubleshooting](docs/troubleshooting.md) — why oag-mcp does not start, a client cannot connect, or a call failed
+* Reference — [CLI](docs/reference/cli.md), [configuration](docs/reference/configuration.md), [error codes](docs/reference/error-codes.md), [error types](docs/reference/error-types.md), [log events](docs/reference/log-events.md)
+* [Architecture](docs/architecture.md) — components, start-up preparation, execution model, design choices
 * [SDK compatibility](docs/sdk-compatibility.md) — supported versions, options, package layouts, dependencies
-* [Configuration reference](docs/configuration.md)
+* [Configuration guide](docs/configuration.md) — the configuration file and secrets
 * [Authentication and authorization](docs/authentication.md) — `mcpAuth`, `upstreamAuth`, permissions
 * [Execution sandbox and limits](docs/security.md) — what is and is not isolated
 * [Logging](docs/logging.md) — operational records (OpenTelemetry) and security audit records (OCSF)
