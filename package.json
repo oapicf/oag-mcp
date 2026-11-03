@@ -1,7 +1,7 @@
 {
   "name": "oag-mcp",
   "type": "module",
-  "description": "Plug in an OpenAPI spec and its OAG-generated SDK at runtime and get a code-mode MCP server: agents discover operations with search and call your SDK in a sandbox with execute. No codegen, no build step.",
+  "description": "Turn an OpenAPI spec and its OAG-generated SDK into a code-mode MCP server at runtime",
   "keywords": [
     "openapi",
     "openapi-generator",
