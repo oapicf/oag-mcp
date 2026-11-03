@@ -27,7 +27,7 @@
 <li><code>execute</code> for running agent-written code against your SDK in a sandbox.</li>
 </ul>
 <p>The SDK stays on the host with your credentials, which are applied from the spec’s security schemes, so secrets never enter the sandbox.</p>
-<p>Point OAG-MCP at a spec and an SDK, and your whole API is agent-ready in a few hundred tokens of context.</p>
+<p>Point OAG-MCP at a spec and an SDK, and your whole API is agent-ready in under a thousand tokens of context.</p>
 <pre><code class="bash"><span class="hl-0">oag-mcp</span><span class="hl-1"> </span><span class="hl-2">serve</span><span class="hl-1"> </span><span class="hl-3">--spec</span><span class="hl-1"> </span><span class="hl-2">./openapi.yaml</span><span class="hl-1"> </span><span class="hl-3">--sdk</span><span class="hl-1"> </span><span class="hl-2">./generated-sdk</span><span class="hl-1"> </span><span class="hl-3">--transport</span><span class="hl-1"> </span><span class="hl-2">streamable-http</span><span class="hl-1"> </span><span class="hl-3">--port</span><span class="hl-1"> </span><span class="hl-4">3000</span>
 </code><button type="button">Copy</button></pre>
 
@@ -50,18 +50,6 @@ using directly; OAG-MCP only reads it.</li>
 <li><strong>MCP sees two tools</strong>, not one per endpoint, so large APIs don't flood the
 agent's context.</li>
 </ul>
-<pre><code class="text">                    oag-mcp serve (one process)
- openapi.yaml ─┐   ┌──────────────── start-up, once ────────────────┐
-               ├──▶│ 1 inputs  2 compatibility  3 bundle + .d.ts     │
- SDK dir/.tgz ─┘   │ 4 method index  5 bridge + Deno executor        │
-  (read-only)      │ 6 register search/execute  7 start transport    │
-                   └───────────────────────┬─────────────────────────┘
-                                           ▼  (stdio or Streamable HTTP)
-                    search ─▶ in-memory index
-                    execute ─▶ type check ─▶ Deno sandbox (real SDK) ──┐
-                               host broker: authz, network, credentials ◀┘ ─▶ your API
-</code><button type="button">Copy</button></pre>
-
 <h2 id="installation" class="tsd-anchor-link">Installation<a href="#installation" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
 <pre><code class="bash"><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">install</span><span class="hl-1"> </span><span class="hl-3">-g</span><span class="hl-1"> </span><span class="hl-2">oag-mcp</span>
 </code><button type="button">Copy</button></pre>
@@ -89,7 +77,7 @@ Docker image:</p>
 <p>On start-up OAG-MCP checks that the SDK is compatible, prepares it for the
 sandbox and indexes its methods — typically in one to three seconds — and
 only then accepts MCP requests. If anything cannot be prepared, it exits with
-<a href="media/error-types.md">an error type</a> and a hint explaining what to fix, rather than starting a
+<a href="docs/reference/error-codes.md">an error code</a> and a hint explaining what to fix, rather than starting a
 partially working server.</p>
 <p>Example MCP client entry (stdio):</p>
 <pre><code class="json"><span class="hl-1">{</span><br/><span class="hl-1">  </span><span class="hl-8">&quot;mcpServers&quot;</span><span class="hl-1">: {</span><br/><span class="hl-1">    </span><span class="hl-8">&quot;petstore&quot;</span><span class="hl-1">: {</span><br/><span class="hl-1">      </span><span class="hl-8">&quot;command&quot;</span><span class="hl-1">: </span><span class="hl-2">&quot;oag-mcp&quot;</span><span class="hl-1">,</span><br/><span class="hl-1">      </span><span class="hl-8">&quot;args&quot;</span><span class="hl-1">: [</span><br/><span class="hl-1">        </span><span class="hl-2">&quot;serve&quot;</span><span class="hl-1">, </span><span class="hl-2">&quot;--spec&quot;</span><span class="hl-1">, </span><span class="hl-2">&quot;/path/to/openapi.yaml&quot;</span><span class="hl-1">, </span><span class="hl-2">&quot;--sdk&quot;</span><span class="hl-1">, </span><span class="hl-2">&quot;/path/to/generated-sdk&quot;</span><span class="hl-1">,</span><br/><span class="hl-1">        </span><span class="hl-2">&quot;--transport&quot;</span><span class="hl-1">, </span><span class="hl-2">&quot;stdio&quot;</span><span class="hl-1">, </span><span class="hl-2">&quot;--config&quot;</span><span class="hl-1">, </span><span class="hl-2">&quot;/path/to/oag-mcp.config.yaml&quot;</span><br/><span class="hl-1">      ],</span><br/><span class="hl-1">      </span><span class="hl-8">&quot;env&quot;</span><span class="hl-1">: { </span><span class="hl-8">&quot;PETSTORE_API_KEY&quot;</span><span class="hl-1">: </span><span class="hl-2">&quot;…&quot;</span><span class="hl-1"> }</span><br/><span class="hl-1">    }</span><br/><span class="hl-1">  }</span><br/><span class="hl-1">}</span>
@@ -97,7 +85,7 @@ partially working server.</p>
 
 <h3 id="3-configure-credentials-and-access" class="tsd-anchor-link">3. Configure credentials and access<a href="#3-configure-credentials-and-access" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <p>Create OAG-MCP configuration file:</p>
-<pre><code class="yaml"><span class="hl-5"># oag-mcp.config.yaml — contains references to secrets, never secret values</span><br/><span class="hl-9">upstream</span><span class="hl-1">:</span><br/><span class="hl-1">  </span><span class="hl-5"># default: the spec&#39;s first absolute server URL</span><br/><span class="hl-1">  </span><span class="hl-9">baseUrl</span><span class="hl-1">: </span><span class="hl-10">https://api.example.com/v1</span><br/><span class="hl-9">upstreamAuth</span><span class="hl-1">:</span><br/><span class="hl-1">  </span><span class="hl-9">schemes</span><span class="hl-1">:</span><br/><span class="hl-1">    </span><span class="hl-9">apiKeyHeader</span><span class="hl-1">:</span><br/><span class="hl-1">      </span><span class="hl-5"># security scheme name from the OpenAPI document</span><br/><span class="hl-1">      </span><span class="hl-9">apiKey</span><span class="hl-1">: { </span><span class="hl-9">env</span><span class="hl-1">: </span><span class="hl-10">PETSTORE_API_KEY</span><span class="hl-1"> }</span>
+<pre><code class="yaml"><span class="hl-5"># oag-mcp.config.yaml — contains references to secrets, never secret values</span><br/><span class="hl-9">upstream</span><span class="hl-1">:</span><br/><span class="hl-1">  </span><span class="hl-5"># default: the spec&#39;s first server URL, which must be absolute</span><br/><span class="hl-1">  </span><span class="hl-9">baseUrl</span><span class="hl-1">: </span><span class="hl-10">https://api.example.com/v1</span><br/><span class="hl-9">upstreamAuth</span><span class="hl-1">:</span><br/><span class="hl-1">  </span><span class="hl-9">schemes</span><span class="hl-1">:</span><br/><span class="hl-1">    </span><span class="hl-9">apiKeyHeader</span><span class="hl-1">:</span><br/><span class="hl-1">      </span><span class="hl-5"># security scheme name from the OpenAPI document</span><br/><span class="hl-1">      </span><span class="hl-9">apiKey</span><span class="hl-1">: { </span><span class="hl-9">env</span><span class="hl-1">: </span><span class="hl-10">PETSTORE_API_KEY</span><span class="hl-1"> }</span>
 </code><button type="button">Copy</button></pre>
 
 <p>Run MCP server with the configuration file passed as <code>--config</code> arg:</p>
@@ -113,9 +101,13 @@ read. See <a href="media/authentication.md">authentication</a> for MCP access co
 for every option.</p>
 <h2 id="learn-more" class="tsd-anchor-link">Learn more<a href="#learn-more" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
 <ul>
-<li><a href="media/architecture.md">Architecture</a> — start-up preparation, execution model, design choices</li>
+<li><a href="docs/how-it-works.md">How it works</a> — what happens, step by step, from start-up to each tool call</li>
+<li><a href="docs/recipes/README.md">Recipes</a> — set-ups for common situations: read-only, curated, per-caller, remote, audit logging and more</li>
+<li><a href="docs/troubleshooting.md">Troubleshooting</a> — why oag-mcp does not start, a client cannot connect, or a call failed</li>
+<li>Reference — <a href="media/cli.md">CLI</a>, <a href="media/configuration.md">configuration</a>, <a href="docs/reference/error-codes.md">error codes</a>, <a href="media/error-types.md">error types</a>, <a href="media/log-events.md">log events</a></li>
+<li><a href="media/architecture.md">Architecture</a> — components, start-up preparation, execution model, design choices</li>
 <li><a href="media/sdk-compatibility.md">SDK compatibility</a> — supported versions, options, package layouts, dependencies</li>
-<li><a href="media/configuration-1.md">Configuration reference</a></li>
+<li><a href="media/configuration-1.md">Configuration guide</a> — the configuration file and secrets</li>
 <li><a href="media/authentication.md">Authentication and authorization</a> — <code>mcpAuth</code>, <code>upstreamAuth</code>, permissions</li>
 <li><a href="media/security.md">Execution sandbox and limits</a> — what is and is not isolated</li>
 <li><a href="media/logging.md">Logging</a> — operational records (OpenTelemetry) and security audit records (OCSF)</li>

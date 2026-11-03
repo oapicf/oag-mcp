@@ -1,176 +1,259 @@
 # Architecture
 
-`oag-mcp serve --spec <openapi> --sdk <typescript-fetch SDK>` is a single
-process with two phases: **start-up preparation**, run once, turns the spec
-and SDK into an in-memory method index and a sandbox-ready SDK bundle; the
-**serving** phase exposes two MCP tools over stdio or Streamable HTTP and
-reuses that preparation for every session and call.
-
-## Components
-
-| Component | Modules | Responsibility |
-| --- | --- | --- |
-| Start-up preparation | `lib/prepare/prepare.ts`, `workspace.ts` | Run the preparation stages in order with logging; own the private temporary workspace and its cleanup. |
-| SDK adapter and compatibility | `lib/prepare/sdk-input.ts`, `compat.ts`, `bundle.ts` | Resolve directory inputs in place (read-only) and extract archives safely, reject unsupported generators/versions/options/layouts and missing dependencies, bundle the SDK for Deno, emit or copy declarations. |
-| Method indexing and search | `lib/prepare/spec.ts`, `analyze.ts`, `method-records.ts`, `lib/search/search-index.ts` | Parse OpenAPI, statically map SDK methods to operations, extract signatures and types, merge them into method records, build and query the in-memory MiniSearch index (English stop words from `stopword`, Porter stemming from `stemmer`). |
-| MCP server | `lib/server/serve.ts`, `tools.ts`, `service.ts`, `authentication.ts`, `authorization.ts` | Start the stdio or Streamable HTTP transport, register `search`/`execute` and implement them, authenticate MCP callers and authorise each operation they call. |
-| Execution and SDK initialisation | `lib/executor/*`, `assets/deno-runner.js`, `lib/upstream/*` | Code policy, type checking, the Deno subprocess executor, the SDK-shaped bridge, the trusted request broker and upstream credential providers. |
-| Cross-cutting | `lib/logging/logger.ts`, `lib/logging/otel.ts`, `lib/logging/ocsf.ts`, `lib/util/redact.ts`, `lib/config.ts`, `lib/util/secrets.ts` | Logging (OpenTelemetry operational records, OCSF audit records) and redaction, configuration, secret resolution. |
-
-Boundaries are interfaces rather than a plugin system:
-
-- `Executor` (`lib/executor/types.ts`) is all the tools depend on; the Deno
-  executor can be replaced without touching search.
-- `CredentialProvider` (`lib/upstream/types.ts`) receives the request
-  principal, so a per-caller provider can be added later.
-- The SDK adapter (compat + analyze) is the only code that knows the
-  typescript-fetch layout; other generators would add sibling adapters.
-
-The convention for where types live (contracts in `<module>/types.ts`,
-shared data in `lib/types.ts`, and so on) is in
-[AGENTS-extras.md](../AGENTS-extras.md#where-types-live).
-
-## Start-up preparation
-
-`serve` runs these stages before accepting any MCP request
-(`prepare.stage.completed` is logged for each, with its duration):
-
-1. **inputs**: load the spec with `@apidevtools/swagger-parser` (OpenAPI
-   3.0/3.1, local `$ref`s only — HTTP resolution is disabled). Resolve the
-   SDK: a directory is used **in place and read-only**; an `npm pack`
-   archive is safely extracted into the workspace.
-2. **compatibility** (`inspectSdk`): typescript-fetch runtime markers,
-   recorded generator version in the tested set, supported options, layout
-   (`src/*.ts` sources or `dist/*.js` + `.d.ts`), and that every runtime
-   dependency in `package.json` resolves from the SDK's (or a parent's)
-   `node_modules`. Nothing is installed and no package script runs.
-3. **sdk**: declarations are emitted with the TypeScript compiler API
-   (sources) or copied (compiled packages) into the workspace; esbuild
-   writes one ES module (`sdk/sdk.bundle.js`) with all SDK runtime
-   dependencies inlined. A CommonJS entry gets a small ESM re-export shim,
-   also written in the workspace. TypeScript lib files and the Deno runner
-   are copied next to them.
-4. **index**: each API class's `<method>RequestOpts` (7.x) or
-   `<method>Raw` (older output) is parsed for the HTTP method and path
-   template literal, then matched to the OpenAPI operation by
-   `METHOD + path`. Methods with no binding, no matching operation, or
-   several matching operations stop start-up — nothing is guessed, and
-   `operationId` is never assumed to equal the method name. Signatures,
-   docs and referenced type declarations come from the type checker; OpenAPI
-   descriptions, parameters, schemas, examples and security are merged in.
-   The records, the MiniSearch index and the `sdk` binding declaration are
-   held in memory (the declaration also in the workspace, for the type
-   checker).
-5. **executor** (`OagMcpService.create`): credential provider, authorization
-   policy, request broker, Deno runtime resolution, and a verification run
-   that loads the bundle in the sandbox and checks that every binding exists.
-6. The fixed `search` and `execute` tools are registered (descriptions are
-   computed once).
-7. The transport starts; `server.ready` is logged with the total start-up
-   duration.
-
-Any failure logs `prepare.stage.failed`/`prepare.failed`, removes the
-workspace and exits non-zero with an `Error [CODE]: … Hint: …` message on
-stderr. Nothing is served partially.
-
-### The workspace
-
-A `mkdtemp` directory `oag-mcp-ws-*` (mode `0700`) under the OS temporary
-directory holds `sdk/` (bundle, declarations, binding declaration, TS libs),
-`executor/runner.js`, and `input/` for an extracted archive. It contains no
-secrets (credentials are resolved later, host-side) and nothing in it needs
-to be managed by the user: it is removed on `SIGINT`/`SIGTERM`, when a stdio client closes
-stdin, on start-up failure and, as a last resort, on process exit. Signal
-handlers are installed before preparation begins: a signal during start-up
-cancels preparation at the next stage boundary (`STARTUP_ABORTED`, exit
-code 1) and the workspace is removed by the normal failure path; a second
-signal exits immediately. Each workspace records its owner PID; a later start removes workspaces whose
-process no longer exists (e.g. after `SIGKILL`).
-
-### Caching
-
-There is no persistent cache: preparation of typical SDKs takes one to a few
-seconds, and a cache would have to be keyed on the spec, SDK contents,
-adapter version and settings and integrity-checked before its bundle is run.
-That trade-off may be revisited for very large SDKs.
-
-## Execution model
+OAG-MCP turns an OpenAPI document and the typescript-fetch SDK generated from
+it into an MCP server, so that AI agents can use the API. Instead of one MCP
+tool per operation, it exposes two: `search`, to find SDK methods, and
+`execute`, to run TypeScript that calls them. The agent's code runs with the
+real SDK in a sandbox without permissions; every request the SDK makes is
+checked, given credentials and sent by oag-mcp itself, outside the sandbox.
 
 ```text
- MCP client ── execute(code) ──▶ oag-mcp host (Node.js, trusted)
-                                  │ 1. reject imports, transpile, type-check
-                                  │ 2. spawn Deno (no permissions, empty env)
-                                  ▼
-                      ┌──── Deno sandbox (untrusted code) ────┐
-                      │  agent code ─▶ sdk.PetsApi.listPets() │
-                      │  real generated SDK (bundle)          │
-                      │  fetchApi = bridge  ── JSON line ─────┼──▶ broker
-                      └───────────────────────────────────────┘     │
-                                                                    │ authorise op (per call)
-                                                                    │ check URL/method/path
-                                                                    │ attach credentials
-                                                                    ▼
-                                                                 your API
+                    oag-mcp serve (one process)
+ openapi.yaml ─┐   ┌──────────────── start-up, once ────────────────┐
+               ├──▶│ 1 inputs  2 compatibility  3 bundle + .d.ts     │
+ SDK dir/.tgz ─┘   │ 4 method index  5 bridge + Deno executor        │
+  (read-only)      │ 6 register search/execute  7 start transport    │
+                   └───────────────────────┬─────────────────────────┘
+                                           ▼  (stdio or Streamable HTTP)
+                    search ─▶ in-memory index
+                    execute ─▶ type check ─▶ Deno sandbox (real SDK) ──┐
+                               host broker: authz, network, credentials ◀┘ ─▶ your API
 ```
 
-The real SDK runs inside the sandbox: request building, parameter
-serialisation, model conversion (`FromJSON`/`ToJSON`, dates) and error types
-are the generated code's own. Only the final `fetch` is bridged to the host,
-which is where credentials live. See [security](security.md).
+Goals:
 
-### Alternatives considered
+- **Make any OpenAPI API usable by agents** with only what the API already
+  has: its OpenAPI document and a generated SDK. No hand-written tools, no
+  changes to the API or the SDK.
+- **Keep the agent's context small** whatever the size of the API, and let
+  it compose many calls into one program
+  ([ADR 1](decisions/0001-code-mode-with-two-tools.md)).
+- **Treat agent code as untrusted**: it never sees credentials, and can only
+  reach the operations a caller is allowed, on the configured API
+  ([ADR 2](decisions/0002-real-sdk-in-a-deno-sandbox.md)).
+- **Leave a complete, standard record** of what each caller did
+  ([ADR 7](decisions/0007-logging-in-opentelemetry-and-ocsf.md)).
 
-- **Run the SDK on the host and proxy method calls from the sandbox.** Keeps
-  the SDK out of the sandbox, but means serialising SDK arguments (Dates,
-  Blobs) across the boundary and running user-supplied SDK code in the server
-  process. Rejected: the hybrid gives the same credential isolation with less
-  machinery.
-- **Give the sandbox `--allow-net=<api host>` and credentials.** Simplest, but
-  credentials would be readable by agent code. Rejected.
-- **`node:vm`, `isolated-vm` or QuickJS/WASM.** `node:vm` is not a security
-  boundary; isolated-vm/QuickJS would need a custom host bridge for fetch,
-  timers and SDK globals and are less battle-tested against this SDK's
-  runtime. Deno gives a separate process, a permission model and a standard
-  web runtime the SDK already targets.
+[How it works](how-it-works.md) follows what happens step by step; this page
+describes the structure behind it.
 
-## Template changes
+OAG-MCP does not have formal service-level targets. These are the properties
+it is designed for, how it achieves them, and what has been observed with the
+test API (11 operations) on a developer machine.
 
-The repository started from the `generator-node` CLI template (JavaScript,
-Mocha, bagofcli, Suntory/Bob). Changes:
+| Attribute | Design | Observed |
+| --- | --- | --- |
+| Security | Agent code in a separate Deno process with no permissions; credentials and network only on the host side; per-operation authorization; secrets never logged; refuses to listen beyond loopback without MCP authentication. See [Security](security.md). | Every escape attempt in the integration tests (files, network, environment, subprocesses, `eval`, forged bridge messages) is denied and audited. |
+| Start-up | Everything is prepared at start-up, once, with no cache ([ADR 5](decisions/0005-prepare-at-start-up-without-a-cache.md)). | 1.7 to 6 seconds, varying with machine load; grows with the size of the SDK. |
+| Latency | `search` answers from memory; each `execute` starts a fresh sandbox process. | `search` about 1 ms. `execute` of trivial code 50 to 90 ms, the first call or two a few hundred ms more; each SDK call adds the API's own response time. |
+| Concurrency | Executions run in separate processes, up to `execution.maxConcurrent` (default 4), with a bounded queue; each has its own memory limit. See [Execution limits](recipes/execution-limits.md). | Calls beyond the queue are refused at once with `executor_busy`, without affecting running ones. |
+| Scalability | One process per server; Streamable HTTP is stateless, so instances can be added behind a load balancer ([ADR 8](decisions/0008-stateless-streamable-http.md)). | Not load-tested. |
+| Availability | Fails fast at start-up rather than serving partially; stdout carries only MCP messages; a failing audit destination can stop `execute` (fail-closed) instead of running unaudited. | |
+| Maintainability | Strict TypeScript; cyclomatic complexity at most 10 for every function in `lib/`; one adapter knows the SDK layout ([ADR 3](decisions/0003-typescript-fetch-sdks-only.md)). | 100% line coverage by unit tests; audit records validated against the OCSF schema in CI. |
 
-- **Build tooling**: the Makefile is Olympia, a TypeScript counterpart of
-  Suntory, and Bob is not used. The Makefile's targets run the
-  project's own tools directly: `tsc` (`build`, `typecheck`), Prettier
-  (`style`), ESLint (`lint`, and `complexity` through its `complexity` rule),
-  Mocha and c8 (`test`, `test-integration`, `coverage`), TypeDoc (`doc`) and
-  `npm pack` (`package`). The only npm script left is the `prepare` lifecycle
-  hook, which builds `dist/` on `npm install` and before `npm pack`/`npm
-  publish`.
+## Tech stack
 
-- **Language**: sources are TypeScript in `lib/` (template layout kept),
-  compiled by `tsc` to `dist/`; `bin/oag-mcp.js` loads `dist/cli.js`. Added
-  `tsconfig.json` (type-check incl. tests) and `tsconfig.build.json`.
-- **Module conventions**: ES modules, `"use strict"`, JSDoc and
-  `module - method` test naming are kept. The callback convention is replaced
-  by `async`/`await` because the MCP SDK, fetch, esbuild and the TypeScript
-  API are promise-based.
-- **CLI**: still `bagofcli` with `conf/commands.json`; the sample `display`
-  command, `lib/models/message.js` and `examples/oag-mcp.yaml` were removed.
-- **Tests**: Mocha + Sinon + referee are kept; tests are TypeScript run
-  through `tsx` (Mocha configuration in `package.json`, so Olympia dotfile
-  updates cannot remove it). Unit tests use local fixture files;
-  integration tests (`test-integration/*.ts`) add a mock API and a local
-  authorisation server. `test-integration/cli.ts` runs the CLI as a process
-  to cover help and option validation (it replaces the template's cmdt
-  `commands.yml`).
-- **Lint/format**: `eslint.config.js` now uses `typescript-eslint`; Prettier
-  config ignores fixtures and build output.
-- **Packaging**: `package.json` gained `exports`, `files`, `types`,
-  pinned dependencies, scripts and Node 22+. `.gitignore` ignores `dist/`.
-- **CI**: the workflow runs `make deps` and `make ci`; the upgrade workflow
-  runs `make deps-upgrade` (npm-check-updates) followed by `make ci`.
-- **Makefile-extras**: a `gen-sdk` target generates a typescript-fetch SDK
-  with OpenAPI Generator's Docker image and packs it with `npm pack`
-  (`make -f Makefile-extras gen-sdk SPEC=path/to/openapi.yaml`).
-- **Changelog**: the template's CHANGELOG contained another project's
-  release history; it was replaced with this project's.
+| Part | Technology | Why |
+| --- | --- | --- |
+| Language and runtime | TypeScript, on Node.js 22 or later | Typed throughout, and the MCP, TypeScript compiler and bundler tools it builds on are Node.js libraries. |
+| MCP | `@modelcontextprotocol/server`, `@modelcontextprotocol/node` | The official SDK, for both transports and OAuth resource server support. |
+| Sandbox | Deno 2, from the `deno` npm package | A separate process with a deny-by-default permission model, and the standard web runtime typescript-fetch SDKs target ([ADR 2](decisions/0002-real-sdk-in-a-deno-sandbox.md)). |
+| OpenAPI | `@apidevtools/swagger-parser`, `openapi-sampler` | Validates and dereferences documents without fetching remote references; generates example values. |
+| SDK analysis | TypeScript compiler API (`typescript`) | Reads the generated code to bind methods, extracts exact signatures, emits declarations and type-checks agent code against them ([ADR 4](decisions/0004-bind-methods-by-static-analysis.md)). |
+| Bundling | `esbuild` | Turns the SDK and its dependencies into one module the sandbox can load. |
+| Search | `minisearch`, `stopword`, `stemmer` | An in-memory full-text index with English stop words and stemming, small enough to build at every start-up. |
+| Authentication | `jose` | Validates JWT access tokens for OAuth MCP callers against the issuer's keys. |
+| Configuration | `yaml`, `zod` | YAML or JSON files, validated strictly against one schema. |
+| Logging | `pino`, `pino-pretty`, `sonic-boom` | Fast structured logging with synchronous writes, so a failing audit destination is noticed at once ([ADR 7](decisions/0007-logging-in-opentelemetry-and-ocsf.md)). |
+| Packaging | `tar`, `semver`, `which` | Safe extraction of SDK archives, generator and Deno version checks, finding Deno on `PATH`. |
+| CLI | `bagofcli` | Command and option definitions, with validation, from `conf/commands.json`. |
+| Build | Olympia Makefile, `tsc`, ESLint, Prettier, Mocha, c8, TypeDoc | The standard tooling of Olympia projects ([ADR 9](decisions/0009-typescript-and-olympia-build.md)). |
+
+## Diagrams
+
+OAG-MCP sits between MCP clients and the API. It reads its inputs at
+start-up, and talks to authorization servers only when the configuration
+uses OAuth.
+
+```mermaid
+flowchart LR
+  person([Person]) --> client["MCP client and agent"]
+  client -- "MCP over stdio or Streamable HTTP" --> oag["oag-mcp"]
+  oag -- "HTTP requests with credentials" --> api[("Your API")]
+  oag -. "OAuth2 client credentials" .-> apiAuth["Authorization server for the API"]
+  client -. "sign-in, OAuth mode" .-> mcpAuth["Authorization server for MCP callers"]
+  oag -. "JWKS or introspection, OAuth mode" .-> mcpAuth
+  oag -- "operational and audit records" --> logs[("Log destination or SIEM")]
+  inputs[/"OpenAPI document, SDK, configuration, secrets"/] --> oag
+```
+
+Everything runs in one oag-mcp process, except agent code, which runs in a
+separate sandbox process for each `execute` call. The sandbox has no way out
+except the bridge to the request broker.
+
+```mermaid
+flowchart TB
+  subgraph host["oag-mcp process (trusted)"]
+    cli["CLI and configuration<br/>cli.ts, config.ts"]
+    prepare["Start-up preparation<br/>prepare/"]
+    index["Method index<br/>search/"]
+    server["MCP server: transports, authentication,<br/>authorization, tools<br/>server/"]
+    executor["Executor: code policy, type checker,<br/>sandbox processes<br/>executor/"]
+    broker["Request broker and credentials<br/>upstream/"]
+    logging["Logging: OpenTelemetry and OCSF<br/>logging/"]
+  end
+  subgraph sandbox["Deno sandbox, one per execute (untrusted)"]
+    code["Agent code"]
+    sdk["Generated SDK bundle"]
+    bridge["Bridged fetch"]
+  end
+  cli --> prepare --> index
+  cli --> server
+  server --> index
+  server --> executor
+  executor -- "starts, limits, kills" --> sandbox
+  code --> sdk --> bridge
+  bridge -- "one message per request" --> broker
+  broker -- "checked request" --> api[("Your API")]
+  server -.-> logging
+  executor -.-> logging
+  broker -.-> logging
+```
+
+The main data path: the agent's code, its SDK calls, and the result.
+
+```mermaid
+sequenceDiagram
+  participant C as MCP client
+  participant S as oag-mcp server
+  participant E as Executor
+  participant D as Deno sandbox
+  participant B as Request broker
+  participant A as Your API
+
+  C->>S: tools/call execute { code }
+  S->>S: identify caller, record request (audit)
+  S->>E: check code: size, imports, types
+  E->>D: start process with SDK bundle and code
+  loop each SDK call
+    D->>B: request, tagged with its SDK method
+    B->>B: authorize, check destination, add credentials (audit)
+    B->>A: HTTP request
+    A-->>B: response
+    B-->>D: response, within size limit
+  end
+  D-->>E: result and console output
+  E-->>S: outcome, sandbox stopped
+  S-->>C: { ok, result, logs, stats } or { ok: false, error }
+```
+
+`search` needs no diagram: the server answers it from the method index,
+filtered by what the caller may call, without the sandbox or the API.
+
+## Repo structure
+
+```text
+bin/oag-mcp.js        command entry point; loads dist/cli.js
+conf/commands.json    CLI commands, options and their validation
+lib/                  TypeScript sources
+  cli.ts              the serve command: configuration, logging, signals, start and stop
+  config.ts           configuration schema and loading
+  errors.ts           OagMcpError: stable error codes and hints
+  types.ts            data shared between areas (operations, principals, …)
+  prepare/            start-up preparation: inputs, compatibility, bundle, method index
+  search/             the in-memory search index
+  server/             transports, MCP authentication, authorization, the two tools
+  executor/           code policy, type checker, Deno sandbox processes
+  upstream/           request broker, security requirements, credential providers
+  logging/            the logger, OpenTelemetry and OCSF formats
+  util/               hashing, redaction, secrets, semaphore, version
+assets/deno-runner.js the program that runs inside the sandbox (JavaScript, not compiled)
+test/                 unit tests, mirroring lib/, with fixtures (including the Pet Clinic API and SDKs)
+test-integration/     integration tests: the CLI as a process, a mock API, a local authorization server
+examples/             example configuration and CLI usage
+docs/                 user documentation, reference pages and decision records
+```
+
+The code is organised by responsibility, not by layer. These rules keep the
+responsibilities apart:
+
+- **Dependencies point one way.** At run time, `cli` uses `server`; `server`
+  uses `prepare`, `search`, `executor` and `upstream`; all of them use
+  `logging`, `util`, `config` and `errors`. Where a module needs a type from
+  an area that depends on it, it imports the type only (`import type`), so
+  there are no cycles at run time.
+- **One place for each boundary.** Only `executor/` starts sandbox processes.
+  Only `upstream/` sends requests to the API and handles upstream
+  credentials. Only `prepare/compat.ts` and `prepare/analyze.ts` know the
+  typescript-fetch layout. Only `assets/deno-runner.js` runs inside the
+  sandbox, and it imports nothing from `lib/`.
+- **Contracts are interfaces.** The tools depend on `Executor`
+  (`lib/executor/types.ts`), not on Deno, and the broker on
+  `CredentialProvider` (`lib/upstream/types.ts`), which receives the caller.
+  These are where another sandbox or a per-caller credential provider would
+  plug in.
+- **No logging around the logger.** Library code logs through `Logs`, never
+  `console`, and never writes to stdout, which carries MCP messages.
+
+Where each kind of type lives, and other code conventions, are in
+[AGENTS.md](../AGENTS.md) and [AGENTS-extras.md](../AGENTS-extras.md#where-types-live).
+
+## Decision records
+
+The significant design decisions, each with its context, the choice made and
+its consequences, are in [decisions/](decisions/README.md):
+
+1. [Code mode with two tools](decisions/0001-code-mode-with-two-tools.md)
+2. [The real SDK in a Deno sandbox, with a host broker](decisions/0002-real-sdk-in-a-deno-sandbox.md)
+3. [typescript-fetch SDKs only](decisions/0003-typescript-fetch-sdks-only.md)
+4. [Bind SDK methods to operations by static analysis](decisions/0004-bind-methods-by-static-analysis.md)
+5. [Prepare at start-up, without a persistent cache](decisions/0005-prepare-at-start-up-without-a-cache.md)
+6. [One shared upstream identity, no token passthrough](decisions/0006-shared-upstream-identity.md)
+7. [Logging in OpenTelemetry and OCSF](decisions/0007-logging-in-opentelemetry-and-ocsf.md)
+8. [Stateless Streamable HTTP](decisions/0008-stateless-streamable-http.md)
+9. [TypeScript and the Olympia build](decisions/0009-typescript-and-olympia-build.md)
+
+## Deployment and operations
+
+OAG-MCP is one process, with short-lived Deno processes under it for
+executions. It runs in one of two ways:
+
+- **Local, over stdio**: an MCP client on the same machine starts it as a
+  subprocess, one per client. Nothing listens on the network.
+- **As a service, over Streamable HTTP**: on a server or in a container,
+  behind a reverse proxy that provides HTTPS, with MCP authentication. Being
+  stateless, it can run as several instances behind a load balancer. See
+  [Remote server](recipes/remote-server.md) and [Deployment](deployment.md).
+
+It needs Node.js 22 or later, its own npm dependencies (including Deno), the
+OpenAPI document, the SDK and the configuration. It does not need OpenAPI
+Generator or Docker, nor network access at start-up, except to reach the
+authorization server when MCP callers use OAuth. It writes only to its
+temporary folders and its log files.
+
+Settings come from command-line flags and one configuration file, validated
+strictly at start-up; see the [CLI](reference/cli.md) and
+[configuration](reference/configuration.md) references. Secrets are never in
+either: the configuration references them, by environment variable or by key
+in a secrets file only its owner can read, and they are resolved when the
+server starts. Agent code never has access to them, and they are scrubbed
+from every log line and result.
+
+The temporary workspace, under `TMPDIR`, holds the prepared SDK. It contains
+no secrets and is removed when the server stops; on a read-only root
+filesystem, point `TMPDIR` at a writable volume.
+
+OAG-MCP writes two kinds of log, to stderr by default, or to files or file
+descriptors: operational records in OpenTelemetry's format, and security
+audit records in OCSF. See [Logging](logging.md), the
+[log events reference](reference/log-events.md) and
+[Audit logging](recipes/audit-logging.md).
+
+Readiness is the `server.ready` record and, over HTTP, the
+`oag-mcp listening on <url>` line on stderr. Over HTTP, `GET /healthz`
+answers `{"status":"ok"}` without authentication, subject to the `Host` check.
+
+OAG-MCP exposes no metrics endpoint and emits no traces. Counts and durations
+are in the operational records (`execution.completed`,
+`upstream.call.completed`, …), so metrics can be derived from them by a log
+pipeline, such as an OpenTelemetry Collector.

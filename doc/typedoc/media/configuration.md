@@ -19,7 +19,7 @@ properties here.
 The file never contains secret values. Each property that takes a secret holds
 a *secret reference* instead, in one of two forms:
 
-```yaml
+```text
 { env: NAME }      # the value of environment variable NAME
 { secret: key }    # the value of key in the upstreamAuth.secretsFile map
 ```

@@ -65,7 +65,10 @@ Rejected:
 | `sagasAndRecords` | redux-saga/immutable code; not an SDK the sandbox can use |
 | `stringEnums=true` | TypeScript `enum`s cannot be referenced from agent code (it has no imports); the default string-literal unions work |
 | `dateLibrary=temporal` | experimental upstream |
-| others | `SDK_OPTION_UNTESTED` |
+
+An SDK generated with one of these is refused with `SDK_OPTION_UNSUPPORTED`.
+Other options are not detected: an SDK generated with an option not listed
+here is served if it passes the other checks, but has not been tested.
 
 ## Accepted inputs
 
