@@ -7,18 +7,34 @@ tool per operation, it exposes two: `search`, to find SDK methods, and
 real SDK in a sandbox without permissions; every request the SDK makes is
 checked, given credentials and sent by oag-mcp itself, outside the sandbox.
 
-```text
-                    oag-mcp serve (one process)
- openapi.yaml ─┐   ┌──────────────── start-up, once ────────────────┐
-               ├──▶│ 1 inputs  2 compatibility  3 bundle + .d.ts     │
- SDK dir/.tgz ─┘   │ 4 method index  5 bridge + Deno executor        │
-  (read-only)      │ 6 register search/execute  7 start transport    │
-                   └───────────────────────┬─────────────────────────┘
-                                           ▼  (stdio or Streamable HTTP)
-                    search ─▶ in-memory index
-                    execute ─▶ type check ─▶ Deno sandbox (real SDK) ──┐
-                               host broker: authz, network, credentials ◀┘ ─▶ your API
+```mermaid
+flowchart LR
+  inputs[/"OpenAPI document,<br/>SDK (read-only),<br/>configuration"/]
+  subgraph startup["Start-up, once"]
+    direction TB
+    s1["1. Read command line<br/>and configuration"] --> s2["2. Read OpenAPI document<br/>and SDK"]
+    s2 --> s3["3. Check SDK compatibility"]
+    s3 --> s4["4. Bundle SDK and<br/>declarations"]
+    s4 --> s5["5. Index SDK methods"]
+    s5 --> s6["6. Credentials, policy,<br/>sandbox check"]
+    s6 --> s7["7. Register tools,<br/>open transport"]
+  end
+  subgraph serving["Serving, every call"]
+    direction TB
+    caller["Authenticate caller"] --> search["search"]
+    caller --> execute["execute"]
+    search --> index[("Method index,<br/>filtered by permissions")]
+    execute --> check["Code policy<br/>and type check"]
+    check --> sandbox["Deno sandbox:<br/>agent code and real SDK"]
+    sandbox --> broker["Host broker: authorization,<br/>network policy, credentials"]
+  end
+  inputs --> s1
+  s7 -- "stdio or<br/>Streamable HTTP" --> caller
+  broker --> api[("Your API")]
 ```
+
+The numbered steps are those of [How it works](how-it-works.md), which
+follows each one in turn.
 
 Goals:
 
