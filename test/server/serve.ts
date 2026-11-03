@@ -353,14 +353,17 @@ describe("serve - servePrepared over Streamable HTTP", function () {
   });
 
   it("should refuse an oversized request body", async function () {
-    started = await start();
+    // A body small enough to be sent at once: the server answers 413 without
+    // reading it, and closing a socket with a large unread body resets it, which
+    // on macOS reaches the client before the response.
+    started = await start({ http: { maxBodyBytes: 1024 } });
     const res = await rawRequest(started.running.url!, {
       method: "POST",
       headers: {
         "content-type": "application/json",
         accept: "application/json, text/event-stream",
       },
-      body: "x".repeat(2 * 1024 * 1024),
+      body: "x".repeat(2048),
     });
     assert.equals(res.status, 413);
   });

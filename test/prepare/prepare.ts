@@ -240,7 +240,12 @@ describe("prepare - prepareSdk", function () {
     pkg.dependencies = { "not-installed-pkg": "1.0.0" };
     fs.writeFileSync(pkgFile, JSON.stringify(pkg));
     const archive = path.join(work, "sdk.tgz");
-    execFileSync("tar", ["-czf", archive, "-C", work, "package"]);
+    // COPYFILE_DISABLE stops macOS tar adding AppleDouble `._*` entries for
+    // extended attributes, which would give the archive a second top-level
+    // entry; GNU tar ignores it.
+    execFileSync("tar", ["-czf", archive, "-C", work, "package"], {
+      env: { ...process.env, COPYFILE_DISABLE: "1" },
+    });
     const err = await rejection(prepareSdk(options({ sdk: archive }).opts));
     assert.equals(err.code, "SDK_DEPENDENCIES_MISSING");
     assert.match(err.hint!, /Extract the archive/);
