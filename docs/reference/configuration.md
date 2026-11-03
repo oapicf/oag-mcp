@@ -9,10 +9,10 @@ sandbox limits (`execution`), the Streamable HTTP endpoint (`http`) and logging
 (`logging`).
 
 The file is YAML or JSON. Every section and property is optional, and anything
-left out takes its default; without `--config`, oag-mcp runs on the defaults
+left out takes its default; without `--config`, OAG-MCP runs on the defaults
 alone. Unknown properties are rejected, to catch typos. The file is read and
-validated once at start-up, and an invalid file stops oag-mcp with a
-`CONFIG_INVALID` error naming the property; restart oag-mcp to apply changes.
+validated once at start-up, and an invalid file stops OAG-MCP with a
+`CONFIG_INVALID` error naming the property; restart OAG-MCP to apply changes.
 `--host`, `--port`, `--path` and the logging flags override the matching
 properties here.
 
@@ -24,7 +24,7 @@ a *secret reference* instead, in one of two forms:
 { secret: key }    # the value of key in the upstreamAuth.secretsFile map
 ```
 
-References are resolved when oag-mcp starts, so a missing variable or key
+References are resolved when OAG-MCP starts, so a missing variable or key
 stops it with a configuration error.
 
 ## Example
@@ -35,7 +35,7 @@ is a working one for the Pet Clinic test fixture.
 
 ```yaml
 upstream:
-  baseUrl: https://api.example.com/v1
+  baseUrl: https://api.example.com/v1   # default: the OpenAPI document's first server URL
   allowedOrigins: [https://files.example.com]
   followRedirects: true
   maxRedirects: 3
@@ -88,8 +88,8 @@ mcpAuth:
       clientSecret: { env: INTROSPECTION_CLIENT_SECRET }
     allowInsecureIssuer: false
 
-authorization:
-  default: deny
+authorization:                       # without this section, every operation is allowed
+  default: deny                      # with it, anything no rule allows is refused
   rules:
     - id: readers
       scopes: [pets:read]
@@ -176,7 +176,7 @@ used as a key, and `[]` marks the properties of each item in a list, so
 | `mcpAuth.oauth.algorithms` | The JWT signing algorithms accepted. | string[] | No | `[RS256, PS256, ES256, EdDSA]` | `[RS256]` |
 | `mcpAuth.oauth.clockToleranceSec` | Clock skew allowed when checking token times, in seconds. | integer, 0 to 300 | No | `30` | `60` |
 | `mcpAuth.oauth.introspection.endpoint` | An RFC 7662 introspection endpoint, for opaque (non-JWT) tokens. When set, it replaces JWT validation. | string (URL) | Yes, when `introspection` is set | None | `https://auth.example.com/oauth/introspect` |
-| `mcpAuth.oauth.introspection.clientId` | The client id oag-mcp authenticates to the introspection endpoint with. | secret reference | Yes, when `introspection` is set | None | `{ env: INTROSPECTION_CLIENT_ID }` |
+| `mcpAuth.oauth.introspection.clientId` | The client id OAG-MCP authenticates to the introspection endpoint with. | secret reference | Yes, when `introspection` is set | None | `{ env: INTROSPECTION_CLIENT_ID }` |
 | `mcpAuth.oauth.introspection.clientSecret` | The client secret for the introspection endpoint. | secret reference | Yes, when `introspection` is set | None | `{ env: INTROSPECTION_CLIENT_SECRET }` |
 | `mcpAuth.oauth.allowInsecureIssuer` | Allow a plain http issuer on a non-loopback host. For local testing only. | boolean | No | `false` | `true` |
 | `authorization.default` | The decision for an operation no rule allows or denies. Without an `authorization` section at all, every operation is allowed. | string | No | `deny` | `deny`, `allow` |
@@ -184,7 +184,7 @@ used as a key, and `[]` marks the properties of each item in a list, so
 | `authorization.rules[].principals` | The rule applies only to these principals, by name or id; `*` wildcards allowed. | string[] | No | Any principal | `[ci-bot, "team-*"]` |
 | `authorization.rules[].scopes` | The rule applies only to callers holding all of these scopes. | string[] | No | Any scopes | `[pets:read]` |
 | `authorization.rules[].clientIds` | The rule applies only to callers with one of these OAuth client ids. | string[] | No | Any client | `[my-oauth-client]` |
-| `authorization.rules[].allow` | Operations the rule allows, as patterns: `PetsApi.listPets` or a glob such as `PetsApi.*`, `tag:<tag>`, `method:<METHOD>` or `operationId:<glob>`. | string[] | No | `[]` | `["method:GET"]`, `["PetsApi.*", "tag:owners"]` |
+| `authorization.rules[].allow` | Operations the rule allows, as [patterns](#authorization-patterns): `PetsApi.listPets` or a glob such as `PetsApi.*`, `tag:<tag>`, `method:<METHOD>` or `operationId:<glob>`. | string[] | No | `[]` | `["method:GET"]`, `["PetsApi.*", "tag:owners"]` |
 | `authorization.rules[].deny` | Operations the rule denies, in the same patterns as `allow`. A deny from any applicable rule wins over every allow. | string[] | No | `[]` | `["AdminApi.*"]` |
 | `execution.timeoutMs` | Time limit for each `execute` call, in milliseconds, when the call doesn't set its own. | integer, at least 100 | No | `30000` | `60000` |
 | `execution.maxTimeoutMs` | The highest time limit an `execute` call may ask for, in milliseconds. | integer, at least 100 | No | `120000` | `300000` |
@@ -209,3 +209,36 @@ used as a key, and `[]` marks the properties of each item in a list, so
 | `logging.file` | Where operational records go: a file path, relative to the working directory, or `fd:N` for an open file descriptor. stdout is refused. Overridden by `--log-file`. | string | No | stderr | `/var/log/oag-mcp/operational.log`, `fd:3` |
 | `logging.auditFile` | Where security audit (OCSF) records go: a file path or `fd:N`. stdout is refused. Overridden by `--audit-log-file`. | string | No | stderr | `/var/log/oag-mcp/audit.log`, `fd:4` |
 | `logging.auditFailClosed` | Refuse `execute` calls while security audit records cannot be written. `--audit-fail-closed` also turns it on. | boolean | No | `false` | `true` |
+
+## Authorization patterns
+
+A rule's `allow` and `deny` lists select operations with these patterns:
+
+| Pattern | Matches | Example |
+| --- | --- | --- |
+| `<ApiClass>.<method>` | One SDK method, by its binding id: the name the agent calls, as in `sdk.PetsApi.listPets(…)`. | `PetsApi.listPets` |
+| A binding id with `*` | Every SDK method whose binding id matches. | `PetsApi.*`, `*.list*` |
+| `tag:<tag>` | Every operation with that OpenAPI tag among its tags. Exact and case-sensitive. | `tag:owners` |
+| `method:<METHOD>` | Every operation with that HTTP method. | `method:GET` |
+| `operationId:<glob>` | Every operation whose `operationId` in the OpenAPI document matches. This is the document's id, which can differ from the SDK method's name. | `operationId:list*` |
+
+A rule applies to a caller when every selector it sets matches:
+`principals` (any of them, by name or id, with `*` wildcards), `scopes` (all
+of them) and `clientIds` (any of them). A rule that sets none applies to
+every caller.
+
+For each SDK call, OAG-MCP's broker looks at the rules that apply to the
+caller:
+
+1. if any of them denies the operation, the call is refused;
+2. otherwise, if any of them allows it, the call is allowed;
+3. otherwise `authorization.default` decides.
+
+The same decision filters `search` results, so a caller is not shown methods
+it cannot call; the broker's check on each call is the control.
+
+Without an `authorization` section, every operation is allowed, and the
+start-up audit record `authorization.policy_loaded` says
+`policyMode: implicit-allow-all`. The [curated](../recipes/curated.md) and
+[per-caller permissions](../recipes/per-caller-permissions.md) recipes put
+these rules to work.
