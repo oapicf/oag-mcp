@@ -12,7 +12,7 @@ so it chooses from a short, relevant list instead of the whole API.
 
 Curation is an `authorization` policy, like the
 [read-only recipe](read-only.md): deny every operation by default, then allow
-the chosen ones in a rule. oag-mcp enforces it for every SDK call, whatever
+the chosen ones in a rule. OAG-MCP enforces it for every SDK call, whatever
 code the agent submits:
 
 - `search` lists only the curated methods. Asking it for any other method by
@@ -51,13 +51,13 @@ operation's first tag (`pets` becomes `PetsApi`) and the method after its
 Tags and binding ids also behave differently as the API grows:
 
 - **By tag**, the set follows the API: an operation added to a curated tag is
-  exposed as soon as oag-mcp serves an SDK that has it. Good for "everything
+  exposed as soon as OAG-MCP serves an SDK that has it. Good for "everything
   about pets", when the tag is a trusted boundary.
 - **By binding id**, the set is an exact list: a new operation is never
   exposed until you add it. Good when every operation must be reviewed
   first.
 
-To see the binding ids and tags of your API, start oag-mcp once without an
+To see the binding ids and tags of your API, start OAG-MCP once without an
 `authorization` section and ask the agent to list the available methods, or
 call `search` with no arguments: the result lists every method by binding id,
 grouped by API class with its tags.
@@ -101,7 +101,7 @@ property.
 
 ## Running it
 
-Start oag-mcp with your OpenAPI document, the typescript-fetch SDK generated
+Start OAG-MCP with your OpenAPI document, the typescript-fetch SDK generated
 from it, and the configuration. With no `--transport`, it serves MCP over
 stdio:
 
@@ -113,13 +113,13 @@ oag-mcp serve --spec ./openapi.yaml --sdk ./generated-sdk \
 ```
 
 The two log flags write both kinds of record to `./oag-mcp.log`, where you can
-follow them; without them, logs go to stderr. To register oag-mcp with an MCP
+follow them; without them, logs go to stderr. To register OAG-MCP with an MCP
 client, see [Running it](read-only.md#running-it) in the read-only recipe and
 use this configuration file.
 
 ## What the agent and the logs show
 
-The examples below come from the Pet Clinic API that oag-mcp's tests use,
+The examples below come from the Pet Clinic API that OAG-MCP's tests use,
 with the configuration above; the JSON records are shown on several lines,
 with some fields left out. This `jq` command prints one line per record:
 

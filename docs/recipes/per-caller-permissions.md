@@ -1,6 +1,6 @@
 # Per-caller permissions
 
-When several agents or people share one oag-mcp server, they rarely need the
+When several agents or people share one OAG-MCP server, they rarely need the
 same access. A support assistant may read pets and owners; an operations
 agent may also register pets and check the store. This recipe gives each
 caller its own set of operations, from who the caller is and what its token
@@ -12,7 +12,7 @@ rule applies to. Callers are identified by the MCP authentication mode
 (`mcpAuth`), which for more than one caller means Streamable HTTP with either
 static bearer tokens or OAuth.
 
-For every SDK call, oag-mcp finds the rules that apply to the caller, then
+For every SDK call, OAG-MCP finds the rules that apply to the caller, then
 decides:
 
 1. if any of them denies the operation, it is refused;
@@ -24,7 +24,7 @@ deny. `search` shows each caller only its own operations, and every decision
 is recorded in an audit record naming the caller.
 
 These rules decide what each caller may ask for. They do not change who the
-API sees: oag-mcp calls the API with one shared set of upstream credentials,
+API sees: OAG-MCP calls the API with one shared set of upstream credentials,
 whichever caller made the call (see
 [Authentication](../authentication.md#identity-model)).
 
@@ -64,7 +64,7 @@ Two habits keep rules easy to reason about:
 ## Configuration with static bearer tokens
 
 Static bearer tokens are the simplest way to tell callers apart: you give
-each caller a long random token, and oag-mcp maps it to a principal and its
+each caller a long random token, and OAG-MCP maps it to a principal and its
 scopes. This plan has two callers:
 
 | Caller | Token scopes | May call |
@@ -122,7 +122,7 @@ oag-mcp serve --spec ./openapi.yaml --sdk ./generated-sdk \
   --log-file ./oag-mcp.log --audit-log-file ./oag-mcp.log
 ```
 
-When it is ready, oag-mcp prints its endpoint on stderr:
+When it is ready, OAG-MCP prints its endpoint on stderr:
 
 ```text
 oag-mcp listening on http://127.0.0.1:3000/mcp
@@ -149,7 +149,7 @@ machines, bind a non-loopback `--host` behind a TLS-terminating proxy; see
 ## Configuration with OAuth
 
 With an OAuth 2.0 authorization server, callers bring access tokens it issued,
-and oag-mcp validates them as a resource server. Scopes come from the tokens,
+and OAG-MCP validates them as a resource server. Scopes come from the tokens,
 so the same scope rules work unchanged; the per-caller exception selects the
 OAuth client instead of a principal name, since OAuth principals have no
 name:
@@ -179,15 +179,15 @@ authorization:
 ```
 
 `requiredScopes` decides who may connect; the rules decide what each caller
-may then do. MCP clients discover the authorization server from oag-mcp's
+may then do. MCP clients discover the authorization server from OAG-MCP's
 protected resource metadata and sign the user in themselves. The access token
-is only ever used to authenticate the caller: oag-mcp never forwards it to the
+is only ever used to authenticate the caller: OAG-MCP never forwards it to the
 API. [Authentication](../authentication.md) covers token validation, JWKS and
 introspection.
 
 ## What the agents and the logs show
 
-The examples below come from the Pet Clinic API that oag-mcp's tests use,
+The examples below come from the Pet Clinic API that OAG-MCP's tests use,
 with the configurations above; the JSON records are shown on several lines,
 with some fields left out. This `jq` command prints one line per record, with
 the caller:
@@ -317,7 +317,7 @@ The refused call has `actor.user.uid` `static:support-bot`, `status_detail`
 sent to the API.
 
 `upstream.token.issue` shows the shared upstream identity at work: the API
-call that `clinic-ops` made used an OAuth2 token issued to oag-mcp's
+call that `clinic-ops` made used an OAuth2 token issued to OAG-MCP's
 `service-identity`, the same one any other caller's calls would use.
 
 ### With OAuth

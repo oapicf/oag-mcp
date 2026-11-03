@@ -1,24 +1,24 @@
 # Read-only server
 
-A good first step with oag-mcp is to expose only your API's read operations.
+A good first step with OAG-MCP is to expose only your API's read operations.
 An agent can then search the API and fetch data through it, but cannot create,
-change or delete anything. That makes it a safe way to try oag-mcp against a
+change or delete anything. That makes it a safe way to try OAG-MCP against a
 real API before deciding what else to allow.
 
 Read-only access is set with an `authorization` policy: deny every operation
-by default, and allow the ones whose HTTP method is `GET`. oag-mcp enforces it
+by default, and allow the ones whose HTTP method is `GET`. OAG-MCP enforces it
 on its own side, for every SDK call, whatever code the agent submits:
 
 - `search` lists only the methods the policy allows, so the agent never sees
   the write operations.
 - An SDK call to anything else is refused before any request is sent. The
   agent gets a `permission_denied` error with reason `authorization_denied`,
-  and oag-mcp writes an `authorization.denied` audit record.
+  and OAG-MCP writes an `authorization.denied` audit record.
 
 The policy goes by HTTP method, so it is only as read-only as your API is: a
 `GET` operation that changes data, or returns data the agent should not see,
 is still allowed. Check the `GET` operations in your OpenAPI document, and
-where your API supports it, give oag-mcp read-only credentials as well, so
+where your API supports it, give OAG-MCP read-only credentials as well, so
 the API itself refuses writes too.
 
 ## Configuration
@@ -41,10 +41,10 @@ authorization:
       allow: ["method:GET"]             # allow every GET operation
 ```
 
-- `upstreamAuth.schemes` holds the credentials oag-mcp uses to call your API,
+- `upstreamAuth.schemes` holds the credentials OAG-MCP uses to call your API,
   keyed by the names under `components.securitySchemes` in your OpenAPI
   document. The file only references the key; its value comes from the
-  environment when oag-mcp starts. Leave the section out if your API needs no
+  environment when OAG-MCP starts. Leave the section out if your API needs no
   credentials.
 - The `read-only` rule names no `principals`, `scopes` or `clientIds`, so it
   applies to every caller. `default: deny` refuses everything else.
@@ -56,7 +56,7 @@ property.
 
 ## Running it
 
-Start oag-mcp with your OpenAPI document, the typescript-fetch SDK generated
+Start OAG-MCP with your OpenAPI document, the typescript-fetch SDK generated
 from it, and the configuration. With no `--transport`, it serves MCP over
 stdio, for an MCP client on the same machine:
 
@@ -93,13 +93,13 @@ configuration:
 }
 ```
 
-Use absolute paths there, since the client may start oag-mcp from any folder.
+Use absolute paths there, since the client may start OAG-MCP from any folder.
 Then ask the agent something that needs your API's data, such as "list three
 pets".
 
 ## What the logs show
 
-The examples below come from the Pet Clinic API that oag-mcp's tests use,
+The examples below come from the Pet Clinic API that OAG-MCP's tests use,
 with the configuration above; the JSON records are shown on several lines,
 with some fields left out. This `jq` command prints one line per record: the
 event, and for SDK calls the operation and the outcome.
