@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.10.0 - 2026-11-03
 ### Added
 - `oag-mcp serve --spec <openapi> --sdk <typescript-fetch SDK dir|.tgz>` over stdio and Streamable HTTP, exposing exactly two MCP tools, `search` and `execute`
 - Start-up preparation, once per process and logged per stage: input validation, SDK compatibility checks (OpenAPI Generator 7.26.0, options, source or compiled layout, installed dependencies), safe archive extraction, an esbuild-prepared execution bundle, static method-to-operation binding analysis and an in-memory MiniSearch index
