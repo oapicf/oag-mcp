@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+- Fix publish workflow to use make deps-upgrade
+
 ## 0.10.0 - 2026-11-03
 ### Added
 - `oag-mcp serve --spec <openapi> --sdk <typescript-fetch SDK dir|.tgz>` over stdio and Streamable HTTP, exposing exactly two MCP tools, `search` and `execute`
