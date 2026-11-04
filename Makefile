@@ -79,7 +79,7 @@ deps-extra-apt:
 	$(call run_hook,x-post-deps-extra-apt)
 
 deps-upgrade:
-	$(NODE_BIN)/npm-check-updates --upgrade
+	$(NODE_BIN)/pkjutil upgrade-dependencies 
 	npm install
 
 rmdeps:
