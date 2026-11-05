@@ -28,6 +28,8 @@ Point OAG-MCP at a spec and an SDK, and your whole API is agent-ready in under a
 oag-mcp serve --spec ./openapi.yaml --sdk ./generated-sdk --transport streamable-http --port 3000
 ```
 
+https://github.com/user-attachments/assets/93b462db-4ff8-4b22-8dfd-120daa0855c9
+
 ## Why OAG-MCP
 
 A lot of OpenAPI-to-MCP bridges expose one MCP tool per endpoint, or a generic
