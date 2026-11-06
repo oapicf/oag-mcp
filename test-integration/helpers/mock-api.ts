@@ -208,7 +208,15 @@ export async function startMockApi(
       return send(res, 200, { status: "ok" });
     }
     if (req.method === "GET" && p === "/v1/slow") {
-      const delay = Number(url.searchParams.get("delayMs") ?? "1000");
+      const DEFAULT_DELAY_MS = 1000;
+      const MAX_DELAY_MS = 5000;
+      const requestedDelay = Number(
+        url.searchParams.get("delayMs") ?? String(DEFAULT_DELAY_MS),
+      );
+      const delay =
+        Number.isFinite(requestedDelay) && requestedDelay >= 0
+          ? Math.min(requestedDelay, MAX_DELAY_MS)
+          : DEFAULT_DELAY_MS;
       setTimeout(() => send(res, 200, { status: "slow-ok" }), delay);
       return;
     }
