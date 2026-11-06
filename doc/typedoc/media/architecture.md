@@ -60,7 +60,7 @@ test API (11 operations) on a developer machine.
 | Attribute | Design | Observed |
 | --- | --- | --- |
 | Security | Agent code in a separate Deno process with no permissions; credentials and network only on the host side; per-operation authorisation; secrets never logged; refuses to listen beyond loopback without MCP authentication. See [Security](security.md). | Every escape attempt in the integration tests (files, network, environment, subprocesses, `eval`, forged bridge messages) is denied and audited. |
-| Start-up | Everything is prepared at start-up, once, with no cache ([ADR 5](decisions/0005-prepare-at-start-up-without-a-cache.md)). | 1.7 to 6 seconds, varying with machine load; grows with the size of the SDK. |
+| Start-up | Everything is prepared at start-up, once, with no cache ([ADR 5](decisions/0005-prepare-at-start-up-without-a-cache.md)). | One to a few seconds (about 1.5 seconds in a recent run), varying with machine load; grows with the size of the SDK. |
 | Latency | `search` answers from memory; each `execute` starts a fresh sandbox process. | `search` about 1 ms. `execute` of trivial code 50 to 90 ms, the first call or two a few hundred ms more; each SDK call adds the API's own response time. |
 | Concurrency | Executions run in separate processes, up to `execution.maxConcurrent` (default 4), with a bounded queue; each has its own memory limit. See [Execution limits](recipes/execution-limits.md). | Calls beyond the queue are refused at once with `executor_busy`, without affecting running ones. |
 | Scalability | One process per server; Streamable HTTP is stateless, so instances can be added behind a load balancer ([ADR 8](decisions/0008-stateless-streamable-http.md)). | Not load-tested. |
@@ -73,7 +73,7 @@ test API (11 operations) on a developer machine.
 | --- | --- | --- |
 | Language and runtime | TypeScript, on Node.js 22 or later | Typed throughout, and the MCP, TypeScript compiler and bundler tools it builds on are Node.js libraries. |
 | MCP | `@modelcontextprotocol/server`, `@modelcontextprotocol/node` | The official SDK, for both transports and OAuth resource server support. |
-| Sandbox | Deno 2, from the `deno` npm package | A separate process with a deny-by-default permission model, and the standard web runtime typescript-fetch SDKs target ([ADR 2](decisions/0002-real-sdk-in-a-deno-sandbox.md)). |
+| Sandbox | Deno 2 (2.5 or later), from the `deno` npm package | A separate process with a deny-by-default permission model, and the standard web runtime typescript-fetch SDKs target ([ADR 2](decisions/0002-real-sdk-in-a-deno-sandbox.md)). |
 | OpenAPI | `@apidevtools/swagger-parser`, `openapi-sampler` | Validates and dereferences documents without fetching remote references; generates example values. |
 | SDK analysis | TypeScript compiler API (`typescript`) | Reads the generated code to bind methods, extracts exact signatures, emits declarations and type-checks agent code against them ([ADR 4](decisions/0004-bind-methods-by-static-analysis.md)). |
 | Bundling | `esbuild` | Turns the SDK and its dependencies into one module the sandbox can load. |

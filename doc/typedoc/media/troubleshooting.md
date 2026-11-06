@@ -68,7 +68,7 @@ see the start-up error. If it works in a terminal but not in the client:
 
 For a Streamable HTTP server, `curl http://127.0.0.1:3000/healthz` should
 answer `{"status":"ok"}`. A `401` means the client sends no token or the
-wrong one; a `403` with `Invalid Host` or `Origin not allowed` means the
+wrong one; a `403` with `Invalid Host`, `Invalid Origin` or `Origin not allowed` means the
 `http.allowedHosts` or `http.allowedOrigins` settings do not include what the
 client sends. [Remote server](recipes/remote-server.md) covers each.
 
