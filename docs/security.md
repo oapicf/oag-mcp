@@ -14,7 +14,7 @@ Each of OAG-MCP's security features answers one of those:
 
 | Feature | What it protects |
 | --- | --- |
-| [Authentication](#authentication) | Only known callers use OAG-MCP, and OAG-MCP proves itself to the API. |
+| [Authentication](#authentication) | No remote caller gets in without a valid token, every caller has an identity, and OAG-MCP proves itself to the API. |
 | [Authorisation](#authorisation) | Each caller can call only the operations it is allowed. |
 | [Secret handling](#secret-handling) | Credentials never leave OAG-MCP's own process. |
 | [Execution sandbox](#execution-sandbox) | Agent code cannot reach the files, network, environment or processes of the host. |
@@ -46,9 +46,12 @@ as the identities it is given.
 ## Authentication
 
 Authentication has two independent halves. **MCP Auth** decides who may use
-OAG-MCP: the operating system's process boundary for stdio, and for
-Streamable HTTP either pre-shared bearer tokens or OAuth 2.0 access tokens
-validated against your authorization server. **Upstream Auth** supplies the
+OAG-MCP. Over stdio there is no credential: only the process that started
+OAG-MCP can reach it, and the session runs as a principal set in the
+configuration. Over Streamable HTTP, each request carries a pre-shared bearer
+token or an OAuth 2.0 access token validated against your authorization
+server; serving with no authentication (`mcpAuth.mode: none`) is allowed only
+on a loopback address, where any local process can connect. **Upstream Auth** supplies the
 credentials your API expects: API keys, basic, bearer, or OAuth2 client
 credentials tokens that OAG-MCP obtains itself.
 

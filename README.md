@@ -50,6 +50,34 @@ mode** where the SDK is generated out of the OpenAPI specification itself:
 * **MCP sees two tools**, not one per endpoint, so large APIs don't flood the
   agent's context.
 
+Letting an AI agent write code against a real API is only useful if it is
+safe. OAG-MCP is built **security-first**: it treats agent code as untrusted
+and keeps your credentials out of its reach, so you can give an agent your API
+without giving it your keys or your infrastructure:
+
+* **Credentials never reach the agent**: secrets are loaded only at run time,
+  added to requests by OAG-MCP's broker outside the sandbox, and scrubbed from
+  logs, errors and results.
+* **Agent code runs in a locked-down sandbox**: a fresh Deno process per call,
+  with no file system, network, environment or subprocess access, no
+  `eval`, and limits on time, memory, output and API calls.
+* **Every API call is checked**: the broker allows a request only if it
+  matches the operation it claims to be, on the configured API, for a caller
+  the authorisation rules allow; a deny always wins.
+* **No unauthenticated remote access**: over HTTP, every request must carry a
+  valid bearer or OAuth 2.0 access token; serving without one is allowed only
+  on loopback. Over stdio, only the process that started OAG-MCP can reach it.
+  Either way each caller gets an identity for authorisation and audit, and an
+  MCP token is never forwarded to your API.
+* **Safe by default**: it binds to loopback, refuses to serve a non-loopback
+  address without authentication, checks `Host` and `Origin`, and never runs
+  the SDK's code or install scripts on the host.
+* **Everything is audited**: every security decision is a standard
+  [OCSF](https://ocsf.io/) event, ready for a SIEM, with an option to stop
+  executing while audit records cannot be written.
+
+[Security](docs/security.md) describes each protection, and what is not claimed.
+
 ## Installation
 
 ```bash
