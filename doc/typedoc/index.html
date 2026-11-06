@@ -51,6 +51,33 @@ using directly; OAG-MCP only reads it.</li>
 <li><strong>MCP sees two tools</strong>, not one per endpoint, so large APIs don't flood the
 agent's context.</li>
 </ul>
+<p>Letting an AI agent write code against a real API is only useful if it is
+safe. OAG-MCP is built <strong>security-first</strong>: it treats agent code as untrusted
+and keeps your credentials out of its reach, so you can give an agent your API
+without giving it your keys or your infrastructure:</p>
+<ul>
+<li><strong>Credentials never reach the agent</strong>: secrets are loaded only at run time,
+added to requests by OAG-MCP's broker outside the sandbox, and scrubbed from
+logs, errors and results.</li>
+<li><strong>Agent code runs in a locked-down sandbox</strong>: a fresh Deno process per call,
+with no file system, network, environment or subprocess access, no
+<code>eval</code>, and limits on time, memory, output and API calls.</li>
+<li><strong>Every API call is checked</strong>: the broker allows a request only if it
+matches the operation it claims to be, on the configured API, for a caller
+the authorisation rules allow; a deny always wins.</li>
+<li><strong>No unauthenticated remote access</strong>: over HTTP, every request must carry a
+valid bearer or OAuth 2.0 access token; serving without one is allowed only
+on loopback. Over stdio, only the process that started OAG-MCP can reach it.
+Either way each caller gets an identity for authorisation and audit, and an
+MCP token is never forwarded to your API.</li>
+<li><strong>Safe by default</strong>: it binds to loopback, refuses to serve a non-loopback
+address without authentication, checks <code>Host</code> and <code>Origin</code>, and never runs
+the SDK's code or install scripts on the host.</li>
+<li><strong>Everything is audited</strong>: every security decision is a standard
+<a href="https://ocsf.io/">OCSF</a> event, ready for a SIEM, with an option to stop
+executing while audit records cannot be written.</li>
+</ul>
+<p><a href="media/security.md">Security</a> describes each protection, and what is not claimed.</p>
 <h2 id="installation" class="tsd-anchor-link">Installation<a href="#installation" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
 <pre><code class="bash"><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">install</span><span class="hl-1"> </span><span class="hl-3">-g</span><span class="hl-1"> </span><span class="hl-2">oag-mcp</span>
 </code><button type="button">Copy</button></pre>
