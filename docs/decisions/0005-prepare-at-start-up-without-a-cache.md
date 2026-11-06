@@ -19,7 +19,7 @@ build command and no cache.
 - Deploying is putting the OpenAPI document, the SDK and the configuration
   next to OAG-MCP; nothing generated needs storing, invalidating or
   protecting.
-- Start-up takes a few seconds for a typical SDK, longer for a large one,
+- Start-up takes one to a few seconds for a typical SDK, longer for a large one,
   and changing the spec or SDK needs a restart.
 - A cache would have to be keyed on the spec, the SDK's contents, OAG-MCP's
   version and settings, and integrity-checked before its bundle runs in the

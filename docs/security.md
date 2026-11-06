@@ -117,8 +117,9 @@ or `node:vm` are not used as the boundary. Each `execute` call goes through:
    - a V8 heap limit (`execution.memoryMb`);
    - an empty environment, apart from Deno's own bookkeeping (`DENO_DIR`,
      `TMPDIR` and `HOME` pointing at a private temporary folder that is
-     deleted afterwards, `NO_COLOR`, `TZ=UTC`), with that folder as the
-     working directory.
+     deleted afterwards, `DENO_NO_UPDATE_CHECK`, `DENO_NO_PROMPT`,
+     `NO_COLOR`, `TZ=UTC`, and `SystemRoot` on Windows), with that folder as
+     the working directory.
 
 No state survives from one execution to the next: each gets a new process
 and a new temporary folder, and nothing is writable.

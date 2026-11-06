@@ -87,7 +87,7 @@ npm install -g oag-mcp
 ## Requirements
 
 * Node.js 22+ - For running the `oag-mcp` command.
-* Deno 2.x - Installed automatically through the `deno` npm dependency; or set `OAG_MCP_DENO_PATH` / put `deno` on `PATH`.
+* Deno 2.5 or later (2.x) - Installed automatically through the `deno` npm dependency; or set `OAG_MCP_DENO_PATH` / put `deno` on `PATH`.
 * OpenAPI specification
 * An SDK generated with [OpenAPI Generator](https://openapi-generator.tech)'s `typescript-fetch`.
 
@@ -128,7 +128,7 @@ oag-mcp serve --spec ./openapi.yaml --sdk ./petstore-sdk-1.0.0.tgz --transport s
 ```
 
 On start-up OAG-MCP checks that the SDK is compatible, prepares it for the
-sandbox and indexes its methods — typically in one to three seconds — and
+sandbox and indexes its methods — typically in one to a few seconds — and
 only then accepts MCP requests. If anything cannot be prepared, it exits with
 [an error code](docs/reference/error-codes.md) and a hint explaining what to fix, rather than starting a
 partially working server.

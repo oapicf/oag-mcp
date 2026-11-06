@@ -167,7 +167,7 @@ export function resolveDeno(configured?: string): DenoRuntime {
         "DENO_VERSION_UNSUPPORTED",
         `Deno ${version} at ${c.path} is outside the supported range ${DENO_VERSION_RANGE}`,
         {
-          hint: "Install a supported Deno 2.x release or set OAG_MCP_DENO_PATH.",
+          hint: "Install Deno 2.5 or later, below 3.0, or set OAG_MCP_DENO_PATH.",
         },
       );
     }
@@ -177,7 +177,7 @@ export function resolveDeno(configured?: string): DenoRuntime {
     "DENO_NOT_FOUND",
     "No Deno runtime was found for the execute tool",
     {
-      hint: "Reinstall oag-mcp so its `deno` dependency is installed, install Deno 2.x (https://deno.com) on PATH, or set OAG_MCP_DENO_PATH.",
+      hint: "Reinstall oag-mcp so its `deno` dependency is installed, install Deno 2.5 or later (https://deno.com) on PATH, or set OAG_MCP_DENO_PATH.",
     },
   );
 }

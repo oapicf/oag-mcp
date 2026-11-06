@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+- Improve documentation consistency and correctness
+
 ## 0.10.1 - 2026-11-05
 ### Fixed
 - Fix publish workflow to use make deps-upgrade
