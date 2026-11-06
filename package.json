@@ -1,7 +1,7 @@
 {
   "name": "oag-mcp",
   "type": "module",
-  "description": "Turn an OpenAPI spec and its OAG-generated SDK into a code-mode MCP server at runtime",
+  "description": "Turn an OpenAPI spec and its OpenAPI Generator (OAG) typescript-fetch SDK into a code-mode MCP server at runtime",
   "keywords": [
     "openapi",
     "openapi-generator",

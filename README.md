@@ -13,7 +13,7 @@
 
 # OAG-MCP
 
-OAG-MCP turns an OpenAPI spec and its OAG-generated SDK into a code-mode MCP server at runtime.
+OAG-MCP turns an OpenAPI specification and its [OpenAPI Generator](https://openapi-generator.tech) (OAG) SDK into a code-mode MCP server at runtime.
 
 Instead of exposing hundreds of endpoints as individual tools, it exposes two:
 
