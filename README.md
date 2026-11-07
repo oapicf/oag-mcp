@@ -189,6 +189,7 @@ for every option.
 * [Security](docs/security.md) — OAG-MCP's security features, and what is not claimed
 * [Authentication](docs/authentication.md) — who may call OAG-MCP (`mcpAuth`), and how it calls your API (`upstreamAuth`)
 * [Authorisation](docs/authorisation.md) — what each caller may do (`authorization`)
+* [Identity](docs/identity.md) — how the agent, OAG-MCP and the API are identified, and how to trace a call through the logs
 * [Logging](docs/logging.md) — operational records (OpenTelemetry) and security audit records (OCSF)
 * [Deployment](docs/deployment.md) — running OAG-MCP as a server, in a container and in production
 * [Troubleshooting](docs/troubleshooting.md) — why OAG-MCP does not start, a client cannot connect, or a call failed
