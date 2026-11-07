@@ -110,6 +110,9 @@ in the audit log: `authorization.allowed`, `authorization.denied`,
 `network.destination_denied` or `credential.lookup_failed`. Counting them
 counts attempted API calls, whatever happened next.
 
+To find which agent made a call and what the API saw, see
+[Finding the actors in the logs](identity.md#finding-the-actors-in-the-logs).
+
 ## What is never logged
 
 Logs never contain credentials, the code the agent submits, search queries,

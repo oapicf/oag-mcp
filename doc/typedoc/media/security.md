@@ -230,8 +230,10 @@ records are written whatever the log level, and never sampled.
 
 With `--audit-fail-closed`, `execute` stops while audit records cannot be
 written, so no API call goes unaudited. [Logging](logging.md) explains the
-records and their destinations, and the
-[audit logging recipe](recipes/audit-logging.md) shows how to keep them.
+records and their destinations, the
+[audit logging recipe](recipes/audit-logging.md) shows how to keep them, and
+[Identity](identity.md) shows how to trace a call from the agent to the API
+with them.
 
 ## What is not claimed
 

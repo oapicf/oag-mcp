@@ -126,7 +126,7 @@ code gets none of them, only a few variables OAG-MCP sets for Deno itself
 
 | Name | Description | Mandatory | Default | Example |
 | --- | --- | --- | --- | --- |
-| Those named by `{ env: NAME }` | Secret values the configuration file refers to, such as upstream API keys or MCP bearer tokens. Read once at start-up; a missing one stops start-up. | When the configuration refers to them | | `PC_API_KEY=…` |
+| Those named by `{ env: NAME }` | Secret values the configuration file refers to, such as upstream API keys or MCP bearer tokens. Read once at start-up; a missing one stops start-up. | When the configuration refers to them | | `PETCLINIC_API_KEY=…` |
 | `OAG_MCP_DENO_PATH` | The Deno binary that runs the sandbox, when `execution.denoPath` is not set. Otherwise the `deno` npm package installed with OAG-MCP is used, then `deno` on `PATH`. The first one found must be Deno 2.5 or later, below 3.0. | No | The bundled `deno` package | `OAG_MCP_DENO_PATH=/usr/local/bin/deno` |
 | `TMPDIR` | Where the prepared SDK and each execution's private folder are created. Set it to a writable volume on a read-only root filesystem. | No | The system temporary directory | `TMPDIR=/var/tmp` |
 | `PATH` | Searched for `deno` as a last resort. | No | | |

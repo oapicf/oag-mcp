@@ -34,8 +34,8 @@ ask the user before a call:
 
 | Name | `readOnlyHint` | `destructiveHint` | `idempotentHint` | `openWorldHint` |
 | --- | --- | --- | --- | --- |
-| `search` | `true` | | `true` | `false` |
-| `execute` | `false` | `true` | | `true` |
+| `search` | `true` | `false` | `true` | `false` |
+| `execute` | `false` | `true` | `false` | `true` |
 
 `execute` is marked destructive because the code it runs can call any
 operation the caller is allowed, including ones that change data. To make

@@ -181,5 +181,7 @@ records why.
 - Each execution has its own sandbox process and broker context, bound to its
   caller, so concurrent callers cannot see each other's calls.
 
+[Identity](identity.md) shows how the agent, OAG-MCP and the API are
+identified, and how to trace a call from one to the other in the logs.
 [Security](security.md) describes how authentication fits with OAG-MCP's
 other protections.
