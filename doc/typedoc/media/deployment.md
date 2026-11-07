@@ -152,6 +152,11 @@ show the main pieces in full.
   when callers can sign in through your identity provider; use
   `mcpAuth.oauth.requiredScopes` to keep tokens issued for other services
   out. See [Authentication](authentication.md#mcp-auth).
+- **With `oauth`, set `mcpAuth.oauth.principalIdKey`** to a secret of at
+  least 32 characters, the same on every server. Without it, each server
+  picks its own random key, so a caller's principal id differs between
+  servers and changes on every restart, and audit records cannot be matched
+  up.
 - **Write an authorisation policy** with `default: deny`. Without one, every
   caller may call every operation, and the start-up audit record says
   `policyMode: implicit-allow-all`. Start from the

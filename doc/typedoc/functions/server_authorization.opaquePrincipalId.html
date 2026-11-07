@@ -14,9 +14,16 @@
 <section class="tsd-panel">
 <ul class="tsd-signatures">
 <li class="">
-<div class="tsd-signature tsd-anchor-link" id="opaqueprincipalid"><span class="tsd-kind-call-signature">opaquePrincipalId</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">kind</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">parts</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><a href="#opaqueprincipalid" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-signature tsd-anchor-link" id="opaqueprincipalid"><span class="tsd-kind-call-signature">opaquePrincipalId</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">kind</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">parts</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">key</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">BinaryLike</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><a href="#opaqueprincipalid" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
-<div class="tsd-comment tsd-typography"><p>Derive an opaque, stable principal id from identifying values.</p>
+<div class="tsd-comment tsd-typography"><p>Derive an opaque principal id from identifying values, such as an OAuth
+issuer and subject, so that logs and audit records can name a caller
+without recording who they are.</p>
+<p>A keyed HMAC-SHA256 rather than a plain hash: subjects are often guessable
+(an email address, an employee number), and the issuer is public, so a
+plain hash of the two could be reversed by anyone holding the logs and a
+list of likely subjects. Without the key, that list is useless. The same
+key gives the same id, so ids are stable for as long as the key is.</p>
 </div>
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
@@ -26,11 +33,14 @@
 </div></li>
 <li><span><span class="tsd-kind-parameter">parts</span>: <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span></span>
 <div class="tsd-comment tsd-typography"><p>identifying values (e.g. issuer and subject)</p>
+</div></li>
+<li><span><span class="tsd-kind-parameter">key</span>: <span class="tsd-signature-type">BinaryLike</span></span>
+<div class="tsd-comment tsd-typography"><p>secret HMAC key</p>
 </div></li></ul></div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">string</span></h4><p>opaque id</p>
 <aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/oapicf/oag-mcp/blob/ba69f9a8d451e1107c74872a0c6b6ac56fd1fb21/lib/server/authorization.ts#L24">lib/server/authorization.ts:24</a></li></ul></aside></div></li></ul></section></div>
+<li>Defined in <a href="https://github.com/oapicf/oag-mcp/blob/02dda18c0bf0d5bf51cd6a875fd8a3370732d1e4/lib/server/authorization.ts#L33">lib/server/authorization.ts:33</a></li></ul></aside></div></li></ul></section></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

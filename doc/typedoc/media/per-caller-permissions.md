@@ -37,7 +37,7 @@ select principals with three selectors:
 | --- | --- | --- | --- | --- |
 | stdio (any `mcpAuth.mode`) | `local:<name>` | `mcpAuth.stdio.principal` | `mcpAuth.stdio.scopes` | None |
 | `static-bearer` | `static:<name>` | The token's `principal` | The token's `scopes` | None |
-| `oauth` | `oauth:<hash>` of the issuer and the token's subject | None | The access token's scopes | The token's `client_id` |
+| `oauth` | `oauth:<hash>`, a keyed hash of the issuer and the token's subject | None | The access token's scopes | The token's `client_id` |
 | `none` (loopback only) | `anonymous` | None | None | None |
 
 | Selector | The rule applies when | Example |
@@ -162,6 +162,7 @@ mcpAuth:
   oauth:
     issuer: https://auth.example.com/
     requiredScopes: [mcp:tools]         # every token needs this to connect at all
+    principalIdKey: { env: OAG_MCP_PRINCIPAL_ID_KEY }   # keeps principal ids stable across restarts
 
 http:
   publicUrl: https://mcp.example.com/mcp   # the URL clients use, behind a TLS proxy
@@ -338,9 +339,10 @@ audit        authorization.allowed oauth:b292842effa50c8b StoreApi.getStoreInven
 Here `oauth:fc108540e5fc4e0d` signed in through the support app with
 `pets:read`, and `oauth:b292842effa50c8b` through `clinic-ops-app` with
 `pets:read` and `pets:write`. The id is a hash of the issuer and the token's
-subject, so it is stable for one user without putting the user's identity in
-the logs. `authentication.succeeded` shows the protocol and the validation
-used:
+subject, keyed with `principalIdKey`, so it is stable for one user without
+putting the user's identity in the logs, and cannot be traced back to the
+user without the key. `authentication.succeeded` shows the protocol and the
+validation used:
 
 ```json
 {
