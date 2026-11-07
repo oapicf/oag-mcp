@@ -269,8 +269,8 @@ authorization:
       allow: ["method:GET"]
     - id: pet-writers
       principals: [ci-bot]
-      allow: ["PetsApi.*", "AdminApi.*"]
-      deny: ["AdminApi.deletePet"]
+      allow: ["PetsApi.*"]
+      deny: ["PetsApi.deletePet"]
 ```
 
 Rules can match callers by `principals`, `scopes` or OAuth `clientIds`, and

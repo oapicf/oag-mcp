@@ -4,7 +4,7 @@ A deployment needs four things, all supplied when the server starts:
 
 | What | Notes |
 | --- | --- |
-| **OAG-MCP** | `npm install -g oag-mcp` (Node.js 22+). Its `deno` dependency provides the sandbox runtime; alternatively set `OAG_MCP_DENO_PATH` or put Deno 2.5 or later (2.x) on `PATH`. |
+| **OAG-MCP** | `npm install -g oag-mcp` (Node.js 22+). Its `deno` dependency provides the sandbox runtime; alternatively set `OAG_MCP_DENO_PATH` or put Deno 2.x on `PATH`. |
 | **The OpenAPI document** | `--spec`, read once at start-up. |
 | **The typescript-fetch SDK** | `--sdk`, a directory or an `npm pack` archive, read once at start-up and never modified. Its runtime dependencies (if any) must already be installed. |
 | **Configuration and secrets** | `--config` plus environment variables or a `0600` secrets file. |

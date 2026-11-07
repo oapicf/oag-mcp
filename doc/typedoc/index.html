@@ -20,7 +20,7 @@
 <a href="https://www.npmjs.com/package/oag-mcp"><img src="https://img.shields.io/npm/v/oag-mcp.svg" alt="Published Version"></a></p>
 <!-- END:BADGES -->
 <h1 id="oag-mcp" class="tsd-anchor-link">OAG-MCP<a href="#oag-mcp" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h1>
-<p>OAG-MCP turns an OpenAPI specification and its <a href="https://openapi-generator.tech">OpenAPI Generator</a> (OAG) SDK into a code-mode MCP server at runtime.</p>
+<p>OAG-MCP turns an OpenAPI spec and its OAG-generated SDK into a code-mode MCP server at runtime.</p>
 <p>Instead of exposing hundreds of endpoints as individual tools, it exposes two:</p>
 <ul>
 <li><code>search</code> for discovering operations from the spec.</li>
@@ -85,7 +85,7 @@ executing while audit records cannot be written.</li>
 <h2 id="requirements" class="tsd-anchor-link">Requirements<a href="#requirements" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
 <ul>
 <li>Node.js 22+ - For running the <code>oag-mcp</code> command.</li>
-<li>Deno 2.5 or later (2.x) - Installed automatically through the <code>deno</code> npm dependency; or set <code>OAG_MCP_DENO_PATH</code> / put <code>deno</code> on <code>PATH</code>.</li>
+<li>Deno 2.x - Installed automatically through the <code>deno</code> npm dependency; or set <code>OAG_MCP_DENO_PATH</code> / put <code>deno</code> on <code>PATH</code>.</li>
 <li>OpenAPI specification</li>
 <li>An SDK generated with <a href="https://openapi-generator.tech">OpenAPI Generator</a>'s <code>typescript-fetch</code>.</li>
 </ul>
@@ -103,7 +103,7 @@ Docker image:</p>
 </code><button type="button">Copy</button></pre>
 
 <p>On start-up OAG-MCP checks that the SDK is compatible, prepares it for the
-sandbox and indexes its methods — typically in one to a few seconds — and
+sandbox and indexes its methods — typically in one to three seconds — and
 only then accepts MCP requests. If anything cannot be prepared, it exits with
 <a href="media/error-codes.md">an error code</a> and a hint explaining what to fix, rather than starting a
 partially working server.</p>

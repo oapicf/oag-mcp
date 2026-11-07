@@ -70,14 +70,12 @@ authorization specification describes:
 - **Challenges.** A missing or invalid token gets `401 invalid_token`, and a
   token without the required scopes `403 insufficient_scope`, each with a
   `WWW-Authenticate` header that points to the metadata.
-- **Validation of every request,** in one of two ways, chosen by the
-  configuration. By default, tokens must be JWTs, checked against the
+- **Validation of every request.** JWT access tokens are checked against the
   authorization server's keys (configured, or discovered from the issuer):
   signature and algorithm, issuer, audience (the resource, or configured
-  audiences), expiry and not-before, with a clock tolerance. With
-  `mcpAuth.oauth.introspection` set, every token, JWT or opaque, is checked
-  by token introspection (RFC 7662) instead: active, issuer, audience and
-  expiry. Either way, every token must carry `mcpAuth.oauth.requiredScopes`.
+  audiences), expiry and not-before, with a clock tolerance. Opaque tokens
+  are checked by token introspection (RFC 7662): active, issuer, audience
+  and expiry. Every token must carry `mcpAuth.oauth.requiredScopes`.
 - **Private principals.** The principal id is a hash of the issuer and
   subject, so logs never record a personal identifier.
 

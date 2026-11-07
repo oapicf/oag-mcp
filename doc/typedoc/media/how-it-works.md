@@ -30,7 +30,7 @@ every flag.
 
 It then reads the configuration file given with `--config`, if any, and
 validates every property, refusing unknown ones so that a typo cannot be
-silently ignored. Every problem in the file, up to eight, is reported at once. Without
+silently ignored. Every problem in the file is reported at once. Without
 `--config`, the built-in defaults apply. The flags `--host`, `--port`,
 `--path` and the logging flags override the file.
 
@@ -272,13 +272,11 @@ secrets are scrubbed from all of it, in case the API echoed one back:
 ```json
 {
   "ok": true,
-  "executionId": "exec_4b0f6c2e-8d1a-4f7e-9c3b-2a5d6e7f8a90",
   "result": [
     { "pet": "Biscuit", "spentCents": 8100 },
     { "pet": "Nori", "spentCents": 8400 }
   ],
   "logs": [],
-  "logsTruncated": false,
   "stats": { "durationMs": 131, "sdkCalls": 5 }
 }
 ```

@@ -117,9 +117,8 @@ or `node:vm` are not used as the boundary. Each `execute` call goes through:
    - a V8 heap limit (`execution.memoryMb`);
    - an empty environment, apart from Deno's own bookkeeping (`DENO_DIR`,
      `TMPDIR` and `HOME` pointing at a private temporary folder that is
-     deleted afterwards, `DENO_NO_UPDATE_CHECK`, `DENO_NO_PROMPT`,
-     `NO_COLOR`, `TZ=UTC`, and `SystemRoot` on Windows), with that folder as
-     the working directory.
+     deleted afterwards, `NO_COLOR`, `TZ=UTC`), with that folder as the
+     working directory.
 
 No state survives from one execution to the next: each gets a new process
 and a new temporary folder, and nothing is writable.
@@ -132,8 +131,7 @@ to the broker in OAG-MCP's own process. For each one, the broker:
 - checks the caller may call the operation (see [Authorisation](#authorisation));
 - checks the request matches that operation's HTTP method and path template
   on the configured `upstream.baseUrl`, after normalising the URL, and
-  refuses anything else, including any URL over 8,192 characters. The path
-  check takes linear time, so no path can make it slow;
+  refuses anything else;
 - removes credentials supplied by agent code and adds the configured ones;
 - handles redirects itself (unless `upstream.followRedirects` is `false`):
   same-origin ones are followed, others only to `upstream.allowedOrigins`
