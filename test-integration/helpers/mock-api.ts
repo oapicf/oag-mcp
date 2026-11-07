@@ -208,15 +208,18 @@ export async function startMockApi(
       return send(res, 200, { status: "ok" });
     }
     if (req.method === "GET" && p === "/v1/slow") {
-      const DEFAULT_DELAY_MS = 1000;
       const MAX_DELAY_MS = 5000;
-      const requestedDelay = Number(
-        url.searchParams.get("delayMs") ?? String(DEFAULT_DELAY_MS),
-      );
-      const delay =
-        Number.isFinite(requestedDelay) && requestedDelay >= 0
-          ? Math.min(requestedDelay, MAX_DELAY_MS)
-          : DEFAULT_DELAY_MS;
+      const delay = Number(url.searchParams.get("delayMs") ?? "1000");
+      // Refuse an out-of-range delay rather than clamping it: CodeQL
+      // (js/resource-exhaustion) accepts an upper-bound check with an early
+      // return as a guard on a request-controlled setTimeout delay, but not
+      // Math.min.
+      if (!Number.isInteger(delay) || delay < 0 || delay > MAX_DELAY_MS) {
+        return send(res, 400, {
+          code: "bad_request",
+          message: `delayMs must be an integer from 0 to ${MAX_DELAY_MS}`,
+        });
+      }
       setTimeout(() => send(res, 200, { status: "slow-ok" }), delay);
       return;
     }
