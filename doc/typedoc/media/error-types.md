@@ -91,6 +91,7 @@ also recorded as a security audit record; the last column is the record's
 | `authorization_denied` | `permission_denied` | The caller's `authorization` rules don't allow the operation. | `authorization.denied` |
 | `network_destination_denied` | `permission_denied` | The request's method, origin or path doesn't match the operation on the configured base URL. | `network.destination_denied` |
 | `invalid_url` | `permission_denied` | The request URL could not be parsed. | `network.destination_denied` |
+| `url_too_long` | `permission_denied` | The request URL is longer than 8,192 characters. | `network.destination_denied` |
 | `redirect_denied` | `permission_denied` | The API redirected to an origin not in `upstream.allowedOrigins`. | `network.redirect_denied` |
 | `unknown_binding` | `permission_denied` | A request did not come from a known SDK method. | `execution.boundary_violation` |
 | `credential_not_configured` | `upstream_auth_error` | None of the operation's security schemes has credentials under `upstreamAuth.schemes`. | `credential.lookup_failed` |

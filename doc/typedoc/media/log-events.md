@@ -310,7 +310,7 @@ or `credential.lookup_failed`.
 | `execution.timeout` | Process Activity: Terminate | Low | An execution reached its time limit. | `wall_clock_timeout`; `timeoutMs` |
 | `executor.terminated` | Process Activity: Terminate | Low | The sandbox process was killed. | reasons such as `timeout`, `output_limit`; `executor` |
 | `execution.boundary_violation` | Detection Finding: Create | Medium | Agent code sent the host a message that did not come from an SDK method. | `unknown_binding`; `binding` |
-| `network.destination_denied` | HTTP Activity: the request's method | Low | An upstream request did not match its operation on the configured base URL. | `origin_not_allowed`, `method_mismatch`, `path_mismatch`, `invalid_url` |
+| `network.destination_denied` | HTTP Activity: the request's method | Low | An upstream request did not match its operation on the configured base URL. | `origin_not_allowed`, `method_mismatch`, `path_mismatch`, `invalid_url`, `url_too_long` |
 | `network.redirect_denied` | HTTP Activity: the request's method | Low | An upstream redirect was not followed. | `redirects_disabled`, `too_many_redirects`, `origin_not_allowed` |
 | `transport.host_rejected` | HTTP Activity: the request's method | Low | An inbound request's `Host` is not allowed (`http.allowedHosts`). | `host_not_allowed` |
 | `transport.origin_rejected` | HTTP Activity: the request's method | Low | An inbound request's `Origin` is not allowed (`http.allowedOrigins`). | `origin_not_allowed` |
