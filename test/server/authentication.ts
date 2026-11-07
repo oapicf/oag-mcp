@@ -15,7 +15,7 @@ import { SecretRegistry } from "../../lib/util/redact.js";
 import { SecretResolver } from "../../lib/util/secrets.js";
 import { quietLogs } from "../helpers/fakes.js";
 
-const { assert, match } = referee;
+const { assert, match, refute } = referee;
 
 const ISSUER = "https://auth.example.test";
 const RESOURCE = "https://mcp.example.test/mcp";
@@ -27,6 +27,8 @@ const env = {
   WEAK: "short",
   ICID: "mcp server",
   ISEC: "introspect-secret-123",
+  PIDKEY: "principal-id-key-0123456789abcdef",
+  PIDWEAK: "principal-id-key-too-short",
 };
 
 type Route = (init: RequestInit) => Response | Promise<Response>;
@@ -366,6 +368,49 @@ describe("authentication - oauth with JWTs", function () {
     });
   }
 
+  it("should keep principal ids stable with a principal id key", async function () {
+    const a = await jwtAuth({ principalIdKey: { env: "PIDKEY" } });
+    const b = await jwtAuth({ principalIdKey: { env: "PIDKEY" } });
+    const token = await sign({}, { exp: "5m" });
+    const ra = await a.auth.authenticate(request(`Bearer ${token}`), a.logs);
+    const rb = await b.auth.authenticate(request(`Bearer ${token}`), b.logs);
+    assert.isTrue(ra.ok && rb.ok);
+    if (ra.ok && rb.ok) {
+      assert.equals(ra.principal.id, rb.principal.id);
+    }
+    assert.equals(a.registry.scrubKnown(env.PIDKEY), "[REDACTED]");
+    const configured = a
+      .records()
+      .find((r) => r.event === "authentication.mode_configured")!;
+    assert.isUndefined(configured.get("warning"));
+  });
+
+  it("should use a per-process key and warn without a principal id key", async function () {
+    const a = await jwtAuth();
+    const b = await jwtAuth();
+    const token = await sign({}, { exp: "5m" });
+    const ra1 = await a.auth.authenticate(request(`Bearer ${token}`), a.logs);
+    const ra2 = await a.auth.authenticate(request(`Bearer ${token}`), a.logs);
+    const rb = await b.auth.authenticate(request(`Bearer ${token}`), b.logs);
+    assert.isTrue(ra1.ok && ra2.ok && rb.ok);
+    if (ra1.ok && ra2.ok && rb.ok) {
+      assert.equals(ra1.principal.id, ra2.principal.id);
+      refute.equals(ra1.principal.id, rb.principal.id);
+    }
+    const configured = a
+      .records()
+      .find((r) => r.event === "authentication.mode_configured")!;
+    assert.match(String(configured.get("warning")), /principalIdKey/);
+    assert.greater(Number(configured.raw.severity_id), 1);
+  });
+
+  it("should refuse a short principal id key", async function () {
+    await assert.rejects(
+      jwtAuth({ principalIdKey: { env: "PIDWEAK" } }),
+      match({ code: "MCP_AUTH_PRINCIPAL_KEY_WEAK" }),
+    );
+  });
+
   async function refused(
     auth: HttpAuthenticator,
     logs: ReturnType<typeof quietLogs>["logs"],
@@ -379,6 +424,7 @@ describe("authentication - oauth with JWTs", function () {
   it("should accept a valid token and identify the caller opaquely", async function () {
     const { auth, logs, records, registry } = await jwtAuth({
       requiredScopes: ["mcp"],
+      principalIdKey: { env: "PIDKEY" },
     });
     const token = await sign({ client_id: "cli" }, { exp: "5m" });
     const result = await auth.authenticate(request(`Bearer ${token}`), logs);
@@ -386,7 +432,7 @@ describe("authentication - oauth with JWTs", function () {
     if (result.ok) {
       assert.equals(
         result.principal.id,
-        opaquePrincipalId("oauth", [ISSUER, "user-1"]),
+        opaquePrincipalId("oauth", [ISSUER, "user-1"], env.PIDKEY),
       );
       assert.equals(result.principal.kind, "oauth");
       assert.equals(result.principal.clientId, "cli");
@@ -528,13 +574,15 @@ describe("authentication - oauth with introspection", function () {
       seen = init;
       return active({ client_id: "cli", sub: "user-2", scope: "mcp" });
     };
-    const { auth, logs, records, registry } = await introspected();
+    const { auth, logs, records, registry } = await introspected({
+      principalIdKey: { env: "PIDKEY" },
+    });
     const result = await auth.authenticate(request("Bearer opaque-1"), logs);
     assert.isTrue(result.ok);
     if (result.ok) {
       assert.equals(
         result.principal.id,
-        opaquePrincipalId("oauth", [ISSUER, "user-2"]),
+        opaquePrincipalId("oauth", [ISSUER, "user-2"], env.PIDKEY),
       );
       assert.equals(result.principal.clientId, "cli");
       assert.equals(result.principal.scopes, ["mcp"]);

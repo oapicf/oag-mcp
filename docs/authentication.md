@@ -28,7 +28,7 @@ principal may then do is decided by [authorisation](authorisation.md).
 | stdio | The operating system: the caller is the process that started OAG-MCP | `local:<mcpAuth.stdio.principal>` (`local:local` by default) | `mcpAuth.stdio.scopes` |
 | Streamable HTTP, `mcpAuth.mode: none` | Nobody; loopback addresses only | `anonymous` | None |
 | Streamable HTTP, `mcpAuth.mode: static-bearer` | A pre-shared bearer token | `static:<principal>` | The token's `scopes` |
-| Streamable HTTP, `mcpAuth.mode: oauth` | An OAuth 2.0 access token from your authorization server | `oauth:<hash of issuer and subject>` | The token's scopes, and its client id |
+| Streamable HTTP, `mcpAuth.mode: oauth` | An OAuth 2.0 access token from your authorization server | `oauth:<keyed hash of issuer and subject>` | The token's scopes, and its client id |
 
 ### stdio
 
@@ -78,8 +78,14 @@ authorization specification describes:
   `mcpAuth.oauth.introspection` set, every token, JWT or opaque, is checked
   by token introspection (RFC 7662) instead: active, issuer, audience and
   expiry. Either way, every token must carry `mcpAuth.oauth.requiredScopes`.
-- **Private principals.** The principal id is a hash of the issuer and
-  subject, so logs never record a personal identifier.
+- **Private principals.** The principal id is a keyed hash (HMAC-SHA256) of
+  the issuer and subject, so logs never record a personal identifier, and
+  the id cannot be traced back to a user by hashing likely subjects without
+  the key. Set the key with `mcpAuth.oauth.principalIdKey`, a secret of at
+  least 32 characters, to keep ids the same across restarts and servers.
+  Without it, OAG-MCP picks a random key at start-up, warns in the
+  `authentication.mode_configured` audit record, and ids change on every
+  restart.
 
 OAG-MCP is not an authorization server and needs no particular provider: any
 issuer with published keys or an introspection endpoint works, including

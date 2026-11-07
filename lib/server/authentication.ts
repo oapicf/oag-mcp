@@ -408,6 +408,8 @@ interface OAuthContext {
   resource: URL;
   resourceMetadataUrl: string;
   registry: SecretRegistry;
+  /** The HMAC key for opaque principal ids. */
+  principalIdKey: crypto.BinaryLike;
 }
 
 /**
@@ -716,6 +718,38 @@ function _metadataHandler(
   };
 }
 
+/** The shortest accepted `mcpAuth.oauth.principalIdKey`. */
+const MIN_PRINCIPAL_ID_KEY_LENGTH = 32;
+
+/**
+ * The HMAC key for opaque OAuth principal ids: the configured
+ * `principalIdKey`, or without one a random key for this process only, so
+ * ids stay private but change on every restart.
+ *
+ * @private
+ */
+function _principalIdKey(
+  o: OAuthConfig,
+  opts: AuthenticatorOptions,
+): crypto.BinaryLike {
+  if (!o.principalIdKey) {
+    return crypto.randomBytes(32);
+  }
+  const key = opts.resolver.resolve(
+    o.principalIdKey,
+    "mcpAuth.oauth.principalIdKey",
+  );
+  if (key.length < MIN_PRINCIPAL_ID_KEY_LENGTH) {
+    throw new OagMcpError(
+      "MCP_AUTH_PRINCIPAL_KEY_WEAK",
+      `mcpAuth.oauth.principalIdKey is shorter than ${MIN_PRINCIPAL_ID_KEY_LENGTH} characters`,
+      { hint: "Generate one with: openssl rand -hex 32" },
+    );
+  }
+  opts.registry.add(key);
+  return key;
+}
+
 /**
  * OAuth 2.0 resource server.
  *
@@ -749,12 +783,24 @@ async function _oauthAuthenticator(
       new URL(resourceMetadataUrl).pathname,
     ]),
   );
-  opts.logs.audit("authentication.mode_configured", "success", {
-    mode,
-    validation,
-    issuer: o.issuer,
-    requiredScopes: o.requiredScopes,
-  });
+  const principalIdKey = _principalIdKey(o, opts);
+  opts.logs.audit(
+    "authentication.mode_configured",
+    "success",
+    {
+      mode,
+      validation,
+      issuer: o.issuer,
+      requiredScopes: o.requiredScopes,
+      ...(o.principalIdKey
+        ? {}
+        : {
+            warning:
+              "mcpAuth.oauth.principalIdKey is not set; principal ids change on every restart",
+          }),
+    },
+    o.principalIdKey ? "info" : "warn",
+  );
   const ctx: OAuthContext = {
     o,
     verifier,
@@ -762,6 +808,7 @@ async function _oauthAuthenticator(
     resource,
     resourceMetadataUrl,
     registry: opts.registry,
+    principalIdKey,
   };
   return {
     mode,
@@ -790,10 +837,11 @@ async function _authenticateOAuth(
     });
     const extra = (authInfo.extra ?? {}) as { sub?: string; iss?: string };
     const principal: Principal = {
-      id: opaquePrincipalId("oauth", [
-        String(extra.iss ?? o.issuer),
-        String(extra.sub ?? authInfo.clientId),
-      ]),
+      id: opaquePrincipalId(
+        "oauth",
+        [String(extra.iss ?? o.issuer), String(extra.sub ?? authInfo.clientId)],
+        ctx.principalIdKey,
+      ),
       kind: "oauth",
       clientId: authInfo.clientId,
       scopes: authInfo.scopes,

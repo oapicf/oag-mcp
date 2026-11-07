@@ -15,15 +15,28 @@ import type { AuthorizationRule } from "../config.js";
 import type { OperationBinding, Principal } from "../types.js";
 
 /**
- * Derive an opaque, stable principal id from identifying values.
+ * Derive an opaque principal id from identifying values, such as an OAuth
+ * issuer and subject, so that logs and audit records can name a caller
+ * without recording who they are.
+ *
+ * A keyed HMAC-SHA256 rather than a plain hash: subjects are often guessable
+ * (an email address, an employee number), and the issuer is public, so a
+ * plain hash of the two could be reversed by anyone holding the logs and a
+ * list of likely subjects. Without the key, that list is useless. The same
+ * key gives the same id, so ids are stable for as long as the key is.
  *
  * @param {String} kind - principal kind
  * @param {Array} parts - identifying values (e.g. issuer and subject)
+ * @param {Buffer|String} key - secret HMAC key
  * @return {String} opaque id
  */
-export function opaquePrincipalId(kind: string, parts: string[]): string {
+export function opaquePrincipalId(
+  kind: string,
+  parts: string[],
+  key: crypto.BinaryLike,
+): string {
   const h = crypto
-    .createHash("sha256")
+    .createHmac("sha256", key)
     .update(parts.join("\u0000"))
     .digest("hex")
     .slice(0, 16);

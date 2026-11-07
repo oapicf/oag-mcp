@@ -1,4 +1,6 @@
 "use strict";
+import crypto from "node:crypto";
+
 import referee from "@sinonjs/referee";
 
 import {
@@ -130,17 +132,24 @@ describe("authorization - AuthorizationPolicy.decide", function () {
 });
 
 describe("authorization - opaquePrincipalId", function () {
-  it("should be stable and not reveal the subject", function () {
-    const a = opaquePrincipalId("oauth", [
-      "https://issuer",
-      "alice@example.com",
-    ]);
-    assert.equals(
-      a,
-      opaquePrincipalId("oauth", ["https://issuer", "alice@example.com"]),
-    );
+  const parts = ["https://issuer", "alice@example.com"];
+
+  it("should be stable for one key and not reveal the subject", function () {
+    const a = opaquePrincipalId("oauth", parts, "key-1");
+    assert.equals(a, opaquePrincipalId("oauth", parts, "key-1"));
     refute.contains(a, "alice");
     assert.match(a, /^oauth:[0-9a-f]{16}$/);
+  });
+
+  it("should depend on the key, so a plain hash of guessed subjects does not match", function () {
+    const a = opaquePrincipalId("oauth", parts, "key-1");
+    refute.equals(a, opaquePrincipalId("oauth", parts, "key-2"));
+    const plain = crypto
+      .createHash("sha256")
+      .update(parts.join("\u0000"))
+      .digest("hex")
+      .slice(0, 16);
+    refute.equals(a, `oauth:${plain}`);
   });
 });
 

@@ -194,6 +194,7 @@ export const ConfigSchema = z
               .strict()
               .optional(),
             allowInsecureIssuer: z.boolean().default(false),
+            principalIdKey: SecretRef.optional(),
           })
           .strict()
           .optional(),

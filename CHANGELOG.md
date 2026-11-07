@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improve documentation consistency and correctness
 - Fix slow path matching in the request broker on long request paths
 - Fix slow trailing-slash trimming of URLs and path templates
+- Fix guessable OAuth principal ids by keying them with mcpAuth.oauth.principalIdKey
 
 ## 0.10.1 - 2026-11-05
 ### Fixed
