@@ -152,8 +152,12 @@ export function createMcpServer(
           .optional()
           .describe("Maximum results (default 5)"),
       }),
+      // All four hints are set explicitly, even where the MCP spec says one
+      // does not apply, because some tool directories reject tools that
+      // leave any of them out.
       annotations: {
         readOnlyHint: true,
+        destructiveHint: false,
         idempotentHint: true,
         openWorldHint: false,
       },
@@ -196,6 +200,7 @@ export function createMcpServer(
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,
+        idempotentHint: false,
         openWorldHint: true,
       },
     },

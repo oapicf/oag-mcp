@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Replace PC_ with TEST_PETCLINIC_ prefix to avoid confusion
 
+### Fixed
+- Set all four annotation hints on the search and execute tools
+
 ## 0.10.2 - 2026-11-07
 ### Fixed
 - Improve documentation consistency and correctness

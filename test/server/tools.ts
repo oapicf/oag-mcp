@@ -82,8 +82,18 @@ describe("tools - createMcpServer", function () {
       );
       const [search, execute] = tools;
       assert.equals(search.description, searchDescription(svc));
-      assert.isTrue(search.annotations!.readOnlyHint!);
-      assert.isTrue(execute.annotations!.destructiveHint!);
+      assert.equals(search.annotations, {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      });
+      assert.equals(execute.annotations, {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      });
       assert.equals(client.getServerVersion()!.title, "Pet Clinic (oag-mcp)");
     } finally {
       await client.close();
