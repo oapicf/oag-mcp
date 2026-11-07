@@ -132,7 +132,8 @@ to the broker in OAG-MCP's own process. For each one, the broker:
 - checks the caller may call the operation (see [Authorisation](#authorisation));
 - checks the request matches that operation's HTTP method and path template
   on the configured `upstream.baseUrl`, after normalising the URL, and
-  refuses anything else;
+  refuses anything else, including any URL over 8,192 characters. The path
+  check takes linear time, so no path can make it slow;
 - removes credentials supplied by agent code and adds the configured ones;
 - handles redirects itself (unless `upstream.followRedirects` is `false`):
   same-origin ones are followed, others only to `upstream.allowedOrigins`
