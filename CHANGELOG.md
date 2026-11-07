@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Improve documentation consistency and correctness
 - Fix slow path matching in the request broker on long request paths
+- Fix slow trailing-slash trimming of URLs and path templates
 
 ## 0.10.1 - 2026-11-05
 ### Fixed

@@ -32,6 +32,7 @@ import type {
 } from "../types.js";
 import { UpstreamAuthError } from "./credentials.js";
 import type { CredentialProvider } from "./types.js";
+import { trimTrailingSlashes } from "../util/path.js";
 import { resolveSecurity } from "./security.js";
 
 /** Network and size policy for upstream calls. */
@@ -178,19 +179,6 @@ export function compilePathTemplate(
 }
 
 /**
- * Strip trailing slashes without a regular expression.
- *
- * @private
- */
-function _trimTrailingSlashes(s: string): string {
-  let end = s.length;
-  while (end > 0 && s[end - 1] === "/") {
-    end--;
-  }
-  return s.slice(0, end);
-}
-
-/**
  * The literal text and parameters of one template segment, in order. A `{`
  * without a matching `}`, or with another `{` or nothing before it, is
  * literal text.
@@ -332,7 +320,7 @@ export class RequestBroker {
     },
   ) {
     this.base = new URL(opts.network.baseUrl);
-    this.basePath = _trimTrailingSlashes(this.base.pathname);
+    this.basePath = trimTrailingSlashes(this.base.pathname);
     for (const op of opts.operations) {
       this.ops.set(op.id, {
         op,

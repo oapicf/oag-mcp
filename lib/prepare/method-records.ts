@@ -9,6 +9,7 @@
  * @module prepare/method-records
  */
 import { OagMcpError } from "../errors.js";
+import { trimTrailingSlashes } from "../util/path.js";
 import type {
   AuthSummary,
   MethodRecord,
@@ -31,7 +32,7 @@ import {
  * @return {String} normalised template
  */
 export function normalisePathTemplate(p: string): string {
-  return p.replace(/\{[^}]+\}/g, "{}").replace(/\/+$/, "") || "/";
+  return trimTrailingSlashes(p.replace(/\{[^{}]+\}/g, "{}")) || "/";
 }
 
 /**

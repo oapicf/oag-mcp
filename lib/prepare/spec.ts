@@ -12,6 +12,7 @@ import SwaggerParser from "@apidevtools/swagger-parser";
 import { sample } from "openapi-sampler";
 
 import { OagMcpError } from "../errors.js";
+import { trimTrailingSlashes } from "../util/path.js";
 import type {
   ParameterInfo,
   SecurityRequirement,
@@ -218,7 +219,7 @@ function _serverUrls(servers: unknown): string[] {
       for (const [k, v] of Object.entries(vars)) {
         url = url.split(`{${k}}`).join(String(v.default ?? ""));
       }
-      return url.replace(/\/+$/, "");
+      return trimTrailingSlashes(url);
     });
 }
 

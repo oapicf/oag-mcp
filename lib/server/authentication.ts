@@ -39,6 +39,7 @@ import { OagMcpError } from "../errors.js";
 import type { Logs } from "../logging/logger.js";
 import type { SecretRegistry } from "../util/redact.js";
 import type { Principal } from "../types.js";
+import { trimTrailingSlashes } from "../util/path.js";
 import { opaquePrincipalId } from "./authorization.js";
 
 /** Result of authenticating a request. */
@@ -140,10 +141,10 @@ export function isLoopbackHost(host: string): boolean {
  */
 async function _discoverJwks(issuer: string): Promise<string> {
   const u = new URL(issuer);
-  const pathPart = u.pathname.replace(/\/+$/, "");
+  const pathPart = trimTrailingSlashes(u.pathname);
   const candidates = [
     `${u.origin}/.well-known/oauth-authorization-server${pathPart}`,
-    `${issuer.replace(/\/+$/, "")}/.well-known/openid-configuration`,
+    `${trimTrailingSlashes(issuer)}/.well-known/openid-configuration`,
   ];
   for (const url of candidates) {
     try {
