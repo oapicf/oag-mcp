@@ -52,12 +52,12 @@ export const SERVE_ARGS = ["--spec", SPEC, "--sdk", SDK_726];
 
 /** Environment variables carrying upstream secrets for tests. */
 export const SECRET_ENV = {
-  PC_API_KEY: API_KEY,
-  PC_BEARER: BEARER_TOKEN,
-  PC_ADMIN_USER: ADMIN_USER,
-  PC_ADMIN_PASS: ADMIN_PASSWORD,
-  PC_CLIENT_ID: UPSTREAM_CLIENT_ID,
-  PC_CLIENT_SECRET: UPSTREAM_CLIENT_SECRET,
+  TEST_PETCLINIC_API_KEY: API_KEY,
+  TEST_PETCLINIC_BEARER: BEARER_TOKEN,
+  TEST_PETCLINIC_ADMIN_USER: ADMIN_USER,
+  TEST_PETCLINIC_ADMIN_PASS: ADMIN_PASSWORD,
+  TEST_PETCLINIC_CLIENT_ID: UPSTREAM_CLIENT_ID,
+  TEST_PETCLINIC_CLIENT_SECRET: UPSTREAM_CLIENT_SECRET,
 };
 Object.assign(process.env, SECRET_ENV);
 
@@ -117,18 +117,18 @@ export function upstreamAuthConfig(auth?: AuthServer): Record<string, unknown> {
   return {
     allowInsecureTokenUrl: true,
     schemes: {
-      apiKeyHeader: { apiKey: { env: "PC_API_KEY" } },
-      apiKeyQuery: { apiKey: { env: "PC_API_KEY" } },
-      bearerAuth: { token: { env: "PC_BEARER" } },
+      apiKeyHeader: { apiKey: { env: "TEST_PETCLINIC_API_KEY" } },
+      apiKeyQuery: { apiKey: { env: "TEST_PETCLINIC_API_KEY" } },
+      bearerAuth: { token: { env: "TEST_PETCLINIC_BEARER" } },
       adminBasic: {
-        username: { env: "PC_ADMIN_USER" },
-        password: { env: "PC_ADMIN_PASS" },
+        username: { env: "TEST_PETCLINIC_ADMIN_USER" },
+        password: { env: "TEST_PETCLINIC_ADMIN_PASS" },
       },
       ...(auth
         ? {
             clinicOAuth: {
-              clientId: { env: "PC_CLIENT_ID" },
-              clientSecret: { env: "PC_CLIENT_SECRET" },
+              clientId: { env: "TEST_PETCLINIC_CLIENT_ID" },
+              clientSecret: { env: "TEST_PETCLINIC_CLIENT_SECRET" },
               tokenUrl: auth.tokenUrl,
             },
           }

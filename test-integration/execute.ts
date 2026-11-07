@@ -333,7 +333,7 @@ describe("execute - limits, isolation and denied capabilities", function () {
         "write",
       ],
       [`return await fetch("https://example.com/");`, "net"],
-      [`return Deno.env.get("PC_API_KEY") ?? "none";`, "env"],
+      [`return Deno.env.get("TEST_PETCLINIC_API_KEY") ?? "none";`, "env"],
       [
         `return await new Deno.Command("/bin/sh", { args: ["-c", "id"] }).output();`,
         "run",
@@ -348,7 +348,7 @@ describe("execute - limits, isolation and denied capabilities", function () {
       ],
       [`return Deno.dlopen("libc.so.6", {});`, "ffi"],
       [`return Deno.hostname();`, "sys"],
-      [`return globalThis.process.env.PC_API_KEY;`, "env"],
+      [`return globalThis.process.env.TEST_PETCLINIC_API_KEY;`, "env"],
     ];
     for (const [code, capability] of cases) {
       const res = await run(code, { language: "javascript" });
@@ -408,7 +408,7 @@ describe("execute - limits, isolation and denied capabilities", function () {
     ]);
     assert.isTrue(r.frozen);
     assert.equals(r.configuration, "null");
-    refute.contains(JSON.stringify(res), process.env.PC_API_KEY!);
+    refute.contains(JSON.stringify(res), process.env.TEST_PETCLINIC_API_KEY!);
   });
 
   it("should run concurrent executions independently", async function () {
@@ -578,7 +578,10 @@ return "sent";`,
       reached.map((r) => `${r.method} ${r.path}`),
       ["GET /v1/pets"],
     );
-    assert.equals(reached[0].headers["x-api-key"], process.env.PC_API_KEY);
+    assert.equals(
+      reached[0].headers["x-api-key"],
+      process.env.TEST_PETCLINIC_API_KEY,
+    );
     refute.contains(JSON.stringify(reached[0].headers), "forged");
     // One allowed decision, marked as modified because credentials supplied
     // by agent code were removed.

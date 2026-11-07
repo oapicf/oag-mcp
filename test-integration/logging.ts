@@ -301,7 +301,7 @@ describe("logging - records from executions", function () {
       `return await sdk.StoreApi.getStoreInventory({ headers: { "x-echo-auth": "1" } });`,
       `return await sdk.PetsApi.createPet({ newPet: { name: "S", species: "dog" } });`,
       `await sdk.AdminApi.deletePet({ petId: 1 }); return 1;`,
-      `throw new Error("agent says ${SECRET_ENV.PC_API_KEY}");`,
+      `throw new Error("agent says ${SECRET_ENV.TEST_PETCLINIC_API_KEY}");`,
     ];
     for (const code of codes) {
       await svc.execute({ code }, LOCAL);
