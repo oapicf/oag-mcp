@@ -8,6 +8,7 @@ import { SecretRegistry } from "../../lib/util/redact.js";
 import type { OperationBinding, Principal } from "../../lib/types.js";
 import {
   RequestBroker,
+  MAX_URL_LENGTH,
   compilePathTemplate,
 } from "../../lib/upstream/broker.js";
 import { ServiceIdentityCredentialProvider } from "../../lib/upstream/credentials.js";
@@ -81,6 +82,7 @@ function broker(
     timeoutMs: number;
     provider: CredentialProvider;
     operations: OperationBinding[];
+    baseUrl: string;
   }> = {},
 ) {
   const q = quietLogs();
@@ -108,7 +110,7 @@ function broker(
     provider,
     policy: extra.policy ?? new AuthorizationPolicy(),
     network: {
-      baseUrl: BASE,
+      baseUrl: extra.baseUrl ?? BASE,
       allowedOrigins: extra.allowedOrigins ?? [],
       followRedirects: extra.followRedirects ?? true,
       maxRedirects: 3,
@@ -149,6 +151,50 @@ describe("broker - compilePathTemplate", function () {
     assert.isFalse(re.test("/v1/pets/12/visits/x"));
     assert.isFalse(re.test("/pets/12/visits"));
     assert.isFalse(re.test("/v1/pets//visits"));
+  });
+
+  it("should allow one trailing slash", function () {
+    const m = compilePathTemplate("/v1", "/pets/{petId}");
+    assert.isTrue(m.test("/v1/pets/12/"));
+    assert.isFalse(m.test("/v1/pets/12//"));
+    const root = compilePathTemplate("", "/");
+    assert.isTrue(root.test("/"));
+    assert.isFalse(root.test("/x"));
+  });
+
+  it("should match several parameters in one segment", function () {
+    const m = compilePathTemplate("/v1", "/files/{name}.{ext}");
+    assert.isTrue(m.test("/v1/files/report.pdf"));
+    assert.isTrue(m.test("/v1/files/report.v2.pdf"));
+    assert.isFalse(m.test("/v1/files/report."));
+    assert.isFalse(m.test("/v1/files/.pdf"));
+    assert.isFalse(m.test("/v1/files/report"));
+    const pair = compilePathTemplate("", "/x/{a}{b}");
+    assert.isTrue(pair.test("/x/ab"));
+    assert.isFalse(pair.test("/x/a"));
+    const framed = compilePathTemplate("", "/r/v{major}-{minor}.json");
+    assert.isTrue(framed.test("/r/v1-2.json"));
+    assert.isFalse(framed.test("/r/v-2.json"));
+    assert.isFalse(framed.test("/r/v1-.json"));
+    assert.isFalse(framed.test("/r/v1-2.jsonx"));
+    assert.isFalse(compilePathTemplate("", "/a{p}a").test("/aa"));
+  });
+
+  it("should treat unmatched or empty braces as literal text", function () {
+    assert.isTrue(compilePathTemplate("", "/a/{").test("/a/{"));
+    assert.isTrue(compilePathTemplate("", "/a/{}").test("/a/{}"));
+    const nested = compilePathTemplate("", "/a/{{id}");
+    assert.isTrue(nested.test("/a/{7"));
+    assert.isFalse(nested.test("/a/7"));
+  });
+
+  it("should match long paths in linear time", function () {
+    const m = compilePathTemplate("/v1", "/files/{name}.{ext}");
+    const started = performance.now();
+    assert.isFalse(m.test(`/v1/files/${".".repeat(200000)}/x`));
+    assert.isFalse(m.test(`/v1/files/${"a".repeat(200000)}`));
+    assert.isTrue(m.test(`/v1/files/${"a".repeat(200000)}.b`));
+    assert.less(performance.now() - started, 200);
   });
 });
 
@@ -382,6 +428,35 @@ describe("broker - handle request limits and failures", function () {
       (r) => r.event === "network.destination_denied",
     )!;
     assert.equals(denied.get("reason"), "invalid_url");
+  });
+
+  it("should ignore trailing slashes on the base URL", async function () {
+    const f = fakeFetch(() => new Response("{}", { status: 200 }));
+    const { b, logs } = broker(f, { baseUrl: `${BASE}//` });
+    assert.equals(b.sdkBasePath, BASE);
+    const res = await b.handle(
+      req("PetsApi.getPetById", `${BASE}/pets/1`),
+      ctx(logs),
+      signal(),
+    );
+    assert.isTrue(res.ok);
+  });
+
+  it("should refuse and audit a request URL longer than the limit", async function () {
+    const f = fakeFetch(() => new Response("{}"));
+    const { b, logs, records } = broker(f);
+    const res = await b.handle(
+      req("PetsApi.getPetById", `${BASE}/pets/${"1".repeat(MAX_URL_LENGTH)}`),
+      ctx(logs),
+      signal(),
+    );
+    assert.isFalse(res.ok);
+    if (!res.ok) assert.equals(res.error.reason, "url_too_long");
+    assert.equals(f.calls.length, 0);
+    const denied = records().find(
+      (r) => r.event === "network.destination_denied",
+    )!;
+    assert.equals(denied.get("reason"), "url_too_long");
   });
 
   it("should send a base64 request body decoded", async function () {

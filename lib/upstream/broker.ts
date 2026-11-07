@@ -89,7 +89,7 @@ type Body = Uint8Array | string | undefined;
 interface Call {
   op: OperationBinding;
   /** The operation's path template as a URL path matcher. */
-  re: RegExp;
+  re: PathMatcher;
   ctx: BrokerContext;
   signal: AbortSignal;
   /** Fields identifying the operation in audit records. */
@@ -124,21 +124,182 @@ interface Sent {
 }
 
 /**
- * Compile a path template into a regular expression over URL paths.
+ * The longest request URL the broker accepts, in characters. Longer URLs are
+ * refused before any matching, with `permission_denied` (`url_too_long`) and
+ * a `network.destination_denied` audit record, so no request can make path
+ * checks slow.
+ */
+export const MAX_URL_LENGTH = 8192;
+
+/** Matches concrete URL paths against one OpenAPI path template. */
+export interface PathMatcher {
+  test(path: string): boolean;
+}
+
+/** One part of a template segment: literal text, or a `{parameter}`. */
+type Piece = { literal: string } | { param: true };
+
+/**
+ * Compile a path template into a matcher over URL paths. A parameter matches
+ * one or more characters other than `/`, as `[^/]+` would, and one trailing
+ * slash is allowed. Matching works segment by segment without regular
+ * expressions, so it takes linear time whatever the path: a template with
+ * several parameters in one segment, such as `/files/{name}.{ext}`, cannot
+ * be made to backtrack.
+ *
+ * This replaces a regular expression with `[^/]+` for each parameter. Against
+ * a template with several parameters in one segment, that regex backtracked
+ * quadratically on a long request path, and since the broker runs in the
+ * server's own process, one request could block the server for minutes.
+ * Paths are now matched in linear time, and request URLs over
+ * `MAX_URL_LENGTH` (8,192 characters) are refused before matching.
  *
  * @param {String} basePath - base URL path without trailing slash
  * @param {String} template - OpenAPI path template
- * @return {RegExp} matcher
+ * @return {Object} matcher with a `test(path)` method
  */
 export function compilePathTemplate(
   basePath: string,
   template: string,
-): RegExp {
-  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const parts = template
-    .split(/(\{[^}]+\})/)
-    .map((part) => (/^\{[^}]+\}$/.test(part) ? "[^/]+" : escape(part)));
-  return new RegExp(`^${escape(basePath)}${parts.join("")}/?$`);
+): PathMatcher {
+  const segments = template.split("/").map(_segmentPieces);
+  return {
+    test: (path: string) => {
+      if (!path.startsWith(basePath)) {
+        return false;
+      }
+      const rest = path.slice(basePath.length);
+      return (
+        _matchSegments(rest, segments) ||
+        (rest.endsWith("/") && _matchSegments(rest.slice(0, -1), segments))
+      );
+    },
+  };
+}
+
+/**
+ * Strip trailing slashes without a regular expression.
+ *
+ * @private
+ */
+function _trimTrailingSlashes(s: string): string {
+  let end = s.length;
+  while (end > 0 && s[end - 1] === "/") {
+    end--;
+  }
+  return s.slice(0, end);
+}
+
+/**
+ * The literal text and parameters of one template segment, in order. A `{`
+ * without a matching `}`, or with another `{` or nothing before it, is
+ * literal text.
+ *
+ * @private
+ */
+function _segmentPieces(segment: string): Piece[] {
+  const pieces: Piece[] = [];
+  const literal = (text: string) => {
+    const last = pieces[pieces.length - 1];
+    if (last && "literal" in last) {
+      last.literal += text;
+    } else if (text) {
+      pieces.push({ literal: text });
+    }
+  };
+  let i = 0;
+  while (i < segment.length) {
+    const open = segment.indexOf("{", i);
+    const close = open === -1 ? -1 : segment.indexOf("}", open + 1);
+    if (close === -1) {
+      literal(segment.slice(i));
+      break;
+    }
+    const inner = segment.indexOf("{", open + 1);
+    if ((inner !== -1 && inner < close) || close === open + 1) {
+      const next = inner !== -1 && inner < close ? inner : close + 1;
+      literal(segment.slice(i, next));
+      i = next;
+      continue;
+    }
+    literal(segment.slice(i, open));
+    pieces.push({ param: true });
+    i = close + 1;
+  }
+  return pieces;
+}
+
+/**
+ * Whether a path, split on `/`, matches the template's segments one for one.
+ *
+ * @private
+ */
+function _matchSegments(path: string, segments: Piece[][]): boolean {
+  const parts = path.split("/");
+  return (
+    parts.length === segments.length &&
+    parts.every((part, i) => _matchSegment(part, segments[i]))
+  );
+}
+
+/**
+ * Whether one path segment matches a template segment: its literal text in
+ * order, with one or more characters for each parameter. Literals are found
+ * leftmost first, which decides a match in linear time.
+ *
+ * @private
+ */
+function _matchSegment(part: string, pieces: Piece[]): boolean {
+  let start = 0;
+  let end = part.length;
+  let first = 0;
+  let last = pieces.length;
+  const head = pieces[0];
+  if (head && "literal" in head) {
+    if (!part.startsWith(head.literal)) {
+      return false;
+    }
+    start = head.literal.length;
+    first = 1;
+  }
+  const tail = pieces[last - 1];
+  if (last > first && tail && "literal" in tail) {
+    if (!part.endsWith(tail.literal) || end - tail.literal.length < start) {
+      return false;
+    }
+    end -= tail.literal.length;
+    last -= 1;
+  }
+  return _matchMiddle(part, pieces.slice(first, last), start, end);
+}
+
+/**
+ * Whether `part[start, end)` matches pieces that begin and end with a
+ * parameter (or are empty, matching only an empty range).
+ *
+ * @private
+ */
+function _matchMiddle(
+  part: string,
+  pieces: Piece[],
+  start: number,
+  end: number,
+): boolean {
+  let pos = start;
+  let need = 0;
+  for (const piece of pieces) {
+    if (!("literal" in piece)) {
+      need += 1;
+      continue;
+    }
+    const at = part.indexOf(piece.literal, pos + need);
+    if (at === -1 || at + piece.literal.length > end) {
+      return false;
+    }
+    pos = at + piece.literal.length;
+    need = 0;
+  }
+  return need === 0 ? pos === end : end - pos >= need;
 }
 
 /**
@@ -147,7 +308,7 @@ export function compilePathTemplate(
 export class RequestBroker {
   private readonly ops = new Map<
     string,
-    { op: OperationBinding; re: RegExp }
+    { op: OperationBinding; re: PathMatcher }
   >();
   private readonly base: URL;
   private readonly basePath: string;
@@ -171,7 +332,7 @@ export class RequestBroker {
     },
   ) {
     this.base = new URL(opts.network.baseUrl);
-    this.basePath = this.base.pathname.replace(/\/+$/, "");
+    this.basePath = _trimTrailingSlashes(this.base.pathname);
     for (const op of opts.operations) {
       this.ops.set(op.id, {
         op,
@@ -336,6 +497,19 @@ export class RequestBroker {
    * @private
    */
   private _destination(call: Call, req: BridgeFetchRequest): Target | Refusal {
+    if (String(req.url).length > MAX_URL_LENGTH) {
+      call.ctx.logs.audit(
+        "network.destination_denied",
+        "denied",
+        { ...call.audit, reason: "url_too_long", limit: MAX_URL_LENGTH },
+        "warn",
+      );
+      return this._err({
+        type: "permission_denied",
+        reason: "url_too_long",
+        message: `Request URL is longer than ${MAX_URL_LENGTH} characters`,
+      });
+    }
     let url: URL;
     try {
       url = new URL(req.url);
