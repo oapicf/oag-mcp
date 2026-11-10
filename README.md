@@ -10,6 +10,7 @@
 [![Security Status](https://snyk.io/test/github/oapicf/oag-mcp/badge.svg)](https://snyk.io/test/github/oapicf/oag-mcp)
 [![Published Version](https://img.shields.io/npm/v/oag-mcp.svg)](https://www.npmjs.com/package/oag-mcp)
 <!-- END:BADGES -->
+[![M8ven Score](https://m8ven.ai/badge/mcp/oapicf-oag-mcp-1hj9es?v=748a900564df10b25d19505a109a8e75)](https://m8ven.ai/mcp/oapicf-oag-mcp-1hj9es?s=readme)
 
 # OAG-MCP
 
