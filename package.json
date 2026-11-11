@@ -65,7 +65,7 @@
     "bagofcli": "4.0.0",
     "deno": "2.9.6",
     "esbuild": "0.28.2",
-    "jose": "6.2.16",
+    "jose": "6.2.17",
     "minisearch": "7.2.0",
     "openapi-sampler": "1.7.10",
     "pino": "10.4.0",
@@ -100,7 +100,7 @@
     "sinon": "22.1.0",
     "tsx": "4.23.15",
     "typedoc": "0.28.20",
-    "typescript-eslint": "8.72.1"
+    "typescript-eslint": "8.72.2"
   },
   "engines": {
     "node": ">= 22.0.0"
