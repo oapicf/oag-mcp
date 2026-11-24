@@ -6,7 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+- Add an example and a test for every combination of MCP Auth and Upstream Auth
+
 ## 0.11.0 - 2026-11-10
+
 ### Changed
 - Replace PC_ with TEST_PETCLINIC_ prefix to avoid confusion
 

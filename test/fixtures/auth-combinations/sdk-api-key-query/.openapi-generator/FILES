@@ -1,0 +1,11 @@
+.openapi-generator-ignore
+apis/PetsApi.ts
+apis/index.ts
+docs/NewPet.md
+docs/Pet.md
+docs/PetsApi.md
+index.ts
+models/NewPet.ts
+models/Pet.ts
+models/index.ts
+runtime.ts

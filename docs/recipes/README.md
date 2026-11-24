@@ -11,6 +11,7 @@ in this order.
 | [Read-only server](read-only.md) | Try OAG-MCP safely, with the agent able to read but not change anything. |
 | [Upstream credentials](upstream-credentials.md) | Call an API that needs an API key, a bearer token or basic authentication. |
 | [Upstream OAuth2](upstream-oauth.md) | Call an API that takes OAuth2 client credentials tokens. |
+| [MCP Auth and Upstream Auth combinations](auth-combinations.md) | Start from a ready-to-run example for your exact combination of client authentication and API authentication. |
 
 ## Choosing what agents can do
 

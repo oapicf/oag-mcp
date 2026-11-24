@@ -200,6 +200,7 @@ for every option.
    * [Read-only server](docs/recipes/read-only.md) — try OAG-MCP safely, reading but not changing anything
    * [Upstream credentials](docs/recipes/upstream-credentials.md) — API keys, bearer tokens and basic authentication
    * [Upstream OAuth2](docs/recipes/upstream-oauth.md) — OAuth2 client credentials tokens
+   * [MCP Auth and Upstream Auth combinations](docs/recipes/auth-combinations.md) — a ready-to-run example for each of the 24 combinations
    * [Curated operations](docs/recipes/curated.md) — expose only some of an API
    * [Per-caller permissions](docs/recipes/per-caller-permissions.md) — give each caller its own operations
    * [Execution limits](docs/recipes/execution-limits.md) — tune time, memory, result and API-call limits

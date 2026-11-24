@@ -1,0 +1,14 @@
+# OAG-MCP configuration: MCP Auth static bearer, Upstream Auth none.
+# See README.md in this folder, and docs/recipes/auth-combinations.md.
+# Secrets are referenced by environment variable, never written here:
+#   OAG_MCP_TOKEN: the bearer token MCP clients send, at least 16 characters
+
+upstream:
+  baseUrl: https://petstore.example.com/v1   # your API; defaults to the document's server URL
+
+mcpAuth:
+  mode: static-bearer
+  staticBearer:
+    tokens:
+      - principal: petstore-agent      # names the caller in the logs: static:petstore-agent
+        token: { env: OAG_MCP_TOKEN }  # at least 16 characters, e.g. openssl rand -hex 32

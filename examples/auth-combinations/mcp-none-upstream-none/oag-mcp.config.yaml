@@ -1,0 +1,8 @@
+# OAG-MCP configuration: MCP Auth none, Upstream Auth none.
+# See README.md in this folder, and docs/recipes/auth-combinations.md.
+
+upstream:
+  baseUrl: https://petstore.example.com/v1   # your API; defaults to the document's server URL
+
+mcpAuth:
+  mode: none                         # for local development; loopback addresses only

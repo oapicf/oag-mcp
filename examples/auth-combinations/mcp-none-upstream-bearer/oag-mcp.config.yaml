@@ -1,0 +1,15 @@
+# OAG-MCP configuration: MCP Auth none, Upstream Auth HTTP bearer.
+# See README.md in this folder, and docs/recipes/auth-combinations.md.
+# Secrets are referenced by environment variable, never written here:
+#   PETSTORE_TOKEN: the API token
+
+upstream:
+  baseUrl: https://petstore.example.com/v1   # your API; defaults to the document's server URL
+
+upstreamAuth:
+  schemes:
+    bearerAuth:
+      token: { env: PETSTORE_TOKEN }
+
+mcpAuth:
+  mode: none                         # for local development; loopback addresses only

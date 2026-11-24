@@ -1,0 +1,26 @@
+# OAG-MCP configuration: MCP Auth OAuth, Upstream Auth API key in the query.
+# See README.md in this folder, and docs/recipes/auth-combinations.md.
+# Secrets are referenced by environment variable, never written here:
+#   OAG_MCP_PRINCIPAL_ID_KEY: the secret key for principal ids, at least 32 characters, e.g. openssl rand -hex 32
+#   PETSTORE_API_KEY: the API key
+
+upstream:
+  baseUrl: https://petstore.example.com/v1   # your API; defaults to the document's server URL
+
+upstreamAuth:
+  schemes:
+    apiKeyQuery:
+      apiKey: { env: PETSTORE_API_KEY }
+
+mcpAuth:
+  mode: oauth
+  oauth:
+    issuer: https://auth.example.com/ # your authorization server
+    requiredScopes: [mcp:tools]
+    principalIdKey: { env: OAG_MCP_PRINCIPAL_ID_KEY }   # keeps principal ids stable across restarts
+    # Tokens are JWTs checked against the issuer's keys. For opaque tokens,
+    # use token introspection instead:
+    # introspection:
+    #   endpoint: https://auth.example.com/oauth/introspect
+    #   clientId: { env: OAG_MCP_INTROSPECTION_CLIENT_ID }
+    #   clientSecret: { env: OAG_MCP_INTROSPECTION_CLIENT_SECRET }

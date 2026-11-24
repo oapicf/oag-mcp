@@ -102,7 +102,9 @@ describe("cli - documentation", function () {
         .filter((f) => f.endsWith(".md"))
         .map((f) => `docs/${f}`),
       ...fs
-        .readdirSync(path.join(ROOT, "examples"))
+        .readdirSync(path.join(ROOT, "examples"), { recursive: true })
+        .map(String)
+        .filter((f) => fs.statSync(path.join(ROOT, "examples", f)).isFile())
         .map((f) => `examples/${f}`),
     ];
     let invocations = 0;

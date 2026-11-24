@@ -1,0 +1,15 @@
+# OAG-MCP configuration: MCP Auth none, Upstream Auth API key in the query.
+# See README.md in this folder, and docs/recipes/auth-combinations.md.
+# Secrets are referenced by environment variable, never written here:
+#   PETSTORE_API_KEY: the API key
+
+upstream:
+  baseUrl: https://petstore.example.com/v1   # your API; defaults to the document's server URL
+
+upstreamAuth:
+  schemes:
+    apiKeyQuery:
+      apiKey: { env: PETSTORE_API_KEY }
+
+mcpAuth:
+  mode: none                         # for local development; loopback addresses only
