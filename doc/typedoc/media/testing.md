@@ -112,6 +112,11 @@ helpers in `test-integration/helpers/` provide:
   upstream client credentials tokens, which tests can revoke; mints MCP
   OAuth tokens, including expired, mis-targeted and wrongly signed ones, and
   publishes the keys to check them; and answers token introspection;
+- **a mock Pet Store API** (`petstore-api.ts`), the API of the
+  [combination examples](recipes/auth-combinations.md), accepting only the
+  credentials of the scheme it is started with;
+- **the combination examples' source** (`auth-combinations.ts`), which
+  renders every folder in `examples/auth-combinations/`;
 - **shared set-up** (`env.ts`): fixture paths, test credentials, temporary
   folders, and helpers to start a server and connect a client.
 
@@ -136,6 +141,8 @@ Every test cleans up its servers, processes and temporary folders.
 | The CLI's commands, flags and help | `cli.ts`, `test/cli.ts` |
 | MCP authentication over HTTP (missing, invalid, expired and mis-targeted credentials), and stdio principals | `http-auth.ts`, `logging.ts` |
 | Upstream authentication for each scheme; OAuth2 token caching and renewal | `upstream-auth.ts`, `test/upstream/` |
+| Every combination of MCP Auth and Upstream Auth: the API receives exactly the scheme's credentials and never the MCP token, and audit records name the principal and scheme | `auth-combinations.ts` |
+| Every folder in `examples/auth-combinations/` is up to date with its source, and works as its README says, through its own `serve.sh` | `auth-combinations-examples.ts` |
 | Per-operation authorisation, isolation of concurrent callers, MCP tokens never forwarded | `http-auth.ts`, `test/server/` |
 | Sandbox limits, isolation and denied capabilities | `execute.ts` "limits, isolation and denied capabilities" |
 | Forged bridge messages from agent code are refused or re-checked: denied operations, mismatched method, path or origin, unknown bindings, credentials supplied by the code | `execute.ts` "forged bridge messages from agent code" |
@@ -214,9 +221,22 @@ in every form OAG-MCP accepts:
 | `sdk-variant-7.26.0/` | The same, with options changed: `useSingleRequestParameter=false`, `withInterfaces`, `supportsES6`, `withoutRuntimeChecks`, `importFileExtension=.js`, `fileNaming=kebab-case` and `prefixParameterInterfaces`. |
 | `petclinic-sdk-1.2.0.tgz` | The 7.26.0 SDK built with its own `tsc` and packed with `npm pack`, containing both `src/` and compiled CommonJS `dist/`. |
 
+The fixtures in `test/fixtures/auth-combinations/` are the typescript-fetch
+SDKs of the [combination examples](recipes/auth-combinations.md), one for
+each upstream scheme (`sdk-none/`, `sdk-api-key-header/`,
+`sdk-api-key-query/`, `sdk-basic/`, `sdk-bearer/` and
+`sdk-oauth2-client-credentials/`), generated from the examples'
+`openapi.yaml` by OpenAPI Generator 7.26.0.
+
 The SDK fixtures are generated output committed to the repository, so the
-tests never run the generator. To regenerate them, see
-[SDK compatibility](#sdk-compatibility).
+tests never run the generator. To regenerate the Pet Clinic ones, see
+[SDK compatibility](#sdk-compatibility). To regenerate the combination
+examples and their SDKs, after changing
+`test-integration/helpers/auth-combinations.ts`, run, with Docker:
+
+```bash
+make -f Makefile-extras gen-auth-combinations
+```
 
 The mock API and the authorization server in `test-integration/helpers/`
 serve the same API and its credentials; see

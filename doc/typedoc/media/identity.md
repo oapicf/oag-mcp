@@ -127,7 +127,9 @@ OAG-MCP records for each call in `upstream.call.completed`.
 
 Every MCP Auth mode works with every upstream scheme, and the two never
 affect each other. The agent's identity comes only from MCP Auth, and the
-API's view only from Upstream Auth:
+API's view only from Upstream Auth. The
+[combinations recipe](recipes/auth-combinations.md) has a ready-to-run
+example of each, with the identities to expect:
 
 | MCP Auth | Logs name the agent as | Different callers told apart | The API sees |
 | --- | --- | --- | --- |
